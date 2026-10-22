@@ -2,7 +2,7 @@
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
 
-source = Path(SPECPATH)
+source = Path(SPECPATH) / 'src'
 assets = ['ytchatterino.ico', 'ChatternoPing.wav', 'ytchatterino-logo.png', 'ytchatterino-logo.svg']
 a = Analysis(
     [str(source / 'ytchatterino.pyw')],
@@ -21,3 +21,4 @@ exe = EXE(
     icon=[str(source / 'ytchatterino.ico')],
 )
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='YT-Chatterino')
+
