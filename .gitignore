@@ -1,0 +1,22 @@
+# Python caches and local build tools
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Generated Windows packages
+build/
+dist/
+*.zip
+*.zip.sha256
+
+# Local accounts, credentials, settings and diagnostic files
+.env
+.env.*
+!.env.example
+google-oauth-client.json
+*oauth*client*.json
+client_secret*.json
+.ytchatterino*
+*.dpapi
+*.log

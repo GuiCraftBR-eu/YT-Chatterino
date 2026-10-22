@@ -1,0 +1,10 @@
+Bundled components include Python 3.14.7, Tcl/Tk 9.0.4, OpenSSL 3.5.7, zlib-ng,
+Microsoft Visual C runtime components, tzdata 2026.5, and the PyInstaller
+6.22.3 bootloader/runtime hooks. Their respective licenses apply.
+PyInstaller's bootloader exception permits distribution of the bundled app.
+https://www.python.org/
+https://www.tcl-lang.org/
+https://www.openssl.org/
+https://zlib.net/
+https://pyinstaller.org/
+https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist
