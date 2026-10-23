@@ -3,7 +3,7 @@ Updated: 23 October 2026
 
 QUICK START
 ===========
-1. Right-click YT-Chatterino-Windows11-1.2.0.zip > Extract All.
+1. Right-click YT-Chatterino-Windows11-1.2.1.zip > Extract All.
 2. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe.
 
@@ -16,7 +16,7 @@ portable apps. The EXE is unsigned; do not disable security software to run it.
 
 LANGUAGE, SETTINGS AND HELP
 ===========================
-Click the gear or press Ctrl+P. Appearance > Language / Idioma switches
+Click the gear or press Ctrl+P. Appearance > Display > Language / Idioma switches
 immediately between English and Português (Brasil). The choice is saved.
 Menus, buttons, help and connection messages follow the selected language;
 chat messages, usernames, stream titles and emote codes stay unchanged.
@@ -98,7 +98,7 @@ EVERYDAY FEATURES AND CONTROLS
   complete/cycle emotes or @names. Native emotes, badges, BTTV/7TV, animated
   emotes and incoming Twitch subscriber GIFs render where supported.
   Send Twitch subscriber GIFs from the official Twitch browser chat.
-- Right-click a user to highlight them. Highlights adds roles and words;
+- Right-click a user to highlight them. Appearance > Highlights adds roles and words;
   Notifications controls mention sounds and Twitch live alerts.
   Default color: #227400. Default sound: ChatternoPing.wav.
 - Open Twitch channels get live alerts by default. First detection is silent.
@@ -148,7 +148,7 @@ permissions still apply; private subscription details are not exposed publicly.
 YouTube's extended public profile lookup uses your connected Google account and
 costs 1 API unit per uncached profile. Without login, basic chat details remain.
 
-Settings > Messages: default retained message limit is 2000 per pane. Set a
+Settings > Appearance > Messages: default retained message limit is 2000 per pane. Set a
 value from 100 to 20000. Right-click the pane header > Message limit to override
 that pane. A mixed feed shares its limit across its channels. Old text, images
 and rendering references are discarded. This is not a permanent chat log.
@@ -156,12 +156,26 @@ and rendering references are discarded. This is not a permanent chat log.
 Twitch loads up to 200 recent messages from the independent public service
 recent-messages.robotty.de, also used by Chatterino. It receives the channel
 name, never account tokens. Availability varies, especially for newly tracked
-channels. Disable this in Settings > Messages. YouTube loads only the recent
+channels. Disable this in Settings > Appearance > Messages. YouTube loads only the recent
 messages provided by its chat page. Historical messages do not trigger sounds.
 
 NATIVE ARCH LINUX DOWNLOAD
 =========================
 A separate Arch Linux package is available on the GitHub release page.
-Install yt-chatterino-1.2.0-1-any.pkg.tar.zst using pacman -U, or build the
+Install yt-chatterino-1.2.1-1-any.pkg.tar.zst using pacman -U, or build the
 PKGBUILD in the source tar.gz with makepkg -si. No Wine is used. See
 docs/ARCH-LINUX.md in that download for dependencies, encrypted keyring and sound.
+
+VERSION 1.2.1: SETTINGS AND RESIZING
+===================================
+Appearance now groups Display, Messages and Highlights. Use Search settings
+at the top of the settings window, or Ctrl+F there. Search names or keywords
+in English or Portuguese. Enter opens the first match; Down selects results;
+double-click or Open setting jumps to the control. Escape clears the search.
+Switching settings pages keeps unsaved drafts until the window closes.
+
+Window and split resizing avoid repeatedly laying out the entire retained
+history. During a resize, the visible messages are rendered separately; new
+display updates and animated frames resume when the drag stops. The message
+buffer, selection and scroll position are preserved. See docs/PERFORMANCE.md
+in the source download for a reproducible benchmark and its limits.

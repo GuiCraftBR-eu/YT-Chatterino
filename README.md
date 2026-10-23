@@ -6,7 +6,7 @@ Chat de **YouTube e Twitch** em uma interface escura inspirada no Chatterino.
 
 **[Baixar a versão mais recente](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/latest)**
 
-1. Na página da versão, baixe `YT-Chatterino-Windows11-1.2.0.zip` em **Assets**.
+1. Na página da versão, baixe `YT-Chatterino-Windows11-1.2.1.zip` em **Assets**.
 2. Clique com o botão direito no ZIP e selecione **Extrair tudo**.
 3. Abra a pasta extraída e execute **YT-Chatterino.exe**.
 
@@ -15,8 +15,8 @@ O pacote é destinado ao Windows 11 x64 (Intel/AMD).
 
 ## Arch Linux nativo
 
-Baixe o pacote `yt-chatterino-1.2.0-1-any.pkg.tar.zst` na mesma página e instale
-com `sudo pacman -U ./yt-chatterino-1.2.0-1-any.pkg.tar.zst`.
+Baixe o pacote `yt-chatterino-1.2.1-1-any.pkg.tar.zst` na mesma página e instale
+com `sudo pacman -U ./yt-chatterino-1.2.1-1-any.pkg.tar.zst`.
 O menu de aplicativos terá **YT-Chatterino**. Não usa Wine.
 Também há um `.tar.gz` com o código e o PKGBUILD para compilar/instalar com `makepkg -si`.
 Veja o [guia do Arch Linux](docs/ARCH-LINUX.md) para dependências, chaveiro e sons.
@@ -27,12 +27,13 @@ Veja o [guia do Arch Linux](docs/ARCH-LINUX.md) para dependências, chaveiro e s
 - Leitura de chats públicos do YouTube pelo link da live, sem chave de API.
 - Emotes BTTV, 7TV e Twitch, animações, badges e seletor de emotes.
 - Envio de mensagens e moderação conforme as permissões da conta conectada.
+- Configurações com busca em inglês e português; Exibição, Mensagens e Destaques em Aparência.
 - Destaques, filtros, pesquisa, sons, canais salvos e atalhos de teclado.
 - Interface em português brasileiro ou inglês, com opção de manter no topo.
 - Respostas reais da Twitch pelo menu de clique direito nas mensagens.
 - Cartão de usuário ao clicar no nome, com perfil público e mensagens retidas.
 - Histórico recente ao abrir chats, quando disponível.
-- Limite padrão de 2.000 mensagens por painel, configurável em **Configurações → Mensagens**.
+- Limite padrão de 2.000 mensagens por painel, configurável em **Configurações → Aparência → Mensagens**.
   O menu do cabeçalho permite um limite específico para cada painel.
 
 Para conectar contas e moderar, abra **Configurações → Tutorial** no aplicativo.
@@ -46,6 +47,7 @@ e consomem a cota do projeto. A leitura pública não consome essa cota.
 - [Executar o código e gerar o EXE](docs/BUILDING.md)
 - [Instalar no Arch Linux](docs/ARCH-LINUX.md)
 - [Histórico de versões](CHANGELOG.md)
+- [Medição de desempenho](docs/PERFORMANCE.md)
 
 ## Organização
 
@@ -67,7 +69,7 @@ Este projeto não é afiliado à Twitch, ao YouTube ou ao Chatterino.
 
 O histórico da Twitch usa o serviço público independente
 [recent-messages.robotty.de](https://recent-messages.robotty.de/), também usado pelo Chatterino.
-Ele recebe o nome do canal, sem tokens de conta. Pode ser desativado em **Mensagens**.
+Ele recebe o nome do canal, sem tokens de conta. Pode ser desativado em **Aparência → Mensagens**.
 Não é um arquivo completo: canais podem não ter mensagens anteriores disponíveis.
 O YouTube fornece uma janela recente de mensagens pelo próprio chat público.
 

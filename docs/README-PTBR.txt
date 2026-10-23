@@ -3,7 +3,7 @@ Atualizado em: 23 de outubro de 2026
 
 INÍCIO RÁPIDO
 =============
-1. Clique com o botão direito em YT-Chatterino-Windows11-1.2.0.zip > Extrair Tudo.
+1. Clique com o botão direito em YT-Chatterino-Windows11-1.2.1.zip > Extrair Tudo.
 2. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe.
 
@@ -17,7 +17,7 @@ O executável não é assinado; não desative a segurança para executá-lo.
 
 IDIOMA, CONFIGURAÇÕES E AJUDA
 ============================
-Clique na engrenagem ou pressione Ctrl+P. Em Aparência > Idioma / Language,
+Clique na engrenagem ou pressione Ctrl+P. Em Aparência > Exibição > Idioma / Language,
 escolha English ou Português (Brasil). A alteração é imediata e fica salva.
 Menus, botões, ajuda e mensagens de conexão seguem o idioma escolhido;
 mensagens do chat, nomes de usuários, títulos e códigos de emotes não mudam.
@@ -104,7 +104,7 @@ RECURSOS E CONTROLES DO DIA A DIA
   Shift+Tab completam e alternam emotes ou @nomes. Emotes nativos, distintivos,
   BTTV/7TV, emotes animados e GIFs de inscritos recebidos da Twitch aparecem
   quando compatíveis. Envie GIFs pelo chat oficial da Twitch no navegador.
-- Clique com o botão direito em um usuário para destacá-lo. Destaques
+- Clique com o botão direito em um usuário para destacá-lo. Aparência > Destaques
   adiciona cargos e palavras; Notificações controla sons de menção e alertas
   de live da Twitch. Cor padrão: #227400. Som padrão: ChatternoPing.wav.
 - Canais abertos da Twitch recebem alertas de live por padrão. A primeira
@@ -160,7 +160,7 @@ Os detalhes adicionais de perfis do YouTube usam a conta Google conectada e
 custam 1 unidade de API por perfil ainda não consultado. Sem login, os dados
 básicos do chat continuam disponíveis.
 
-Configurações > Mensagens: o limite padrão é de 2000 mensagens por painel.
+Configurações > Aparência > Mensagens: o limite padrão é de 2000 mensagens por painel.
 Escolha um valor entre 100 e 20000. Para alterar um painel específico, clique
 com o botão direito no cabeçalho > Limite de mensagens. Um chat misturado divide
 seu limite entre os canais. Textos, imagens e referências de renderização
@@ -169,13 +169,29 @@ antigos são removidos. Isso não é um registro permanente de conversas.
 A Twitch carrega até 200 mensagens recentes do serviço público independente
 recent-messages.robotty.de, também usado pelo Chatterino. Ele recebe o nome do
 canal, nunca os tokens da conta. A disponibilidade varia, principalmente em
-canais recém-acompanhados. Desative em Configurações > Mensagens, se desejar.
+canais recém-acompanhados. Desative em Configurações > Aparência > Mensagens, se desejar.
 O YouTube carrega apenas as mensagens recentes fornecidas pela própria página.
 Mensagens históricas não acionam sons.
 
 DOWNLOAD NATIVO PARA ARCH LINUX
 ==============================
 Há um pacote separado de Arch Linux na página da versão no GitHub. Instale
-yt-chatterino-1.2.0-1-any.pkg.tar.zst com pacman -U, ou compile o PKGBUILD incluído
+yt-chatterino-1.2.1-1-any.pkg.tar.zst com pacman -U, ou compile o PKGBUILD incluído
 no código-fonte .tar.gz com makepkg -si. Não usa Wine. Consulte o arquivo
 docs/ARCH-LINUX.md desse download para dependências, chaveiro seguro e sons.
+
+VERSÃO 1.2.1: CONFIGURAÇÕES E REDIMENSIONAMENTO
+==============================================
+Aparência agora reúne Exibição, Mensagens e Destaques. Use Pesquisar
+configurações no topo da janela de configurações ou Ctrl+F nessa janela.
+Busque nomes ou palavras-chave em inglês ou português. Enter abre o primeiro
+resultado; Seta para baixo seleciona resultados; clique duplo ou Abrir
+configuração leva ao controle. Esc limpa a busca. Trocar de página mantém
+os rascunhos não aplicados até a janela ser fechada.
+
+Redimensionar a janela e os painéis evita recalcular repetidamente todo o
+histórico mantido. Durante o redimensionamento, as mensagens visíveis são
+renderizadas separadamente; novas atualizações de exibição e quadros animados
+voltam quando o arrasto termina. O histórico, a seleção e a posição de rolagem
+são preservados. Consulte docs/PERFORMANCE.md no download do código-fonte
+para a medição reproduzível e suas limitações.

@@ -1,7 +1,7 @@
 name: Native checks
 on:
   push:
-    branches: [main, codex/v1.2.0]
+    branches: [main, codex/v1.2.1]
   workflow_dispatch:
   release:
     types: [published]
@@ -36,7 +36,7 @@ jobs:
           pacman -Qip /tmp/yt-chatterino-build/packaging/arch/*.pkg.tar.zst
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-ArchLinux-1.2.0-pacman
+          name: YT-Chatterino-ArchLinux-1.2.1-pacman
           path: /tmp/yt-chatterino-build/packaging/arch/*.pkg.tar.zst
   publish-arch:
     if: github.event_name == 'release'
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-ArchLinux-1.2.0-pacman
+          name: YT-Chatterino-ArchLinux-1.2.1-pacman
           path: native-package
       - name: Attach tested native package to release
         env:

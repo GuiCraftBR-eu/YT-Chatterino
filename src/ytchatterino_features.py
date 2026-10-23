@@ -23,6 +23,7 @@ import urllib.request
 import webbrowser
 from ytchatterino_youtube import YouTubeWebClient
 from ytchatterino_chat import ChatTools
+from ytchatterino_settings import SettingsWindow
 import shutil
 import subprocess
 import sys
@@ -892,6 +893,7 @@ class FeatureController:
 
     def refresh_highlights(self):
         for pane in self.app.all_panes():
+            pane.finish_resize()
             for tag in pane.text.tag_names():
                 if tag.startswith("__highlight_"):
                     pane.text.tag_remove(tag, "1.0", "end")
@@ -1231,7 +1233,8 @@ class FeatureController:
         dialog.transient(self.app.root)
         dialog.attributes("-topmost", self.app.top_var.get())
         dialog.geometry(f"{width}x{height}+{max(0, self.app.root.winfo_rootx() + 20)}+{max(0, self.app.root.winfo_rooty() + 50)}")
-        dialog.after(30, lambda: self.core.style_titlebar(dialog) if dialog.winfo_exists() else None)
+        titlebar_timer = dialog.after(30, lambda: self.core.style_titlebar(dialog) if dialog.winfo_exists() else None)
+        dialog.bind("<Destroy>", lambda event: dialog.after_cancel(titlebar_timer) if event.widget is dialog else None, add="+")
         dialog.bind("<Escape>", lambda event: dialog.destroy())
         return dialog
 
@@ -1259,40 +1262,10 @@ class FeatureController:
             self.window.lift()
             self.select_settings(section)
             return
-        self.window = self.dialog("Settings · YT-Chatterino", 760, 670)
-        self.window.minsize(650, 480)
-        side = tk.Frame(self.window, bg="#111111", width=160)
-        side.pack(side="left", fill="y")
-        side.pack_propagate(False)
-        self.settings_content = tk.Frame(self.window, bg=self.core.BG, padx=18, pady=14)
-        self.settings_content.pack(side="left", fill="both", expand=True)
-        self.settings_pages = {}
-        self.settings_buttons = {}
-        for label in ("Accounts", "Appearance", "Messages", "Highlights", "Notifications", "Saved channels", "YouTube quota", "Keyboard shortcuts", "Tutorial"):
-            button = self.button(side, label, lambda value=label: self.select_settings(value))
-            button.pack(fill="x", padx=5, pady=3)
-            self.settings_buttons[label] = button
-        footer = self.label(side, "Changes save locally.", dim=True)
-        footer.configure(wraplength=140)
-        footer.pack(side="bottom", padx=8, pady=12)
-        self.select_settings(section)
+        self.settings_ui = SettingsWindow(self, section)
 
     def select_settings(self, section):
-        self.settings_section = section
-        self.quota_widgets = {}
-        self.quota_display = None
-        self.account_label = None
-        for widget in self.settings_content.winfo_children():
-            widget.destroy()
-        for name, button in self.settings_buttons.items():
-            button.config(bg="#303030" if name == section else "#181818")
-        heading = self.label(self.settings_content, section)
-        heading.config(font=("Segoe UI", 14, "bold"))
-        heading.pack(anchor="w", pady=(0, 12))
-        {"Accounts": self.accounts_page, "Appearance": self.appearance_page, "Messages": self.chat_tools.settings,
-         "Highlights": self.highlights_page, "Notifications": self.notifications_page,
-         "Saved channels": self.saved_channels_page, "YouTube quota": self.quota_page,
-         "Keyboard shortcuts": self.shortcuts_page, "Tutorial": self.tutorial_page}[section](self.settings_content)
+        self.settings_ui.show(section)
 
     def account_status(self, text=None):
         if self.account_label and self.account_label.winfo_exists():
@@ -1429,7 +1402,10 @@ class FeatureController:
             else "https://help.twitch.tv/s/article/twitch-chat-commands"))
         guide_button.pack(side="left")
         def show(event=None):
-            content.configure(text=tr(topics[selector.current()][1]))
+            body = str(tr(topics[selector.current()][1]))
+            body = body.replace("Settings → Highlights", "Settings → Appearance → Highlights")
+            body = body.replace("Configurações → Destaques", "Configurações → Aparência → Destaques")
+            content.configure(text=body)
             guide_button.configure(state="normal" if selector.current() in (0, 1, 2) else "disabled")
         selector.bind("<<ComboboxSelected>>", show)
         show()
@@ -1584,6 +1560,16 @@ class FeatureController:
             self.refresh_highlights()
             refresh()
         self.button(parent, "Apply notifications", apply).pack(anchor="e", pady=4)
+        def refresh_page():
+            selected = sources[combo.current()].key if 0 <= combo.current() < len(sources) else None
+            sources[:] = [source for source in self.app.sources.values() if source.platform == "twitch"]
+            combo.configure(values=[source.name for source in sources])
+            if sources:
+                combo.current(next((i for i, source in enumerate(sources) if source.key == selected), 0))
+            else:
+                combo.set("")
+            refresh()
+        parent.refresh_settings = refresh_page
 
     def shortcuts_page(self, parent):
         self.label(parent, "Ctrl+T   Add chats\nCtrl+Shift+T   Add a split\nMiddle-click empty tab bar   Add chats\n"
@@ -1804,7 +1790,16 @@ class FeatureController:
         self.button(input_row, "Add", add).pack(side="left", padx=(5, 0))
         status.pack(anchor="w", pady=6)
         self.label(parent, "YouTube checks happen only when you click Open. Multiple live broadcasts can be selected individually. Twitch opens even while offline.", dim=True).pack(anchor="w")
-        refresh()
+        def refresh_page():
+            selected = combo.current()
+            old_key = open_sources[selected].key if 0 <= selected < len(open_sources) else None
+            open_sources[:] = list(self.app.sources.values())
+            combo.configure(values=[source.platform.upper() + " · " + source.name for source in open_sources])
+            if open_sources:
+                combo.current(next((i for i, source in enumerate(open_sources) if source.key == old_key), 0))
+            refresh()
+        parent.refresh_settings = refresh_page
+        refresh_page()
 
     def save_channel(self, channel):
         items = self.app.cfg.setdefault("saved_channels", [])

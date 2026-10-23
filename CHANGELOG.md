@@ -1,5 +1,18 @@
 # Histórico de versões
 
+## 1.2.1
+
+- Configurações reorganizadas: Aparência reúne Exibição, Mensagens e Destaques.
+- Busca nas configurações por nomes e palavras-chave em inglês e português,
+  com atalho Ctrl+F, resultados navegáveis e indicação do controle encontrado.
+- Páginas criadas sob demanda, com preservação de rascunhos ao alternar páginas.
+- Redimensionamento usa apenas o trecho visível durante o arrasto; restaura o
+  histórico completo, a seleção e a posição ao terminar. Atualizações de mensagens
+  e animações são adiadas durante o arrasto, sem desconectar os leitores.
+- Atualizações de tamanho e de quebra do cabeçalho são agrupadas para reduzir
+  trabalho repetido. Detalhes da medição em docs/PERFORMANCE.md.
+- Testes de busca, navegação, tradução, seleção, imagens e redimensionamento.
+
 ## 1.2.0
 
 - Respostas reais da Twitch: clique direito na mensagem → Responder à mensagem.

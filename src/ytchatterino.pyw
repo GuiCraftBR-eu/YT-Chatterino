@@ -42,7 +42,7 @@ EDGE = "#333333"  # only used for the thin outline of the input box
 TAB_BLUE, ACCENT, ALT, HEADER_BG = "#4a9cdb", "#2aa8ff", "#0e0e0e", "#111111"
 PALETTE = ["#ff7f50", "#1e90ff", "#00ff7f", "#daa520", "#ff69b4", "#a070ff",
            "#00ced1", "#9acd32", "#ff5a36", "#5f9ea0", "#e08a3c", "#e05d5d"]
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 QUOTA_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino_quota.json")
 LOG_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino_error.log")
 APP_ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ytchatterino.ico")
@@ -1565,7 +1565,7 @@ class PhotoBank:
         playing = False
         for entry in tuple(self.entries.values()):
             frames = entry["frames"]
-            if len(frames) < 2 or not any(view.active and entry["urls"] in view.used_assets
+            if len(frames) < 2 or not any(view.active and not getattr(view, "resizing", False) and entry["urls"] in view.used_assets
                                            for view in entry["users"]):
                 continue
             playing = True
@@ -2083,6 +2083,17 @@ class ChatTab(tk.Frame):
         self.follow_tail = True
         self._render_source = None
         self.header_info = {}
+        self.resizing = False
+        self.resize_after_id = None
+        self.resize_restore_id = None
+        self.viewport_after_id = None
+        self.header_after_id = None
+        self.viewport_target = None
+        self.viewport_applied = None
+        self._header_wrap = None
+        self._jump_placed = False
+        self._jump_offset = None
+        self.resize_surface = None
 
         self.header = tk.Frame(self, bg=HEADER_BG, pady=4, cursor="arrow")
         self.header.pack(side="top", fill="x")
@@ -2096,15 +2107,15 @@ class ChatTab(tk.Frame):
         self.header_text = tk.Label(self.header, bg=HEADER_BG, fg=FG,
                                     font=("Segoe UI", 9, "bold"), justify="left", anchor="w")
         self.header_text.pack(side="left", fill="x", expand=True)
-        self.header.bind("<Configure>", lambda event: self.header_text.config(
-            wraplength=max(60, event.width - 60)))
+        self.header.bind("<Configure>", self._header_configure)
         for widget in (self.header, self.header_icon, self.header_text):
             widget.bind("<Button-1>", lambda event: self.app.focus_pane(self), add="+")
             widget.bind("<Double-Button-1>", lambda event: self.app.zoom_pane(self))
             widget.bind("<Button-3>", lambda event: self.app.pane_menu(event, self))
 
         self.app.features.attach_composer(self)
-        self.text = tk.Text(self, bg=BG, fg=FG, bd=0, highlightthickness=0,
+        self.viewport = tk.Frame(self, bg=BG, bd=0, highlightthickness=0)
+        self.text = tk.Text(self.viewport, bg=BG, fg=FG, bd=0, highlightthickness=0,
                             wrap="word", state="disabled", font=fonts["normal"],
                             padx=6, pady=4, cursor="arrow", insertwidth=0,
                             spacing1=1 if appearance.get("compact_spacing") else 3,
@@ -2114,7 +2125,9 @@ class ChatTab(tk.Frame):
         self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self._scrollbar_view, style=sb_style)
         self.text.configure(yscrollcommand=self._on_scroll)
         self.scrollbar.pack(side="right", fill="y")
-        self.text.pack(side="left", fill="both", expand=True)
+        self.viewport.pack(side="left", fill="both", expand=True)
+        self.text.place(x=0, y=0, width=1, height=1)
+        self.viewport.bind("<Configure>", self._viewport_configure)
         self.jump_button = tk.Label(self, text=tr("↓ Latest"), bg="#252525", fg=FG,
                                     font=("Segoe UI", 9), padx=12, pady=4, cursor="hand2")
         self.jump_button.bind("<Button-1>", lambda event: self.jump_latest())
@@ -2367,7 +2380,160 @@ class ChatTab(tk.Frame):
         except tk.TclError:  # characters Tk can't draw
             self.text.insert("end", re.sub(r"[^\u0000-\uFFFF]", "?", s), tags)
 
+    def _header_configure(self, event):
+        width = max(60, event.width - 60)
+        if width == self._header_wrap:
+            return
+        self._header_wrap = width
+        if self.header_after_id is None:
+            self.header_after_id = self.after(24, self._apply_header_width)
+
+    def _apply_header_width(self):
+        self.header_after_id = None
+        if not self.closed:
+            self.header_text.configure(wraplength=self._header_wrap)
+
+    def _viewport_configure(self, event):
+        target = (max(1, event.width), max(1, event.height))
+        if self.closed or target == self.viewport_target:
+            return
+        self.viewport_target = target
+        if self.viewport_applied is None or not self.active:
+            self._apply_viewport_size()
+            return
+        if not self.resizing:
+            if self.resize_restore_id is not None:
+                self._restore_resize_view()
+            self.resizing = True
+            self._resize_follow = self.follow_tail and not self.text.tag_ranges("sel")
+            self.text.mark_set("__resize_anchor", self.text.index("@0,0"))
+            self.text.mark_gravity("__resize_anchor", "left")
+            # Render a small, independent surface while dragging. The main
+            # text widget keeps all data/selection/marks at its last width.
+            if len(self.row_marks) > 100:
+                start = self.text.index("@0,0 - 10 lines linestart")
+                end = self.text.index(f"@0,{self.text.winfo_height()} + 20 lines lineend +1c")
+                self._make_resize_surface(start, end)
+        if self.viewport_after_id is None:
+            self.viewport_after_id = self.after(16, self._apply_viewport_size)
+        if self.resize_after_id is not None:
+            self.after_cancel(self.resize_after_id)
+        self.resize_after_id = self.after(140, self.finish_resize)
+
+    def _apply_viewport_size(self):
+        if self.viewport_after_id is not None:
+            self.after_cancel(self.viewport_after_id)
+            self.viewport_after_id = None
+        if self.closed or self.viewport_target == self.viewport_applied:
+            return
+        width, height = self.viewport_target
+        surface = self.resize_surface if self.resizing and self.resize_surface is not None else self.text
+        surface.place_configure(width=width, height=height)
+        self.viewport_applied = self.viewport_target
+        if self.resizing:
+            if self._resize_follow:
+                surface.see("end")
+            elif surface is self.text:
+                self.text.yview("__resize_anchor")
+            else:
+                surface.yview(self._resize_local_anchor)
+
+    def _make_resize_surface(self, start, end):
+        if self.resize_surface is None:
+            options = {name: self.text.cget(name) for name in (
+                "bg", "fg", "font", "wrap", "padx", "pady", "spacing1", "spacing2", "spacing3",
+                "selectbackground", "selectforeground", "inactiveselectbackground")}
+            self.resize_surface = tk.Text(self.viewport, bd=0, highlightthickness=0,
+                insertwidth=0, cursor="arrow", undo=False, exportselection=False, **options)
+            self.resize_surface.bind("<Button-1>", self._resize_surface_click)
+            for key in ("<Control-c>", "<Control-C>", "<Control-Insert>"):
+                self.resize_surface.bind(key, self.copy_selection)
+            for key in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                self.resize_surface.bind(key, self._resize_surface_scroll)
+        surface = self.resize_surface
+        surface.configure(state="normal", font=self.text.cget("font"),
+                          spacing1=self.text.cget("spacing1"), spacing3=self.text.cget("spacing3"))
+        surface.delete("1.0", "end")
+        for tag in surface.tag_names():
+            if tag != "sel":
+                surface.tag_delete(tag)
+        active = set(self.text.tag_names(start))
+        used = set(active)
+        records = self.text.dump(start, end, text=True, image=True, tag=True)
+        for kind, value, index in records:
+            if kind == "tagon":
+                active.add(value);used.add(value)
+            elif kind == "tagoff":
+                active.discard(value)
+            elif kind == "text":
+                surface.insert("end", value, tuple(active))
+            elif kind == "image":
+                at = surface.index("end-1c")
+                surface.image_create(at, image=self.text.image_cget(value, "image"), align="center")
+                for tag in active:
+                    surface.tag_add(tag, at, at + "+1c")
+        for tag in self.text.tag_names():
+            if tag in used and not tag.startswith(("message_", "__emote_pending_", "__badge_")):
+                options = {name: values[-1] for name, values in self.text.tag_configure(tag).items() if values[-1] != ""}
+                if options:
+                    surface.tag_configure(tag, **options)
+                surface.tag_raise(tag)
+        first_line = int(start.split('.')[0])
+        anchor_line, anchor_column = self.text.index("__resize_anchor").split('.')
+        self._resize_local_anchor = str(max(1, int(anchor_line) - first_line + 1)) + "." + anchor_column
+        surface.configure(state="disabled")
+        self.text.place_forget()
+
+    def _resize_surface_click(self, event):
+        self.finish_resize()
+        self.text.event_generate("<Button-1>", x=event.x, y=event.y)
+        return "break"
+
+    def _resize_surface_scroll(self, event):
+        self.finish_resize()
+        direction = -1 if getattr(event, "num", 0) == 4 else 1 if getattr(event, "num", 0) == 5 else (-1 if event.delta > 0 else 1)
+        self.text.yview_scroll(direction * 3, "units")
+        self._remember_scroll()
+        return "break"
+
+    def finish_resize(self):
+        if self.resize_after_id is not None:
+            self.after_cancel(self.resize_after_id)
+            self.resize_after_id = None
+        if self.closed:
+            return
+        if not self.resizing:
+            self._apply_viewport_size()
+            if self.resize_restore_id is not None:
+                self._restore_resize_view()
+            return
+        self.resizing = False
+        if self.resize_surface is not None:
+            self.resize_surface.place_forget()
+            self.resize_surface.configure(state="normal")
+            self.resize_surface.delete("1.0", "end")
+            self.resize_surface.configure(state="disabled")
+        self.viewport_applied = None
+        self._apply_viewport_size()
+        # Place geometry is applied at idle. Restore scrolling after that
+        # layout, so a narrower wrap cannot displace the latest message.
+        self.resize_restore_id = self.after_idle(self._restore_resize_view)
+        self.app.photo_bank.wake()
+
+    def _restore_resize_view(self):
+        if self.resize_restore_id is not None:
+            self.after_cancel(self.resize_restore_id)
+            self.resize_restore_id = None
+        if self.closed:
+            return
+        if self._resize_follow:
+            self.text.see("end")
+        elif "__resize_anchor" in self.text.mark_names():
+            self.text.yview("__resize_anchor")
+        self.text.mark_unset("__resize_anchor")
+
     def _left_click(self, event):
+        self.finish_resize()
         self.app.focus_pane(self)
         return self.app.features.chat_tools.click_user(self, event)
 
@@ -2569,6 +2735,7 @@ class ChatTab(tk.Frame):
         self.app.features.refresh_highlights()
 
     def set_search(self, query, reveal=True):
+        self.finish_resize()
         previous_index = self.search_index
         self.search_query = query
         self.search_matches = []
@@ -2624,6 +2791,7 @@ class ChatTab(tk.Frame):
             source.sync_pause()
 
     def copy_selection(self, event=None):
+        self.finish_resize()
         try:
             parts = []
             for kind, value, _ in self.text.dump(
@@ -2642,6 +2810,11 @@ class ChatTab(tk.Frame):
     def close(self):
         if self.closed:
             return
+        for attribute in ("resize_after_id", "resize_restore_id", "viewport_after_id", "header_after_id"):
+            timer = getattr(self, attribute, None)
+            if timer is not None:
+                self.after_cancel(timer)
+                setattr(self, attribute, None)
         self.closed = True
         self.active = False
         if self.search_after_id is not None:
@@ -2723,18 +2896,27 @@ class ChatTab(tk.Frame):
         self.header_text.config(text=tr(title[:237] + "…" if len(title) > 240 else title))
 
     def _on_scroll(self, first, last):
+        if self.resizing:
+            return
         self.scrollbar.set(first, last)
-        if hasattr(self, "jump_button"):
-            if float(last) < 0.995:
-                self.jump_button.place(relx=0.5, rely=1.0, y=-max(42, self.composer.winfo_height() + 8), anchor="s")
-            else:
-                self.jump_button.place_forget()
+        if not hasattr(self, "jump_button"):
+            return
+        visible = float(last) < 0.995
+        offset = -max(42, self.composer.winfo_height() + 8)
+        if visible and (not self._jump_placed or offset != self._jump_offset):
+            self.jump_button.place(relx=0.5, rely=1.0, y=offset, anchor="s")
+            self._jump_placed, self._jump_offset = True, offset
+        elif not visible and self._jump_placed:
+            self.jump_button.place_forget()
+            self._jump_placed = False
 
     def jump_latest(self):
+        self.finish_resize()
         self.follow_tail = True
         self.text.tag_remove("sel", "1.0", "end")
         self.text.see("end")
         self.jump_button.place_forget()
+        self._jump_placed = False
 
     def accepts(self, message):
         name = message.get("name", "").casefold()
@@ -2744,7 +2926,7 @@ class ChatTab(tk.Frame):
                 and not any(term in body for term in self._exclude_terms))
 
     def drain(self, deadline, limit=70):
-        if not self.active or not self.pending_events:
+        if not self.active or self.resizing or not self.pending_events:
             return
         self._batch_bottom = self.follow_tail and not self.text.tag_ranges("sel")
         self._batch = True
@@ -2773,6 +2955,7 @@ class ChatTab(tk.Frame):
         self.pending_events = deque(sorted(events, key=lambda event: event[0])[-cap:], maxlen=cap)
 
     def clear_messages(self, reset_sequence=False):
+        self.finish_resize()
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
         self.text.configure(state="disabled")
@@ -2814,14 +2997,17 @@ class ChatTab(tk.Frame):
         self.set_search(self.search_query, reveal=False)
 
     def _remember_scroll(self):
+        self.finish_resize()
         if not self.closed:
             self.follow_tail = self.text.yview()[1] >= 0.995
 
     def _scrollbar_view(self, *args):
+        self.finish_resize()
         self.text.yview(*args)
         self._remember_scroll()
 
     def _text_menu(self, event):
+        self.finish_resize()
         self.app.focus_pane(self)
         menu = self.app._menu(self)
         selected = bool(self.text.tag_ranges("sel"))
@@ -3131,8 +3317,22 @@ class App:
                 return
             if window is not self.root:
                 window.attributes("-topmost", self.top_var.get())
-            window.after(50, lambda w=window: style_titlebar(w) if w.winfo_exists() else None)
-            window.after(400, lambda w=window: style_titlebar(w) if w.winfo_exists() else None)
+            if not hasattr(window, "_titlebar_timers"):
+                window._titlebar_timers = set()
+                def cancel_timers(event):
+                    if event.widget is window:
+                        for timer in window._titlebar_timers:
+                            window.after_cancel(timer)
+                        window._titlebar_timers.clear()
+                window.bind("<Destroy>", cancel_timers, add="+")
+            for timer in window._titlebar_timers:
+                window.after_cancel(timer)
+            window._titlebar_timers.clear()
+            for delay in (50, 400):
+                def apply_style(w=window):
+                    if w.winfo_exists():
+                        style_titlebar(w)
+                window._titlebar_timers.add(window.after(delay, apply_style))
         except tk.TclError:
             pass
 
@@ -3986,7 +4186,7 @@ class App:
         for pane in panes:
             try:
                 pane.drain(deadline)
-                if time.monotonic() < deadline:
+                if not pane.resizing and time.monotonic() < deadline:
                     for _ in range(2):
                         try:
                             kind, value = pane.q.get_nowait()
@@ -4020,6 +4220,10 @@ class App:
         CATALOG_POOL.shutdown(wait=False, cancel_futures=True)
         IMAGE_POOL.shutdown(wait=False, cancel_futures=True)
         QUOTA.save()
+        # Tk can retain delayed widget callbacks after their Tcl commands are
+        # destroyed. Cancel the remaining events before tearing down the UI.
+        for timer in self.root.tk.call("after", "info"):
+            self.root.tk.call("after", "cancel", timer)
         self.root.destroy()
 
     def all_panes(self):
