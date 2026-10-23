@@ -20,7 +20,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       - name: Install native Arch dependencies
-        run: pacman -Syu --noconfirm --needed git python tk python-pillow python-keyring python-secretstorage xorg-server-xvfb xorg-xauth
+        run: pacman -Syu --noconfirm --needed git python tk python-pillow python-keyring python-secretstorage ttf-dejavu noto-fonts-emoji xorg-server-xvfb xorg-xauth
       - uses: actions/checkout@v4
       - name: Run Tk UI and logic checks on Arch
         run: xvfb-run -a python -m unittest discover -s tests -v

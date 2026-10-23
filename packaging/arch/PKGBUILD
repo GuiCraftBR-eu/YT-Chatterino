@@ -7,7 +7,7 @@ arch=('any')
 url='https://github.com/GuiCraftBR-eu/YT-Chatterino'
 # No license has been granted for the app source by its owner yet.
 license=('LicenseRef-proprietary')
-depends=('python' 'tk' 'python-pillow' 'python-keyring' 'python-secretstorage')
+depends=('python' 'tk' 'python-pillow' 'python-keyring' 'python-secretstorage' 'ttf-dejavu')
 optdepends=('gnome-keyring: Secret Service for saved sign-ins'
             'kwallet: alternative encrypted keyring'
             'pipewire-audio: plays notification sounds with pw-play'

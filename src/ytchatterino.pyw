@@ -2071,6 +2071,7 @@ class ChatTab(tk.Frame):
         self.photo_urls = {}
         self.used_assets = set()
         self.message_records = {}
+        self.row_color_tags = {}
         self.image_counter = 0
         self.pending_counter = 0
         self._batch = False
@@ -2405,6 +2406,10 @@ class ChatTab(tk.Frame):
             if seq is not None:
                 self.message_records.pop(seq, None)
                 self.text.tag_delete("message_" + str(seq))
+                color_tag = self.row_color_tags.pop(seq, None)
+                if color_tag and not self.text.tag_ranges(color_tag):
+                    self.text.tag_delete(color_tag)
+                    self.name_tags.discard(color_tag)
         self.used_assets = set(self.image_assets.values())
         for urls in list(self.emote_photos):
             if urls not in self.used_assets and urls not in self.pending_emote_tags:
@@ -2526,6 +2531,7 @@ class ChatTab(tk.Frame):
         if m.get("_seq") is not None:
             self.text.tag_add("message_" + str(m["_seq"]), message_start, "end-1c")
             self.message_records[m["_seq"]] = (self._render_source, m)
+            self.row_color_tags[m["_seq"]] = tag
         self.app.features.apply_highlight(self, m, message_start, "end-1c")
         self.text.tag_raise("sel")
         self._end(at_bottom)
@@ -2771,6 +2777,10 @@ class ChatTab(tk.Frame):
         self.pending_events.clear()
         self.last_seq = 0 if reset_sequence else self.app.message_sequence
         self.message_records.clear()
+        self.row_color_tags.clear()
+        for color_tag in self.name_tags:
+            self.text.tag_delete(color_tag)
+        self.name_tags.clear()
         for marker, _ in self.row_marks:
             self.text.mark_unset(marker)
         self.row_marks.clear()
@@ -4379,7 +4389,7 @@ if __name__ == "__main__":
             set_app_id(APP_USER_MODEL_ID)
         except Exception:
             pass
-    root = tk.Tk()
+    root = tk.Tk(className="Ytchatterino")
     if os.path.isfile(APP_ICON_PATH):
         try:
             root.iconbitmap(APP_ICON_PATH)

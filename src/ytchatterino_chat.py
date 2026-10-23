@@ -125,7 +125,7 @@ class ChatTools:
         pane.reply_target = (source.key, dict(message))
         pane.reply_label.configure(text=tr("Replying to @{name}: {body}",
             name=message.get("login") or message["name"], body=message.get("text", "")[:100]))
-        pane.reply_bar.pack(side="bottom", fill="x", before=pane.composer)
+        pane.reply_bar.pack(side="bottom", fill="x", after=pane.composer)
         self.owner.update_send_label(pane)
         pane.compose_entry.focus_set()
 

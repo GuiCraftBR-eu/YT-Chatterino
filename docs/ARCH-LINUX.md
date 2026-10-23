@@ -8,7 +8,7 @@ executable, an embedded Windows runtime, or an emulator.
 Download and extract `YT-Chatterino-ArchLinux-1.2.0.tar.gz`. From the extracted folder:
 
 ```sh
-sudo pacman -S --needed base-devel python tk python-pillow python-keyring python-secretstorage
+sudo pacman -S --needed base-devel python tk python-pillow python-keyring python-secretstorage ttf-dejavu
 cd packaging/arch
 makepkg -si
 ```
