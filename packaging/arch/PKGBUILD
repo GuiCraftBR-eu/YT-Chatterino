@@ -1,6 +1,6 @@
 # Run makepkg -si as your regular user from this directory.
 pkgname=yt-chatterino
-pkgver=1.2.1
+pkgver=1.2.2
 pkgrel=1
 pkgdesc='Native YouTube and Twitch chat viewer inspired by Chatterino'
 arch=('any')
@@ -8,7 +8,8 @@ url='https://github.com/GuiCraftBR-eu/YT-Chatterino'
 # No license has been granted for the app source by its owner yet.
 license=('LicenseRef-proprietary')
 depends=('python' 'tk' 'python-pillow' 'python-keyring' 'python-secretstorage' 'ttf-dejavu')
-optdepends=('gnome-keyring: Secret Service for saved sign-ins'
+optdepends=('polkit: authorization for in-app pacman updates'
+            'gnome-keyring: Secret Service for saved sign-ins'
             'kwallet: alternative encrypted keyring'
             'pipewire-audio: plays notification sounds with pw-play'
             'libpulse: alternative notification player paplay'

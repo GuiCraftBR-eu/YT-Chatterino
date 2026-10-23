@@ -3,7 +3,7 @@ Atualizado em: 23 de outubro de 2026
 
 INÍCIO RÁPIDO
 =============
-1. Clique com o botão direito em YT-Chatterino-Windows11-1.2.1.zip > Extrair Tudo.
+1. Clique com o botão direito em YT-Chatterino-Windows11-1.2.2.zip > Extrair Tudo.
 2. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe.
 
@@ -140,7 +140,7 @@ pelo Windows. Configurações/diagnósticos usam arquivos .ytchatterino* em
   no navegador.
 - As ações do YouTube falham: confira ativação da API, OAuth, usuários de
   teste, conta/canal selecionado, direitos de moderação e cota do projeto.
-- Chats offline da Twitch recebem apenas mensagens novas, sem baixar histórico.
+- Canais offline da Twitch também podem carregar mensagens recentes disponíveis no serviço de histórico.
 - Sem som: confira Notificações e o volume do Windows.
 Aplicativo independente; não é uma versão oficial da Twitch, YouTube ou Chatterino.
 
@@ -176,7 +176,7 @@ Mensagens históricas não acionam sons.
 DOWNLOAD NATIVO PARA ARCH LINUX
 ==============================
 Há um pacote separado de Arch Linux na página da versão no GitHub. Instale
-yt-chatterino-1.2.1-1-any.pkg.tar.zst com pacman -U, ou compile o PKGBUILD incluído
+yt-chatterino-1.2.2-1-any.pkg.tar.zst com pacman -U, ou compile o PKGBUILD incluído
 no código-fonte .tar.gz com makepkg -si. Não usa Wine. Consulte o arquivo
 docs/ARCH-LINUX.md desse download para dependências, chaveiro seguro e sons.
 
@@ -195,3 +195,34 @@ renderizadas separadamente; novas atualizações de exibição e quadros animado
 voltam quando o arrasto termina. O histórico, a seleção e a posição de rolagem
 são preservados. Consulte docs/PERFORMANCE.md no download do código-fonte
 para a medição reproduzível e suas limitações.
+
+VERSÃO 1.2.2: ATUALIZAÇÕES, DATAS E HORÁRIOS
+===========================================
+O aplicativo verifica versões estáveis do GitHub ao iniciar e a cada seis horas.
+Quando um pacote mais recente está pronto, aparece uma seta de download ao lado
+da área do saldo do YouTube. Clique nela e depois em Instalar atualização e
+reiniciar. O aplicativo baixa, confere a integridade pelo código SHA-256, fecha,
+substitui seus arquivos e reinicia. Contas, configurações e arquivos adicionais
+na pasta são preservados. Um backup dos arquivos anteriores fica ao lado da
+pasta do aplicativo. Se a versão portátil ou de código-fonte falhar ao iniciar,
+os arquivos anteriores são restaurados. Feche outras cópias antes de atualizar.
+
+Configurações > Atualizações permite desativar verificações em segundo plano ou
+verificar manualmente. Instalações pelo pacman no Arch usam pkexec/polkit para
+autorizar o pacman; instale o polkit e um agente de autenticação para esse fluxo.
+O aplicativo continua sendo executado pelo seu usuário. Atualizações do
+código-fonte mantêm o Python e as dependências já instaladas. Versões portáteis
+e de código-fonte precisam de permissão de escrita na pasta do aplicativo.
+Versões 1.2.1 e anteriores exigem uma atualização manual para a 1.2.2 primeiro.
+
+Aparência > Exibição agora tem Formato de data (padrão DD/MM/YYYY, ou seja,
+dia/mês/ano) e Formato do horário: HH:mm, HH:mm:ss, hh:mm AM/PM ou hh:mm:ss AM/PM.
+Clique em Aplicar para atualizar as mensagens já mantidas, inclusive horários
+ocultos. Datas dos cartões de usuário e dos avisos de atualização seguem o
+formato escolhido. Textos de mensagens e formatos da API e do armazenamento
+continuam intactos.
+
+O saldo do YouTube aparece apenas quando o painel focado inclui o YouTube.
+A seta de atualização continua disponível ao ver a Twitch. A inicialização adia
+trabalho de tradução e descompactação até ele ser necessário; a preparação dos
+padrões de emotes ocorre fora da interface.

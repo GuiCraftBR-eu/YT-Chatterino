@@ -162,7 +162,7 @@ def parse_renderer(renderer, kind, historical=False):
     result = {'id': renderer['id'], 'name': name,
               'user_id': renderer.get('authorExternalChannelId'),
               'avatar': next(iter(image_urls(renderer.get('authorPhoto'))), None),
-              'time': stamp.strftime('%I:%M %p').lower().lstrip('0'), 'text': text,
+              'time': stamp.strftime('%H:%M:%S'), 'text': text,
               'badges': badges, 'youtube_badges': images, 'native_emotes': emotes,
               'special': special, '_history': historical, '_youtube_web': True}
     if sent_at:

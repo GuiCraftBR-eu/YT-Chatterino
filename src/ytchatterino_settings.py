@@ -2,10 +2,10 @@
 import tkinter as tk
 import unicodedata
 from tkinter import ttk
-from ytchatterino_i18n import tr, language
+from ytchatterino_i18n import tr, language, search_translation
 
 SECTIONS = ('Accounts', 'Appearance', 'Notifications', 'Saved channels',
-            'YouTube quota', 'Keyboard shortcuts', 'Tutorial')
+            'YouTube quota', 'Updates', 'Keyboard shortcuts', 'Tutorial')
 APPEARANCE_PAGES = ('Display', 'Messages', 'Highlights')
 
 # Page, visible control label, additional English and Portuguese search words.
@@ -17,6 +17,9 @@ SEARCH_ITEMS = (
     ('Display', 'Always on top', 'pin window topmost fixar janela topo sempre'),
     ('Display', 'Compact message spacing', 'compact space rows compacto espacamento mensagens linhas'),
     ('Display', 'Show timestamps', 'time date clock timestamp hora horario data relogio'),
+    ('Display', 'Date format', 'date format day month year dd mm yyyy data formato dia mes ano'),
+    ('Display', 'Timestamp format', 'time seconds hour clock timestamp hh mm ss 12 24 am pm horario segundos hora formato relogio'),
+    ('Updates', 'Check for updates automatically', 'automatic updates download version upgrade atualizar atualizacao automatica baixar versao'),
     ('Display', 'Alternate message backgrounds', 'background alternate rows color fundo linhas alternadas cor'),
     ('Display', 'Badge height (px)', 'badge size height moderator vip sub emblemas tamanho altura moderador'),
     ('Display', 'Emote height (px)', 'emote emoji size height gif animation tamanho altura animacao'),
@@ -56,7 +59,7 @@ def settings_matches(query):
     result = []
     for page, label, keywords in SEARCH_ITEMS:
         section = 'Appearance' if page in APPEARANCE_PAGES else page
-        searchable = normalized(' '.join((page, section, label, str(tr(page)), str(tr(section)), str(tr(label)), keywords)))
+        searchable = normalized(' '.join((page, section, label, search_translation(page), search_translation(section), search_translation(label), keywords)))
         if all(word in searchable for word in words):
             result.append((page, label))
     return result
@@ -265,7 +268,7 @@ class SettingsWindow:
             builders = {'Accounts':self.owner.accounts_page, 'Display':self.owner.appearance_page,
                 'Messages':self.owner.chat_tools.settings, 'Highlights':self.owner.highlights_page,
                 'Notifications':self.owner.notifications_page, 'Saved channels':self.owner.saved_channels_page,
-                'YouTube quota':self.owner.quota_page, 'Keyboard shortcuts':self.owner.shortcuts_page,
+                'YouTube quota':self.owner.quota_page, 'Updates':self.owner.app.updater.settings_page, 'Keyboard shortcuts':self.owner.shortcuts_page,
                 'Tutorial':self.owner.tutorial_page}
             builders[page](frame.inner)
             frame.install_wheel()

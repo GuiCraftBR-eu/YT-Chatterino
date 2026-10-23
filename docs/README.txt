@@ -3,7 +3,7 @@ Updated: 23 October 2026
 
 QUICK START
 ===========
-1. Right-click YT-Chatterino-Windows11-1.2.1.zip > Extract All.
+1. Right-click YT-Chatterino-Windows11-1.2.2.zip > Extract All.
 2. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe.
 
@@ -130,7 +130,7 @@ extracted program does not erase saved settings or Windows credentials.
   Website restrictions/changes can interrupt reading; use Open chat in browser.
 - YouTube actions fail: check API activation, OAuth/test-user setup, selected
   account/channel, moderator rights and project quota.
-- Offline Twitch chats receive new messages only, without downloading history.
+- Offline Twitch channels may also load recent messages when the history service has them.
 - No sound: check Notifications and Windows volume.
 Independent app; not an official Twitch, YouTube or Chatterino release.
 
@@ -162,7 +162,7 @@ messages provided by its chat page. Historical messages do not trigger sounds.
 NATIVE ARCH LINUX DOWNLOAD
 =========================
 A separate Arch Linux package is available on the GitHub release page.
-Install yt-chatterino-1.2.1-1-any.pkg.tar.zst using pacman -U, or build the
+Install yt-chatterino-1.2.2-1-any.pkg.tar.zst using pacman -U, or build the
 PKGBUILD in the source tar.gz with makepkg -si. No Wine is used. See
 docs/ARCH-LINUX.md in that download for dependencies, encrypted keyring and sound.
 
@@ -179,3 +179,30 @@ history. During a resize, the visible messages are rendered separately; new
 display updates and animated frames resume when the drag stops. The message
 buffer, selection and scroll position are preserved. See docs/PERFORMANCE.md
 in the source download for a reproducible benchmark and its limits.
+
+VERSION 1.2.2: UPDATES, DATES AND TIMES
+=====================================
+The app checks for stable GitHub releases after startup and every six hours.
+When a newer package is ready, a download arrow appears beside the YouTube
+balance area. Click it, then Install update and restart. The app downloads,
+checks the SHA-256 digest, closes, replaces its files and restarts. Accounts,
+settings and extra files in the app folder are preserved. A previous-files
+backup remains beside the app folder. A failed portable/source startup restores
+the previous files. Close other copies of the app before updating.
+
+Settings > Updates can disable background checks or check manually. Arch
+pacman installations use pkexec/polkit to authorize pacman; install polkit and
+an authentication agent for this flow. The normal app still runs as your user.
+Source updates preserve your existing Python and dependencies. A writable app
+folder is required for portable/source updates. Version 1.2.1 and earlier need
+one manual update to 1.2.2 before these controls are available.
+
+Appearance > Display now has Date format (default DD/MM/YYYY) and Timestamp
+format: HH:mm, HH:mm:ss, hh:mm AM/PM or hh:mm:ss AM/PM. Apply changes to update
+the messages already retained, including timestamps currently hidden. Dates in
+user cards and update notices follow your selected format. Chat message text
+and API/storage formats remain unchanged.
+
+The YouTube balance is visible only when the focused pane includes YouTube.
+The update arrow remains available when viewing Twitch. Startup defers unused
+translation and archive work; emote pattern compilation runs off the UI thread.

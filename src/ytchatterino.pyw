@@ -3,6 +3,11 @@
 Requires only Python 3 (Tkinter is included on Windows). No pip installs.
 Run:  python ytchatterino.py
 """
+import sys
+if __name__ == "__main__" and len(sys.argv) == 3 and sys.argv[1] == "--apply-update":
+    from ytchatterino_update import run_helper
+    raise SystemExit(run_helper(sys.argv[2]))
+
 import hashlib
 import base64
 import ctypes
@@ -29,22 +34,24 @@ import weakref
 import zlib
 from collections import OrderedDict, deque
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 from tkinter import messagebox, simpledialog, ttk
-from ytchatterino_i18n import tr, set_language, install_ui, number, language, display_time
+from ytchatterino_i18n import tr, set_language, install_ui, number, language, display_time, set_datetime_formats
 from ytchatterino_features import FeatureController, parse_twitch_gifs, fit_photo
 from ytchatterino_chat import message_limit, parse_privmsg
 from ytchatterino_youtube import YouTubeWebClient, YouTubeReadError, WEB_POLL_SECONDS
 
-CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino.json")
+DATA_HOME = os.path.abspath(os.environ.get("YTCHATTERINO_DATA_DIR") or os.path.expanduser("~"))
+CONFIG_PATH = os.path.join(DATA_HOME, ".ytchatterino.json")
 BG, FG, PANEL, DIM = "#000000", "#efeff1", "#000000", "#8b8b94"
 EDGE = "#333333"  # only used for the thin outline of the input box
 TAB_BLUE, ACCENT, ALT, HEADER_BG = "#4a9cdb", "#2aa8ff", "#0e0e0e", "#111111"
 PALETTE = ["#ff7f50", "#1e90ff", "#00ff7f", "#daa520", "#ff69b4", "#a070ff",
            "#00ced1", "#9acd32", "#ff5a36", "#5f9ea0", "#e08a3c", "#e05d5d"]
-APP_VERSION = "1.2.1"
-QUOTA_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino_quota.json")
-LOG_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino_error.log")
+APP_VERSION = "1.2.2"
+QUOTA_PATH = os.path.join(DATA_HOME, ".ytchatterino_quota.json")
+LOG_PATH = os.path.join(DATA_HOME, ".ytchatterino_error.log")
 APP_ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ytchatterino.ico")
 APP_USER_MODEL_ID = "Guilherme.YTChatterino"
 DAILY_LIMIT = 10000  # default YouTube Data API quota per day
@@ -328,6 +335,7 @@ def load_config():
 def save_config(cfg):
     temp_path = CONFIG_PATH + ".tmp"
     try:
+        os.makedirs(DATA_HOME, exist_ok=True)
         with open(temp_path, "w", encoding="utf-8") as file:
             json.dump(cfg, file, ensure_ascii=False)
             file.flush()
@@ -425,8 +433,8 @@ class ApiKeyStore:
 class TwitchTokenStore(ApiKeyStore):
     """Keep Twitch OAuth tokens encrypted for the current Windows user."""
 
-    TARGET = "YT-Chatterino/Twitch OAuth"
-    DPAPI_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino_twitch.dpapi")
+    TARGET = "YT-Chatterino/Twitch OAuth" + ("/" + hashlib.sha256(DATA_HOME.encode()).hexdigest()[:16] if os.environ.get("YTCHATTERINO_DATA_DIR") else "")
+    DPAPI_PATH = os.path.join(DATA_HOME, ".ytchatterino_twitch.dpapi")
 
     class _DataBlob(ctypes.Structure):
         _fields_ = [("cbData", ctypes.wintypes.DWORD),
@@ -512,7 +520,7 @@ class TwitchTokenStore(ApiKeyStore):
 
 
 def clock():
-    return datetime.now().strftime("%I:%M %p").lower().lstrip("0")
+    return datetime.now().strftime("%H:%M:%S")
 
 
 def video_id_from(text):
@@ -1611,6 +1619,12 @@ class EventQueue(queue.Queue):
                 pass
 
 
+@lru_cache(maxsize=16)
+def compile_emote_pattern(codes):
+    ordered = sorted(codes, key=len, reverse=True)
+    return re.compile(r"(?<![A-Za-z0-9_])(?:" + "|".join(map(re.escape, ordered)) + r")(?![A-Za-z0-9_])") if ordered else None
+
+
 class ChatSource:
     """One channel connection, shared by every pane that displays it."""
 
@@ -1631,6 +1645,7 @@ class ChatSource:
         self.history_requested = False
         self.seen = OrderedDict()
         self.last_status = None
+        self.status_times = OrderedDict()
         self.manual_paused = bool(spec.get("paused", False)) if self.platform == "youtube" else False
         self.emote_map = {}
         self.youtube_emotes = {}
@@ -1698,8 +1713,9 @@ class ChatSource:
 
         def load():
             result = EMOTE_CATALOG.load(self.platform, channel_id)
+            pattern = compile_emote_pattern(tuple(sorted(code for code in result if code and len(code) <= 80 and not any(char.isspace() for char in code))))
             if not self.closed:
-                self.q.put(("emote_catalog", (generation, result)))
+                self.q.put(("emote_catalog", (generation, result, pattern)))
         CATALOG_POOL.submit(load)
 
     def request_badges(self, broadcaster_id):
@@ -1755,6 +1771,10 @@ class ChatSource:
                                 view.load_recent()
                         return
         self.app.message_sequence += 1
+        if kind == "status":
+            self.status_times[self.app.message_sequence] = time.time()
+            while len(self.status_times) > message_limit(self.app.cfg):
+                self.status_times.popitem(last=False)
         if kind == "msg":
             value = dict(value, _seq=self.app.message_sequence)
             self.app.features.on_message(self, value)
@@ -1787,16 +1807,12 @@ class ChatSource:
             self.request_emotes(value)
             self.request_badges(value)
         elif kind == "emote_catalog":
-            generation, emotes = value
+            generation, emotes, pattern = value
             if generation < self.emote_version:
                 return
             self.emote_version = generation
             self.emote_map = emotes
-            codes = sorted((code for code in emotes if code and len(code) <= 80
-                            and not any(char.isspace() for char in code)), key=len, reverse=True)
-            self.emote_pattern = (re.compile(r"(?<![A-Za-z0-9_])(?:"
-                                  + "|".join(re.escape(code) for code in codes)
-                                  + r")(?![A-Za-z0-9_])") if codes else None)
+            self.emote_pattern = pattern
         elif kind == "youtube_emotes":
             self.youtube_emotes.update(value)
             while len(self.youtube_emotes) > 1024:
@@ -2076,6 +2092,7 @@ class ChatTab(tk.Frame):
         self.photo_urls = {}
         self.used_assets = set()
         self.message_records = {}
+        self.timestamp_records = {}
         self.row_color_tags = {}
         self.image_counter = 0
         self.pending_counter = 0
@@ -2411,8 +2428,8 @@ class ChatTab(tk.Frame):
             # Render a small, independent surface while dragging. The main
             # text widget keeps all data/selection/marks at its last width.
             if len(self.row_marks) > 100:
-                start = self.text.index("@0,0 - 10 lines linestart")
-                end = self.text.index(f"@0,{self.text.winfo_height()} + 20 lines lineend +1c")
+                start = self.text.index("@0,0 - 3 lines linestart")
+                end = self.text.index(f"@0,{self.text.winfo_height()} + 6 lines lineend +1c")
                 self._make_resize_surface(start, end)
         if self.viewport_after_id is None:
             self.viewport_after_id = self.after(16, self._apply_viewport_size)
@@ -2573,6 +2590,7 @@ class ChatTab(tk.Frame):
                 self.image_assets.pop(name, None)
         self.text.delete("1.0", delete_to)
         for marker, seq in old:
+            self.timestamp_records.pop(marker, None)
             self.text.mark_unset(marker)
             if seq is not None:
                 self.message_records.pop(seq, None)
@@ -2600,13 +2618,13 @@ class ChatTab(tk.Frame):
                 else:
                     pending.pop(key, None)
 
-    def add_system(self, text):
+    def add_system(self, text, sent_at=None):
         if text == self.last_status:
             return
         self.last_status = text
         at_bottom, alt = self._begin()
         err = text.startswith(("Error", "API quota", "Video not found", "The live chat"))
-        self._ins(display_time(clock()) + " ", "time", *alt)
+        self._insert_time(clock(), sent_at, alt)
         self._ins(str(tr(text)) + "\n", "sys_err" if err else "sys", *alt)
         self._end(at_bottom)
         self.refresh_search_later()
@@ -2670,7 +2688,7 @@ class ChatTab(tk.Frame):
         if reply:
             self._ins(str(tr("↪ Replying to @{name}: {body}", name=reply.get("name") or reply.get("login", ""),
                              body=reply.get("text", "")[:180])) + "\n", "sys", *alt)
-        self._ins(display_time(m["time"]) + " ", "time", *alt)
+        self._insert_time(m["time"], m.get("sent_at"), alt)
         if len(self.sources) > 1:
             label = self._render_source.name
             self._ins("[" + label + "] ", "source_" + self._render_source.platform, *alt)
@@ -2715,7 +2733,37 @@ class ChatTab(tk.Frame):
         self._include_terms = tuple(str(value).casefold() for value in self.filters.get("include_terms", []) if value)
         self._exclude_terms = tuple(str(value).casefold() for value in self.filters.get("exclude_terms", []) if value)
 
+    def _insert_time(self, value, sent_at, tags):
+        self.timestamp_records[self.row_marks[-1][0]] = (value, sent_at)
+        self._ins(display_time(value, sent_at) + " ", "time", *tags)
+
+    def refresh_timestamps(self):
+        self.finish_resize()
+        follow = self.follow_tail and not self.text.tag_ranges("sel")
+        self.text.mark_set("__time_anchor", self.text.index("@0,0"))
+        self.text.configure(state="normal")
+        rows = list(self.row_marks)
+        for i, (marker, _) in enumerate(rows):
+            raw = self.timestamp_records.get(marker)
+            if raw is None:
+                continue
+            end = rows[i+1][0] if i+1 < len(rows) else "end"
+            span = self.text.tag_nextrange("time", marker, end)
+            if len(span) == 2:
+                start, stop = map(str, span)
+                tags = self.text.tag_names(start)
+                self.text.delete(start, stop)
+                self.text.insert(start, display_time(*raw) + " ", tags)
+        self.text.configure(state="disabled")
+        if follow:
+            self.text.see("end")
+        else:
+            self.text.yview("__time_anchor")
+        self.text.mark_unset("__time_anchor")
+        self.refresh_search_later()
+
     def set_appearance(self, appearance):
+        self.finish_resize()
         self.appearance = appearance
         gap = 1 if appearance.get("compact_spacing") else 3
         self.text.configure(spacing1=gap, spacing3=gap)
@@ -2732,7 +2780,6 @@ class ChatTab(tk.Frame):
         if getattr(self, "_image_font_size", size) != size:
             self.load_recent()
         self._image_font_size = size
-        self.app.features.refresh_highlights()
 
     def set_search(self, query, reveal=True):
         self.finish_resize()
@@ -2942,7 +2989,7 @@ class ChatTab(tk.Frame):
                 if kind == "msg":
                     self.add(value, source)
                 else:
-                    self.add_system((f"[{source.name}] " if len(self.sources) > 1 else "") + value)
+                    self.add_system((f"[{source.name}] " if len(self.sources) > 1 else "") + value, source.status_times.get(sequence))
                 count += 1
         finally:
             self._batch = False
@@ -2965,6 +3012,7 @@ class ChatTab(tk.Frame):
         self.pending_events.clear()
         self.last_seq = 0 if reset_sequence else self.app.message_sequence
         self.message_records.clear()
+        self.timestamp_records.clear()
         self.row_color_tags.clear()
         for color_tag in self.name_tags:
             self.text.tag_delete(color_tag)
@@ -3092,8 +3140,10 @@ class App:
         self._twitch_auth_busy = False
         self._twitch_auth_waiters = []
         self.appearance = {"font_size": 12, "compact_spacing": False,
-                           "show_timestamps": True, "alternate_rows": True, "badge_size": 18, "emote_size": 36}
+                           "show_timestamps": True, "alternate_rows": True, "badge_size": 18, "emote_size": 36,
+                           "date_format": "DD/MM/YYYY", "time_format": "HH:mm"}
         self.appearance.update(self.cfg.get("appearance", {}))
+        set_datetime_formats(self.appearance)
         self.tabs = []
         self.current = None
         root.title(tr("YT-Chatterino"))
@@ -3149,9 +3199,13 @@ class App:
         self.gear.bind("<Button-1>", lambda event: self.features.show_settings())
         self.gear.bind("<Button-3>", self.show_gear_menu)
         self.quota_lbl = tk.Label(self.strip, text="", bg=BG, fg=DIM, font=("Segoe UI", 8), padx=4)
-        self.quota_lbl.pack(side="right")
         self.quota_lbl.configure(cursor="hand2")
         self.quota_lbl.bind("<Button-1>", lambda event: self.features.show_settings("YouTube quota"))
+        self.update_button = tk.Label(self.strip, text="⬇", bg=BG, fg="#78c34b",
+                                      font=("Segoe UI Symbol", 13), padx=6, cursor="hand2")
+        from ytchatterino_update import UpdateController
+        self.updater = UpdateController(self, sys.modules[__name__])
+        self.update_button.bind("<Button-1>", lambda event: self.updater.show())
         self.layout_button = tk.Label(self.strip, text=tr("▦"), bg=BG, fg=DIM,
                                        font=("Segoe UI", 13), padx=7, cursor="hand2")
         self.layout_button.pack(side="right")
@@ -3224,6 +3278,9 @@ class App:
         self.pump()
         root.after(50, lambda: style_titlebar(root))
         root.after(400, lambda: style_titlebar(root))
+        if len(sys.argv) == 3 and sys.argv[1] == "--updated":
+            from ytchatterino_update import acknowledge_update
+            root.after(500, lambda: acknowledge_update(sys.argv[2]))
 
     # ---- "+" dialog (the only way to add a stream)
     def add_stream_dialog(self, mode="tabs", anchor=None):
@@ -3361,6 +3418,12 @@ class App:
                 "bans": max(0, left - 1) // 200}
 
     def update_quota(self):
+        show = bool(self.current and not self.current.closed and any(source.platform == "youtube" for source in self.current.sources))
+        if not show:
+            self.quota_lbl.pack_forget()
+            return
+        if not self.quota_lbl.winfo_manager():
+            self.quota_lbl.pack(side="right", after=self.update_button if self.update_button.winfo_manager() else self.gear)
         estimate = self.quota_estimate()
         fraction = estimate["left"] / estimate["limit"]
         color = "#ff5a5a" if fraction <= 0.1 else "#ffb347" if fraction <= 0.3 else DIM
@@ -3735,6 +3798,7 @@ class App:
 
     # ---- tabs
     def _refresh_empty(self):
+        self.update_quota()
         if self.tabs:
             self.empty.place_forget()
         else:
@@ -4206,6 +4270,7 @@ class App:
             return
         self.save_session()
         self.features.close()
+        self.updater.close()
         self._closing = True
         for timer in (self.session_after_id, self.pump_after_id):
             if timer is not None:
@@ -4364,6 +4429,7 @@ class App:
             self.select(pane)
             return
         self.current = pane
+        self.update_quota()
         pane.workspace.focused = pane
         for other in pane.workspace.panes:
             other.configure(highlightbackground=ACCENT if other is pane else HEADER_BG)

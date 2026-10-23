@@ -10,7 +10,7 @@ from tkinter import simpledialog, ttk
 import urllib.parse
 import urllib.request
 
-from ytchatterino_i18n import tr, display_time, number
+from ytchatterino_i18n import tr, display_time, display_date, number
 
 DEFAULT_MESSAGE_LIMIT = 2000
 MIN_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT = 100, 20000
@@ -58,7 +58,7 @@ def parse_privmsg(line, decode_tags, parse_badges, parse_emotes, parse_gifs):
                  "text": tags.get("reply-parent-msg-body", "")}
     return channel, {"id": tags.get("id"), "name": tags.get("display-name") or login,
         "login": login, "user_id": tags.get("user-id"), "room_id": tags.get("room-id"),
-        "time": date.strftime("%I:%M %p").lower().lstrip("0"), "sent_at": stamp,
+        "time": date.strftime("%H:%M:%S"), "sent_at": stamp or date.timestamp(),
         "color": tags.get("color", ""), "text": body, "special": None,
         "badge_ids": badges, "badge_info": tags.get("badge-info", ""),
         "badges": [labels[b["set_id"]] for b in badges if b["set_id"] in labels],
@@ -348,7 +348,7 @@ class UserCard:
                 return
             fields = []
             if data.get("created"):
-                fields.append(str(tr("Created: {date}", date=data["created"])))
+                fields.append(str(tr("Created: {date}", date=display_date(data["created"]))))
             if data.get("followers") is not None:
                 fields.append(str(tr("Followers: {count}", count=number(int(data["followers"])))))
             if data.get("subscribers") is not None:
@@ -412,7 +412,7 @@ class UserCard:
         self.used_assets.clear()
         for row, message in enumerate(messages):
             tags = ("alt",) if row % 2 else ()
-            self.text.insert("end", display_time(message["time"]) + " ", ("time",) + tags)
+            self.text.insert("end", display_time(message["time"], message.get("sent_at")) + " ", ("time",) + tags)
             self.text.insert("end", message["name"] + ": ", ("name",) + tags)
             body = str(tr("[message deleted]")) if message.get("deleted") else message.get("text", "")
             spans = list(message.get("native_emotes", [])) + list(message.get("gifs", []))

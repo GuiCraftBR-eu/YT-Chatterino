@@ -1,5 +1,19 @@
 # Histórico de versões
 
+## 1.2.2
+
+- Atualizador pelo aplicativo: verificação em segundo plano, seta de download,
+  confirmação, integridade SHA-256, backup, substituição e reinício automático.
+- Atualização de pacotes nativos do Arch pelo pacman com autorização do polkit.
+- Datas da interface em DD/MM/AAAA por padrão, com quatro formatos em Aparência.
+- Horários configuráveis de 12/24 horas, com ou sem segundos; atualizam mensagens
+  já mantidas usando o horário original quando disponível.
+- Saldo do YouTube visível apenas para o painel focado que inclui YouTube.
+- Trabalho de tradução/descompactação adiado; padrões de emotes preparados em
+  segundo plano e reutilizados; elimina recálculos repetidos de destaques.
+- Ampliação das verificações de recursos existentes, formatos, atualização,
+  arquivos privados preservados, falhas de instalação e restauração de arquivos.
+
 ## 1.2.1
 
 - Configurações reorganizadas: Aparência reúne Exibição, Mensagens e Destaques.

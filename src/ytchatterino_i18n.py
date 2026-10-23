@@ -9,17 +9,22 @@ import re
 import string
 import tkinter as tk
 import weakref
+from datetime import date, datetime
 from tkinter import messagebox, simpledialog
 
-from ytchatterino_translations import PT_BR
-from ytchatterino_chat_translations import PT_BR_CHAT
-PT_BR.update(PT_BR_CHAT)
+PT_BR = {}
+_catalog_loaded = False
 
 _language = 'en'
 _widgets = weakref.WeakKeyDictionary()
 _installed = False
 _refreshing = False
 _patterns = []
+DATE_FORMATS = {'DD/MM/YYYY': '%d/%m/%Y', 'MM/DD/YYYY': '%m/%d/%Y',
+                'YYYY-MM-DD': '%Y-%m-%d', 'DD.MM.YYYY': '%d.%m.%Y'}
+TIME_FORMATS = ('HH:mm', 'HH:mm:ss', 'hh:mm AM/PM', 'hh:mm:ss AM/PM')
+_date_format, _time_format = 'DD/MM/YYYY', 'HH:mm'
+_clock_pattern = re.compile(r'(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([ap]m))?', re.I)
 
 
 def language():
@@ -29,6 +34,24 @@ def language():
 def set_language(value):
     global _language
     _language = 'pt-BR' if value in ('pt-BR', 'pt_BR', 'pt-br') else 'en'
+    if _language == 'pt-BR':
+        _ensure_catalog()
+
+
+def _ensure_catalog():
+    global _catalog_loaded
+    if not _catalog_loaded:
+        from ytchatterino_translations import PT_BR as base
+        from ytchatterino_chat_translations import PT_BR_CHAT
+        PT_BR.update(base)
+        PT_BR.update(PT_BR_CHAT)
+        _compile_patterns()
+        _catalog_loaded = True
+
+
+def search_translation(text):
+    _ensure_catalog()
+    return _translate(str(text), 'pt-BR')
 
 
 def number(value):
@@ -36,17 +59,46 @@ def number(value):
     return text.replace(',', '.') if _language == 'pt-BR' else text
 
 
-def display_time(value):
-    """Render cached timestamps in the chosen language without changing history."""
-    match = re.fullmatch(r'(\d{1,2}):(\d{2})(?:\s*([ap]m))?', str(value), re.I)
-    if not match:
-        return value
-    hour, minute = int(match[1]), match[2]
-    if match[3]:
-        hour = hour % 12 + (12 if match[3].lower() == 'pm' else 0)
-    if _language == 'pt-BR':
-        return f'{hour:02}:{minute}'
-    return f'{hour % 12 or 12}:{minute} ' + ('pm' if hour >= 12 else 'am')
+def set_datetime_formats(appearance):
+    global _date_format, _time_format
+    requested = appearance.get('date_format', 'DD/MM/YYYY')
+    _date_format = requested if isinstance(requested, str) and requested in DATE_FORMATS else 'DD/MM/YYYY'
+    requested = appearance.get('time_format', 'HH:mm')
+    _time_format = requested if requested in TIME_FORMATS else 'HH:mm'
+
+
+def display_date(value):
+    """Format UI dates only; API and storage dates remain ISO 8601."""
+    try:
+        parsed = value if isinstance(value, date) else datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        return parsed.strftime(DATE_FORMATS[_date_format])
+    except (TypeError, ValueError, OverflowError):
+        return str(value)
+
+
+def display_time(value, sent_at=None):
+    """Use the original epoch when available, including its actual seconds."""
+    if isinstance(value, datetime):
+        hour, minute, second = value.hour, value.minute, value.second
+    elif isinstance(sent_at, (int, float)) and sent_at > 0:
+        try:
+            stamp = datetime.fromtimestamp(sent_at)
+            hour, minute, second = stamp.hour, stamp.minute, stamp.second
+        except (ValueError, OverflowError, OSError):
+            return display_time(value)
+    else:
+        match = _clock_pattern.fullmatch(str(value))
+        if not match:
+            return str(value)
+        hour, minute, second = int(match[1]), int(match[2]), int(match[3] or 0)
+        if match[4]:
+            hour = hour % 12 + (12 if match[4].lower() == 'pm' else 0)
+    if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+        return str(value)
+    suffix = f':{second:02}' if ':ss' in _time_format else ''
+    if 'AM/PM' in _time_format:
+        return f'{hour % 12 or 12}:{minute:02}{suffix} ' + ('PM' if hour >= 12 else 'AM')
+    return f'{hour:02}:{minute:02}{suffix}'
 
 
 def _compile_patterns():
@@ -249,4 +301,3 @@ def install_ui(root):
     simpledialog.Dialog.buttonbox = buttonbox
 
 
-_compile_patterns()

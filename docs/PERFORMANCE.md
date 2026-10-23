@@ -41,3 +41,21 @@ draft preservation, search navigation, latest-size coalescing, incoming messages
 during resize, and preservation of text, selection, tags and image references.
 Native Arch Linux CI runs the same Tk tests under Xvfb. Live Windows checks
 also cover the settings window and public Twitch/YouTube rendering.
+
+## v1.2.2 comparison
+
+A fresh comparison of the same scripted workload on 23/10/2026 measured 12.01 s
+for v1.2.1 and 11.75 s for v1.2.2, including the final layout. That is about 2%
+less elapsed time in this run; there is no large general resize-speed claim.
+These measurements also show why results from separate sessions should not be
+compared as if the machine and window system were constant.
+
+The temporary visible range during dragging is smaller. Emote catalog patterns
+are compiled in a background worker and shared in a bounded cache. Appearance
+changes avoid recalculating all panes' highlights once per pane. English startup
+does not compile the Portuguese catalog or import archive readers until needed.
+Startup timings vary with caches; live checks confirm a responsive first window.
+
+Updater checks run after the first window appears. They never block startup on
+GitHub or download automatically without confirmation. Regression transports
+for sending/moderation/editing are mocked; live UI checks do not post to chat.

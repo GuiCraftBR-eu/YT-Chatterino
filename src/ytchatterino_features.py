@@ -27,7 +27,7 @@ from ytchatterino_settings import SettingsWindow
 import shutil
 import subprocess
 import sys
-from ytchatterino_i18n import tr, set_language, refresh_ui, number, language
+from ytchatterino_i18n import tr, set_language, refresh_ui, number, language, set_datetime_formats, DATE_FORMATS, TIME_FORMATS
 from concurrent.futures import ThreadPoolExecutor
 
 GOOGLE_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl"
@@ -237,8 +237,8 @@ class GoogleAccount:
         self.owner = controller
         core = controller.core
         cls = type("GoogleTokenStore", (core.TwitchTokenStore,), {
-            "TARGET": "YT-Chatterino/Google OAuth",
-            "DPAPI_PATH": os.path.join(os.path.expanduser("~"), ".ytchatterino_google.dpapi")})
+            "TARGET": "YT-Chatterino/Google OAuth" + ("/" + hashlib.sha256(core.DATA_HOME.encode()).hexdigest()[:16] if os.environ.get("YTCHATTERINO_DATA_DIR") else ""),
+            "DPAPI_PATH": os.path.join(core.DATA_HOME, ".ytchatterino_google.dpapi")})
         self.store = cls()
         self.lock = threading.RLock()
         self.auth = {}
@@ -422,6 +422,7 @@ class FeatureController:
 
     def start(self):
         self.watch_timer = self.app.root.after(1500, self.poll_watches)
+        self.app.updater.start()
 
     def close(self):
         self.closed = True
@@ -1042,7 +1043,7 @@ class FeatureController:
                         pane.image_names.pop(image, None)
                         pane.image_assets.pop(image, None)
                 pane.text.delete(start, end)
-                timestamp = self.core.display_time(message.get("time", "")) + " "
+                timestamp = self.core.display_time(message.get("time", ""), message.get("sent_at")) + " "
                 prefix = ("[" + source.name + "] ") if len(pane.sources) > 1 else ""
                 line = timestamp + prefix + message.get("name", "") + ": " + str(tr("[message deleted]")) + "\n"
                 pane.text.insert(start, line, ("sys", tag))
@@ -1436,6 +1437,15 @@ class FeatureController:
             tk.Spinbox(row, from_=low, to=high, textvariable=value, width=6, bg="#111111", fg=self.core.FG,
                        insertbackground=self.core.FG, buttonbackground="#202020").grid(row=index, column=1, padx=10)
         self.label(parent, "Text size: Ctrl++ / Ctrl+- · Ctrl+0 resets. Images keep their aspect ratio.", dim=True).pack(anchor="w", pady=8)
+        formats = tk.Frame(parent, bg=self.core.BG)
+        formats.pack(fill="x", pady=8)
+        date_format = tk.StringVar(value=self.app.appearance.get("date_format", "DD/MM/YYYY"))
+        time_format = tk.StringVar(value=self.app.appearance.get("time_format", "HH:mm"))
+        for i, (label, variable, choices) in enumerate((("Date format", date_format, tuple(DATE_FORMATS)),
+                                                       ("Timestamp format", time_format, TIME_FORMATS))):
+            self.label(formats, label).grid(row=i, column=0, sticky="w", pady=5)
+            ttk.Combobox(formats, state="readonly", values=choices, textvariable=variable, width=20).grid(row=i, column=1, padx=10)
+        self.label(parent, "HH = 24-hour; hh with AM/PM = 12-hour. Add :ss to show seconds.", dim=True).pack(anchor="w")
         def apply():
             parsed = {}
             try:
@@ -1449,10 +1459,18 @@ class FeatureController:
                 return
             self.app.appearance.update({key: variable.get() for key, variable in variables.items()})
             self.app.appearance.update(parsed)
+            old_time = self.app.appearance.get("time_format", "HH:mm")
+            self.app.appearance.update(date_format=date_format.get(), time_format=time_format.get())
+            set_datetime_formats(self.app.appearance)
             self.app.cfg["appearance"] = self.app.appearance
             self.save()
             for pane in self.app.all_panes():
                 pane.set_appearance(self.app.appearance)
+                if old_time != time_format.get():
+                    pane.refresh_timestamps()
+            for card in tuple(self.chat_tools.cards.values()):
+                card.refresh_messages()
+                card.load()
             self.refresh_highlights()
         self.button(parent, "Apply", apply).pack(anchor="e", pady=12)
 

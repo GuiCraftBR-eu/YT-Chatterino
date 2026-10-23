@@ -6,7 +6,7 @@ Chat de **YouTube e Twitch** em uma interface escura inspirada no Chatterino.
 
 **[Baixar a versão mais recente](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/latest)**
 
-1. Na página da versão, baixe `YT-Chatterino-Windows11-1.2.1.zip` em **Assets**.
+1. Na página da versão, baixe `YT-Chatterino-Windows11-1.2.2.zip` em **Assets**.
 2. Clique com o botão direito no ZIP e selecione **Extrair tudo**.
 3. Abra a pasta extraída e execute **YT-Chatterino.exe**.
 
@@ -15,11 +15,18 @@ O pacote é destinado ao Windows 11 x64 (Intel/AMD).
 
 ## Arch Linux nativo
 
-Baixe o pacote `yt-chatterino-1.2.1-1-any.pkg.tar.zst` na mesma página e instale
-com `sudo pacman -U ./yt-chatterino-1.2.1-1-any.pkg.tar.zst`.
+Baixe o pacote `yt-chatterino-1.2.2-1-any.pkg.tar.zst` na mesma página e instale
+com `sudo pacman -U ./yt-chatterino-1.2.2-1-any.pkg.tar.zst`.
 O menu de aplicativos terá **YT-Chatterino**. Não usa Wine.
 Também há um `.tar.gz` com o código e o PKGBUILD para compilar/instalar com `makepkg -si`.
 Veja o [guia do Arch Linux](docs/ARCH-LINUX.md) para dependências, chaveiro e sons.
+
+## Atualizações pelo aplicativo
+
+A partir da 1.2.2, a seta **⬇** aparece quando há uma versão nova. Clique nela e
+confirme **Instalar atualização e reiniciar**. Também há **Configurações → Atualizações**.
+No Arch instalado por pacman, o polkit pede autorização para atualizar o pacote.
+Quem usa 1.2.1 ou anterior precisa instalar a 1.2.2 manualmente uma vez.
 
 ## Recursos
 
@@ -30,6 +37,8 @@ Veja o [guia do Arch Linux](docs/ARCH-LINUX.md) para dependências, chaveiro e s
 - Configurações com busca em inglês e português; Exibição, Mensagens e Destaques em Aparência.
 - Destaques, filtros, pesquisa, sons, canais salvos e atalhos de teclado.
 - Interface em português brasileiro ou inglês, com opção de manter no topo.
+- Datas em DD/MM/AAAA por padrão e formatos de horário de 12/24 horas, com segundos opcionais.
+- Saldo do YouTube exibido apenas quando o painel focado inclui um chat do YouTube.
 - Respostas reais da Twitch pelo menu de clique direito nas mensagens.
 - Cartão de usuário ao clicar no nome, com perfil público e mensagens retidas.
 - Histórico recente ao abrir chats, quando disponível.
