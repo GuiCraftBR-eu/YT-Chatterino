@@ -8,7 +8,7 @@ No Windows, instale o Python com Tcl/Tk e abra um terminal na raiz do repositór
 py src/ytchatterino.pyw
 ```
 
-Mantenha os cinco arquivos Python, o ícone, os logotipos e `ChatternoPing.wav`
+Mantenha todos os arquivos Python, o ícone, os logotipos e `ChatternoPing.wav`
 juntos na pasta src/. A leitura dos chats do YouTube usa apenas o link da live.
 Consulte [README-PTBR.txt](README-PTBR.txt) ou [README.txt](README.txt) para
 conectar as contas e configurar envio de mensagens e moderação.
@@ -37,3 +37,13 @@ O repositório contém o código e os recursos do aplicativo. Os JSONs OAuth,
 tokens, chaves, configurações, logs e dados da conta ficam no computador de
 cada usuário e não devem ser adicionados ao Git. O `.gitignore` cobre os
 nomes usados pelo aplicativo.
+
+## Testes
+
+```powershell
+py -m unittest discover -s tests -v
+```
+
+No Linux sem sessão gráfica, use `xvfb-run -a python -m unittest discover -s tests -v`.
+O workflow `Native checks` executa esses testes no Windows e no Arch Linux e gera
+o pacote pacman. As instruções do Linux estão em [ARCH-LINUX.md](ARCH-LINUX.md).

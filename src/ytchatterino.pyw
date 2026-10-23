@@ -365,11 +365,21 @@ class ApiKeyStore:
     def __init__(self):
         self.windows = sys.platform == "win32"
 
+    @staticmethod
+    def _linux_keyring():
+        import keyring
+        backend = keyring.get_keyring()
+        secure = ("keyring.backends.SecretService", "keyring.backends.kwallet", "keyring.backends.libsecret")
+        if backend.__class__.__module__.startswith("keyring.backends.chainer"):
+            backend = next((item for item in backend.backends if item.__class__.__module__.startswith(secure)), backend)
+        if not backend.__class__.__module__.startswith(secure):
+            raise OSError("Unlock a Secret Service / KWallet keyring to save sign-in securely.")
+        return backend
+
     def read(self):
         if not self.windows:
             try:
-                import keyring
-                return keyring.get_password(self.TARGET, "YT-Chatterino")
+                return self._linux_keyring().get_password(self.TARGET, "YT-Chatterino")
             except Exception:
                 return None
         advapi = ctypes.WinDLL("Advapi32", use_last_error=True)
@@ -393,12 +403,7 @@ class ApiKeyStore:
 
     def write(self, value):
         if not self.windows:
-            import keyring
-            backend = keyring.get_keyring()
-            # Do not use a third-party plaintext fallback backend.
-            if not backend.__class__.__module__.startswith(("keyring.backends.SecretService", "keyring.backends.kwallet", "keyring.backends.libsecret")):
-                raise OSError("Unlock a Secret Service / KWallet keyring to save sign-in securely.")
-            keyring.set_password(self.TARGET, "YT-Chatterino", value)
+            self._linux_keyring().set_password(self.TARGET, "YT-Chatterino", value)
             return True
         raw = value.encode("utf-16-le")
         blob = ctypes.create_string_buffer(raw)

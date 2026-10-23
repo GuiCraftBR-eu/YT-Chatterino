@@ -375,6 +375,8 @@ class UserCard:
             raise ValueError("Profile image is too large.")
         from PIL import Image
         with Image.open(io.BytesIO(data)) as image:
+            if image.width > 2048 or image.height > 2048:
+                raise ValueError("Profile image dimensions are too large.")
             image.thumbnail((96, 96))
             out = io.BytesIO()
             image.convert("RGBA").save(out, format="PNG")

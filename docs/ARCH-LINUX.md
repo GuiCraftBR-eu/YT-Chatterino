@@ -5,6 +5,14 @@ executable, an embedded Windows runtime, or an emulator.
 
 ## Install
 
+For the ready-built pacman package, download `yt-chatterino-1.2.0-1-any.pkg.tar.zst`:
+
+```sh
+sudo pacman -U ./yt-chatterino-1.2.0-1-any.pkg.tar.zst
+```
+
+The source download below is an alternative if you prefer to build it locally.
+
 Download and extract `YT-Chatterino-ArchLinux-1.2.0.tar.gz`. From the extracted folder:
 
 ```sh

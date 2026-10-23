@@ -36,6 +36,12 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(m['badge_info'], 'subscriber/73')
         self.assertEqual(m['native_emotes'][0]['start'], 6)
 
+    def test_missing_twitch_fields_do_not_crash(self):
+        channel,m=core.TwitchIRCManager.parse_message(':tester!t@t PRIVMSG #guicraft_ :plain')
+        self.assertEqual(m['name'],'tester')
+        self.assertIsNone(m['reply'])
+        self.assertEqual(m['native_emotes'],[])
+
     def test_caps_and_invalid_settings(self):
         self.assertEqual(message_limit({}), 2000)
         self.assertEqual(message_limit({'message_limit': 'wrong'}), 2000)
@@ -85,6 +91,15 @@ class ParserTests(unittest.TestCase):
         with patch.dict(sys.modules,keyring=fake):
             with self.assertRaises(OSError):store.write('not-a-real-token')
 
+    def test_linux_secure_chained_keyring(self):
+        secure=type('Keyring',(),{'__module__':'keyring.backends.SecretService',
+            'get_password':lambda self,*a:'mock-value','set_password':lambda self,*a:None})()
+        chained=type('ChainerBackend',(),{'__module__':'keyring.backends.chainer','backends':[secure]})()
+        store=core.TwitchTokenStore();store.windows=False
+        with patch.dict(sys.modules,keyring=SimpleNamespace(get_keyring=lambda:chained)):
+            self.assertEqual(store.read(),'mock-value')
+            self.assertTrue(store.write('mock-value'))
+
 
 class UiTests(unittest.TestCase):
     def setUp(self):
@@ -120,6 +135,20 @@ class UiTests(unittest.TestCase):
         self.assertEqual(len(self.pane.row_marks),100)
         self.assertEqual(len(self.pane.message_records),100)
         self.assertLessEqual(len([m for m in self.pane.text.mark_names() if m.startswith('row_')]),100)
+
+    def test_image_references_are_removed_with_old_rows(self):
+        self.pane.clear_messages(True)
+        self.app.cfg['chat_message_limits']={self.pane.setting_key:100}
+        self.pane.add(self.msg(1),self.source)
+        photo=tk.PhotoImage(master=self.root,width=2,height=2)
+        self.pane.text.configure(state='normal')
+        image_name=self.pane.text.image_create('1.3',image=photo)
+        self.pane.image_names[image_name]='Kappa';self.pane.image_assets[image_name]=('https://example.invalid/emote',)
+        self.pane.text.configure(state='disabled')
+        for i in range(2,105):self.pane.add(self.msg(i),self.source)
+        self.assertNotIn(image_name,self.pane.image_names)
+        self.assertNotIn(image_name,self.pane.image_assets)
+        self.assertEqual(len(self.pane.row_color_tags),100)
 
     def test_reply_cancel_and_usercard(self):
         m=self.msg(1)

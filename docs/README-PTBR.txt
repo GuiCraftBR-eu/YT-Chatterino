@@ -1,9 +1,9 @@
 YT-CHATTERINO - EDIÇÃO PORTÁTIL PARA WINDOWS 11
-Atualizado em: 22 de outubro de 2026
+Atualizado em: 23 de outubro de 2026
 
 INÍCIO RÁPIDO
 =============
-1. Clique com o botão direito em YT-Chatterino-Windows11-Updated.zip > Extrair Tudo.
+1. Clique com o botão direito em YT-Chatterino-Windows11-1.2.0.zip > Extrair Tudo.
 2. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe.
 
@@ -143,3 +143,39 @@ pelo Windows. Configurações/diagnósticos usam arquivos .ytchatterino* em
 - Chats offline da Twitch recebem apenas mensagens novas, sem baixar histórico.
 - Sem som: confira Notificações e o volume do Windows.
 Aplicativo independente; não é uma versão oficial da Twitch, YouTube ou Chatterino.
+
+VERSÃO 1.2.0: RESPOSTAS, CARTÕES DE USUÁRIO E LIMITES
+==================================================
+Twitch: clique com o botão direito em uma mensagem > Responder à mensagem.
+O destinatário aparece acima do campo de envio. Digite e envie normalmente;
+Esc ou x cancela a resposta. As respostas recebidas mostram o contexto original.
+
+Clique com o botão esquerdo no nome de um usuário da Twitch ou do YouTube para
+abrir seu cartão. Ele mostra os dados públicos fornecidos pela plataforma,
+emblemas e meses de inscrição informados no chat, além de até 500 mensagens
+desse usuário ainda mantidas no canal. Há botões de perfil, destaque, menção
+e moderação. As permissões da plataforma continuam necessárias; informações
+privadas de inscrição não são públicas.
+Os detalhes adicionais de perfis do YouTube usam a conta Google conectada e
+custam 1 unidade de API por perfil ainda não consultado. Sem login, os dados
+básicos do chat continuam disponíveis.
+
+Configurações > Mensagens: o limite padrão é de 2000 mensagens por painel.
+Escolha um valor entre 100 e 20000. Para alterar um painel específico, clique
+com o botão direito no cabeçalho > Limite de mensagens. Um chat misturado divide
+seu limite entre os canais. Textos, imagens e referências de renderização
+antigos são removidos. Isso não é um registro permanente de conversas.
+
+A Twitch carrega até 200 mensagens recentes do serviço público independente
+recent-messages.robotty.de, também usado pelo Chatterino. Ele recebe o nome do
+canal, nunca os tokens da conta. A disponibilidade varia, principalmente em
+canais recém-acompanhados. Desative em Configurações > Mensagens, se desejar.
+O YouTube carrega apenas as mensagens recentes fornecidas pela própria página.
+Mensagens históricas não acionam sons.
+
+DOWNLOAD NATIVO PARA ARCH LINUX
+==============================
+Há um pacote separado de Arch Linux na página da versão no GitHub. Instale
+yt-chatterino-1.2.0-1-any.pkg.tar.zst com pacman -U, ou compile o PKGBUILD incluído
+no código-fonte .tar.gz com makepkg -si. Não usa Wine. Consulte o arquivo
+docs/ARCH-LINUX.md desse download para dependências, chaveiro seguro e sons.

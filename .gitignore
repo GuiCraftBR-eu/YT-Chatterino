@@ -9,6 +9,8 @@ build/
 dist/
 *.zip
 *.zip.sha256
+*.pkg.tar.zst
+*.tar.gz
 
 # Local accounts, credentials, settings and diagnostic files
 .env

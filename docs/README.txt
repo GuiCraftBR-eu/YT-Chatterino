@@ -1,9 +1,9 @@
 YT-CHATTERINO - WINDOWS 11 PORTABLE EDITION
-Updated: 22 October 2026
+Updated: 23 October 2026
 
 QUICK START
 ===========
-1. Right-click YT-Chatterino-Windows11-Updated.zip > Extract All.
+1. Right-click YT-Chatterino-Windows11-1.2.0.zip > Extract All.
 2. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe.
 
@@ -133,3 +133,35 @@ extracted program does not erase saved settings or Windows credentials.
 - Offline Twitch chats receive new messages only, without downloading history.
 - No sound: check Notifications and Windows volume.
 Independent app; not an official Twitch, YouTube or Chatterino release.
+
+VERSION 1.2.0: REPLIES, USER CARDS AND MESSAGE LIMITS
+==================================================
+Twitch: right-click a message > Reply to message. The recipient appears above
+the input. Type and send normally; Escape or x cancels the reply. Received
+replies display their parent message above the message body.
+
+Left-click a username in Twitch or YouTube to open their user card. The card
+shows public details provided by the platform, reported badges and subscription
+months, and up to 500 of that user's messages still retained in this channel.
+Use its profile, highlight, mention and moderation buttons as needed. Platform
+permissions still apply; private subscription details are not exposed publicly.
+YouTube's extended public profile lookup uses your connected Google account and
+costs 1 API unit per uncached profile. Without login, basic chat details remain.
+
+Settings > Messages: default retained message limit is 2000 per pane. Set a
+value from 100 to 20000. Right-click the pane header > Message limit to override
+that pane. A mixed feed shares its limit across its channels. Old text, images
+and rendering references are discarded. This is not a permanent chat log.
+
+Twitch loads up to 200 recent messages from the independent public service
+recent-messages.robotty.de, also used by Chatterino. It receives the channel
+name, never account tokens. Availability varies, especially for newly tracked
+channels. Disable this in Settings > Messages. YouTube loads only the recent
+messages provided by its chat page. Historical messages do not trigger sounds.
+
+NATIVE ARCH LINUX DOWNLOAD
+=========================
+A separate Arch Linux package is available on the GitHub release page.
+Install yt-chatterino-1.2.0-1-any.pkg.tar.zst using pacman -U, or build the
+PKGBUILD in the source tar.gz with makepkg -si. No Wine is used. See
+docs/ARCH-LINUX.md in that download for dependencies, encrypted keyring and sound.
