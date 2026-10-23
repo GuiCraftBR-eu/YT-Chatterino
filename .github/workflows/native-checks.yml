@@ -3,6 +3,8 @@ on:
   push:
     branches: [main, codex/v1.2.0]
   workflow_dispatch:
+  release:
+    types: [published]
 permissions:
   contents: read
 jobs:
@@ -36,3 +38,24 @@ jobs:
         with:
           name: YT-Chatterino-ArchLinux-1.2.0-pacman
           path: /tmp/yt-chatterino-build/packaging/arch/*.pkg.tar.zst
+  publish-arch:
+    if: github.event_name == 'release'
+    needs: [arch-linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: YT-Chatterino-ArchLinux-1.2.0-pacman
+          path: native-package
+      - name: Attach tested native package to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          cd native-package
+          sha256sum *.pkg.tar.zst > SHA256SUMS-ArchLinux.txt
+          gh release upload "$RELEASE_TAG" *.pkg.tar.zst SHA256SUMS-ArchLinux.txt
+

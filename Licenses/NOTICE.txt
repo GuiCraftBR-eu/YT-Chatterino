@@ -8,4 +8,7 @@ https://www.openssl.org/
 https://zlib.net/
 https://pyinstaller.org/
 https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist
-`nVersion 1.2.0 also bundles Pillow 13.0.0 on Windows. See Pillow-LICENSE.txt.`nThe native Arch package uses system libraries and their system license files.
+
+Version 1.2.0 also bundles Pillow 13.0.0 on Windows. See Pillow-LICENSE.txt.
+The native Arch package uses system libraries and their system license files.
+
