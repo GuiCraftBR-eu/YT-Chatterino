@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 from tkinter import messagebox, simpledialog, ttk
 from ytchatterino_i18n import tr, set_language, install_ui, number, language, display_time
 from ytchatterino_features import FeatureController, parse_twitch_gifs, fit_photo
+from ytchatterino_chat import message_limit, parse_privmsg
 from ytchatterino_youtube import YouTubeWebClient, YouTubeReadError, WEB_POLL_SECONDS
 
 CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino.json")
@@ -41,7 +42,7 @@ EDGE = "#333333"  # only used for the thin outline of the input box
 TAB_BLUE, ACCENT, ALT, HEADER_BG = "#4a9cdb", "#2aa8ff", "#0e0e0e", "#111111"
 PALETTE = ["#ff7f50", "#1e90ff", "#00ff7f", "#daa520", "#ff69b4", "#a070ff",
            "#00ced1", "#9acd32", "#ff5a36", "#5f9ea0", "#e08a3c", "#e05d5d"]
-MAX_LINES = 3000
+APP_VERSION = "1.2.0"
 QUOTA_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino_quota.json")
 LOG_PATH = os.path.join(os.path.expanduser("~"), ".ytchatterino_error.log")
 APP_ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ytchatterino.ico")
@@ -366,7 +367,11 @@ class ApiKeyStore:
 
     def read(self):
         if not self.windows:
-            return None
+            try:
+                import keyring
+                return keyring.get_password(self.TARGET, "YT-Chatterino")
+            except Exception:
+                return None
         advapi = ctypes.WinDLL("Advapi32", use_last_error=True)
         ptr = ctypes.POINTER(self._Credential)()
         advapi.CredReadW.argtypes = [ctypes.wintypes.LPCWSTR, ctypes.wintypes.DWORD,
@@ -388,7 +393,13 @@ class ApiKeyStore:
 
     def write(self, value):
         if not self.windows:
-            return False
+            import keyring
+            backend = keyring.get_keyring()
+            # Do not use a third-party plaintext fallback backend.
+            if not backend.__class__.__module__.startswith(("keyring.backends.SecretService", "keyring.backends.kwallet", "keyring.backends.libsecret")):
+                raise OSError("Unlock a Secret Service / KWallet keyring to save sign-in securely.")
+            keyring.set_password(self.TARGET, "YT-Chatterino", value)
+            return True
         raw = value.encode("utf-16-le")
         blob = ctypes.create_string_buffer(raw)
         cred = self._Credential()
@@ -462,7 +473,7 @@ class TwitchTokenStore(ApiKeyStore):
 
     def read(self):
         if not self.windows:
-            return None
+            return super().read()
         # Prefer our encrypted fallback when present; Credential Manager writes can
         # be denied by some Windows profiles even though reads are allowed.
         try:
@@ -478,7 +489,7 @@ class TwitchTokenStore(ApiKeyStore):
 
     def write(self, value):
         if not self.windows:
-            return False
+            return super().write(value)
         try:
             super().write(value)
         except Exception:
@@ -745,6 +756,11 @@ class TwitchIRCManager(threading.Thread):
             tags[key] = value
         return tags
 
+    @classmethod
+    def parse_message(cls, line):
+        return parse_privmsg(line, cls._decode_tags, parse_twitch_badges,
+                             parse_twitch_emotes, parse_twitch_gifs)
+
     def _handle_line(self, line, sock, joined, registered):
         if line.startswith("PING "):
             sock.sendall(("PONG " + line[5:] + "\r\n").encode("utf-8"))
@@ -771,29 +787,12 @@ class TwitchIRCManager(threading.Thread):
             channel = target.lstrip("#").lower()
             if separator and channel:
                 worker = self._active_workers().get(channel)
-                display_body = body
-                if display_body.startswith("\x01ACTION "):
-                    display_body = display_body[8:-1] if display_body.endswith("\x01") else display_body[8:]
-                login = prefix.split("!", 1)[0]
-                name = tags.get("display-name") or login
-                raw_badges = tags.get("badges", "")
-                badge_ids = parse_twitch_badges(raw_badges)
-                badge_labels = {"broadcaster": "[HOST]", "moderator": "[MOD]",
-                                "vip": "[VIP]", "founder": "[FOUNDER]",
-                                "subscriber": "[SUB]"}
-                badges = [badge_labels[item["set_id"]] for item in badge_ids
-                          if item["set_id"] in badge_labels]
-                if worker and tags.get("room-id") and worker.room_id != tags["room-id"]:
-                    worker.room_id = tags["room-id"]
-                    worker.out.put(("room_id", tags["room-id"]))
-                message = {"id": tags.get("id"), "color": tags.get("color", ""), "time": clock(), "name": name, "badges": badges,
-                           "badge_ids": badge_ids,
-                           "special": None, "text": display_body, "login": login,
-                           "user_id": tags.get("user-id"), "room_id": tags.get("room-id"),
-                           "sent_at": int(tags.get("tmi-sent-ts") or 0) / 1000,
-                           "gifs": parse_twitch_gifs(tags.get("gifs"), display_body),
-                           "native_emotes": parse_twitch_emotes(tags.get("emotes"), display_body)}
-                if worker:
+                parsed = self.parse_message(line)
+                if worker and parsed:
+                    message = parsed[1]
+                    if message.get("room_id") and worker.room_id != message["room_id"]:
+                        worker.room_id = message["room_id"]
+                        worker.out.put(("room_id", worker.room_id))
                     worker.out.put(("msg", message))
         elif command in ("CLEARMSG", "CLEARCHAT"):
             channel = params.split(" ", 1)[0].lstrip("#").lower()
@@ -1621,7 +1620,10 @@ class ChatSource:
         self.worker = None
         self.info_worker = None
         self.header_info = {}
-        self.history = deque(maxlen=1500)
+        self.history = deque(maxlen=message_limit(app.cfg))
+        self.history_live = deque(maxlen=message_limit(app.cfg))
+        self.history_loading = False
+        self.history_requested = False
         self.seen = OrderedDict()
         self.last_status = None
         self.manual_paused = bool(spec.get("paused", False)) if self.platform == "youtube" else False
@@ -1663,6 +1665,8 @@ class ChatSource:
             except (TypeError, ValueError):
                 interval = WEB_POLL_SECONDS
             self.worker = WebChatWorker(self.video_id, self.q, interval, start_paused=True)
+        if self.platform == "twitch":
+            self.app.features.chat_tools.source_history(self, TwitchIRCManager.parse_message)
         self.worker.start()
         self.request_emotes()
         self.sync_pause()
@@ -1718,12 +1722,15 @@ class ChatSource:
                 return
             self.last_status = value
         if kind == "msg":
+            if self.history_loading and not value.get("_history"):
+                self.history_live.append(value)
+                return
             message_id = value.get("id")
             if message_id:
                 if message_id in self.seen:
                     return
                 self.seen[message_id] = None
-                if len(self.seen) > 4500:
+                if len(self.seen) > self.history.maxlen * 2:
                     self.seen.popitem(last=False)
             if self.platform == "youtube" and value.get("_youtube_web"):
                 # The website and Data API can use different message IDs.
@@ -1746,6 +1753,7 @@ class ChatSource:
         if kind == "msg":
             value = dict(value, _seq=self.app.message_sequence)
             self.app.features.on_message(self, value)
+            self.app.features.chat_tools.on_message(self, value)
         event = (self.app.message_sequence, kind, value, self)
         self.history.append(event)
         for view in tuple(self.views):
@@ -2043,11 +2051,13 @@ class ChatTab(tk.Frame):
         self.active = False
         self.closed = False
         self.q = EventQueue()
-        self.pending_events = deque(maxlen=3000)
+        self.pending_events = deque(maxlen=message_limit(self.app.cfg))
         self.last_seq = 0
         self.name_tags = set()
         self.fonts = fonts
         self.row = 0
+        self.row_marks = deque()
+        self.row_serial = 0
         self.last_status = None
         self.emote_photos = {}
         self.badge_photos = {}
@@ -2121,7 +2131,7 @@ class ChatTab(tk.Frame):
         self.text.bind("<Control-c>", self.copy_selection)
         self.text.bind("<Control-C>", self.copy_selection)
         self.text.bind("<Control-Insert>", self.copy_selection)
-        self.text.bind("<Button-1>", lambda event: self.app.focus_pane(self), add="+")
+        self.text.bind("<Button-1>", self._left_click)
         self.text.bind("<FocusIn>", lambda event: self.app.focus_pane(self), add="+")
         self.text.bind("<Button-3>", self._text_menu)
         for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>", "<Prior>", "<Next>", "<Home>", "<End>"):
@@ -2351,7 +2361,16 @@ class ChatTab(tk.Frame):
         except tk.TclError:  # characters Tk can't draw
             self.text.insert("end", re.sub(r"[^\u0000-\uFFFF]", "?", s), tags)
 
-    def _begin(self):
+    def _left_click(self, event):
+        self.app.focus_pane(self)
+        return self.app.features.chat_tools.click_user(self, event)
+
+    def _begin(self, seq=None):
+        self.row_serial += 1
+        marker = "row_" + str(self.row_serial)
+        self.text.mark_set(marker, "end-1c")
+        self.text.mark_gravity(marker, "left")
+        self.row_marks.append((marker, seq))
         at_bottom = (self._batch_bottom if self._batch else
                      self.follow_tail and not self.text.tag_ranges("sel"))
         alt = ("alt",) if self.appearance.get("alternate_rows", True) and self.row % 2 else ()
@@ -2363,42 +2382,47 @@ class ChatTab(tk.Frame):
     def _end(self, at_bottom):
         if self._batch:
             return
-        lines = int(self.text.index("end-1c").split(".")[0])
-        if lines > MAX_LINES + 100:
-            delete_to = f"{lines - MAX_LINES}.0"
-            for kind, name, _ in self.text.dump("1.0", delete_to, image=True):
-                if kind == "image":
-                    self.image_names.pop(name, None)
-                    self.image_assets.pop(name, None)
-            self.text.delete("1.0", delete_to)
-            for tag in self.text.tag_names():
-                if tag.startswith("message_") and not self.text.tag_ranges(tag):
-                    self.message_records.pop(int(tag[8:]), None)
-                    self.text.tag_delete(tag)
-                elif tag.startswith("u_") and not self.text.tag_ranges(tag):
-                    self.text.tag_delete(tag)
-                    self.name_tags.discard(tag)
-            self.used_assets = set(self.image_assets.values())
-            for urls in list(self.emote_photos):
-                if urls not in self.used_assets and urls not in self.pending_emote_tags:
-                    photo = self.emote_photos.pop(urls)
-                    self.photo_urls.pop(str(photo), None)
-                    self.image_requests.discard(urls)
-            for pending in (self.pending_emote_tags, self.pending_badge_images, self.pending_badge_catalog):
-                for key, items in list(pending.items()):
-                    live = []
-                    for item in items:
-                        if self.text.tag_ranges(item[0]):
-                            live.append(item)
-                        else:
-                            self.text.tag_delete(item[0])
-                    if live:
-                        pending[key] = live
-                    else:
-                        pending.pop(key, None)
+        self.trim_messages()
         self.text.configure(state="disabled")
         if at_bottom:
             self.text.see("end")
+
+    def trim_messages(self):
+        cap = message_limit(self.app.cfg, self.setting_key)
+        if len(self.row_marks) <= cap:
+            return
+        old = []
+        while len(self.row_marks) > cap:
+            old.append(self.row_marks.popleft())
+        delete_to = self.text.index(self.row_marks[0][0])
+        for kind, name, _ in self.text.dump("1.0", delete_to, image=True):
+            if kind == "image":
+                self.image_names.pop(name, None)
+                self.image_assets.pop(name, None)
+        self.text.delete("1.0", delete_to)
+        for marker, seq in old:
+            self.text.mark_unset(marker)
+            if seq is not None:
+                self.message_records.pop(seq, None)
+                self.text.tag_delete("message_" + str(seq))
+        self.used_assets = set(self.image_assets.values())
+        for urls in list(self.emote_photos):
+            if urls not in self.used_assets and urls not in self.pending_emote_tags:
+                photo = self.emote_photos.pop(urls)
+                self.photo_urls.pop(str(photo), None)
+                self.image_requests.discard(urls)
+        for pending in (self.pending_emote_tags, self.pending_badge_images, self.pending_badge_catalog):
+            for key, items in list(pending.items()):
+                live = []
+                for item in items:
+                    if self.text.tag_ranges(item[0]):
+                        live.append(item)
+                    else:
+                        self.text.tag_delete(item[0])
+                if live:
+                    pending[key] = live
+                else:
+                    pending.pop(key, None)
 
     def add_system(self, text):
         if text == self.last_status:
@@ -2457,7 +2481,7 @@ class ChatTab(tk.Frame):
             return False
         self._render_source = source or self.sources[0]
         m = message
-        at_bottom, alt = self._begin()
+        at_bottom, alt = self._begin(m.get("_seq"))
         message_start = self.text.index("end-1c")
         color = m.get("color", "")
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
@@ -2466,6 +2490,10 @@ class ChatTab(tk.Frame):
         if tag not in self.name_tags:
             self.text.tag_configure(tag, foreground=color)
             self.name_tags.add(tag)
+        reply = m.get("reply")
+        if reply:
+            self._ins(str(tr("↪ Replying to @{name}: {body}", name=reply.get("name") or reply.get("login", ""),
+                             body=reply.get("text", "")[:180])) + "\n", "sys", *alt)
         self._ins(display_time(m["time"]) + " ", "time", *alt)
         if len(self.sources) > 1:
             label = self._render_source.name
@@ -2574,7 +2602,8 @@ class ChatTab(tk.Frame):
         active = bool(active) and not self.closed
         if active and not self.active:
             events = [event for source in self.sources for event in source.history if event[0] > self.last_seq]
-            self.pending_events = deque(sorted(events, key=lambda event: event[0])[-3000:], maxlen=3000)
+            cap = message_limit(self.app.cfg, self.setting_key)
+            self.pending_events = deque(sorted(events, key=lambda event: event[0])[-cap:], maxlen=cap)
         self.active = active
         if active:
             self.app.photo_bank.wake()
@@ -2633,6 +2662,11 @@ class ChatTab(tk.Frame):
         self.setting_key = unique[0].key if single else "mix:" + self.uid
         self.channel_login = unique[0].channel_login if single else None
         self.set_filters(self.app.cfg.get("chat_filters", {}).get(self.setting_key, {}))
+        cap = message_limit(self.app.cfg, self.setting_key)
+        for item in unique:
+            retained = max([cap, message_limit(self.app.cfg)] + [message_limit(self.app.cfg, p.setting_key) for p in item.views])
+            item.history = deque(item.history, maxlen=retained)
+            item.history_live = deque(item.history_live, maxlen=retained)
         for source in unique:
             source.views.add(self)
             source.ensure_worker()
@@ -2724,7 +2758,8 @@ class ChatTab(tk.Frame):
     def load_recent(self):
         self.clear_messages(reset_sequence=True)
         events = [event for source in self.sources for event in source.history]
-        self.pending_events = deque(sorted(events, key=lambda event: event[0])[-1500:], maxlen=3000)
+        cap = message_limit(self.app.cfg, self.setting_key)
+        self.pending_events = deque(sorted(events, key=lambda event: event[0])[-cap:], maxlen=cap)
 
     def clear_messages(self, reset_sequence=False):
         self.text.configure(state="normal")
@@ -2736,6 +2771,9 @@ class ChatTab(tk.Frame):
         self.pending_events.clear()
         self.last_seq = 0 if reset_sequence else self.app.message_sequence
         self.message_records.clear()
+        for marker, _ in self.row_marks:
+            self.text.mark_unset(marker)
+        self.row_marks.clear()
         self.image_names.clear()
         self.image_assets.clear()
         self.used_assets.clear()
@@ -2798,6 +2836,11 @@ class ChatTab(tk.Frame):
 def style_titlebar(root):
     """Make the Windows title bar (and its - [] X buttons) black. Windows 11 needed for pure black."""
     if sys.platform != "win32":
+        try:
+            root._app_icon = tk.PhotoImage(file=os.path.join(os.path.dirname(__file__), "ytchatterino-logo.png"))
+            root.iconphoto(True, root._app_icon)
+        except tk.TclError:
+            pass
         return
     try:
         if os.path.isfile(APP_ICON_PATH):
@@ -2839,6 +2882,7 @@ class App:
         self.photo_bank = PhotoBank(self)
         self.cfg = load_config()
         self.cfg.pop("youtube_reader", None)  # obsolete preference; all reading is keyless
+        self.cfg.setdefault("message_limit", 2000)
         set_language(self.cfg.get("language", "en"))
         install_ui(root)
         self.twitch_store = TwitchTokenStore()

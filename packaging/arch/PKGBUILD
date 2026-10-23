@@ -1,0 +1,29 @@
+# Run makepkg -si as your regular user from this directory.
+pkgname=yt-chatterino
+pkgver=1.2.0
+pkgrel=1
+pkgdesc='Native YouTube and Twitch chat viewer inspired by Chatterino'
+arch=('any')
+url='https://github.com/GuiCraftBR-eu/YT-Chatterino'
+# No license has been granted for the app source by its owner yet.
+license=('LicenseRef-proprietary')
+depends=('python' 'tk' 'python-pillow' 'python-keyring' 'python-secretstorage')
+optdepends=('gnome-keyring: Secret Service for saved sign-ins'
+            'kwallet: alternative encrypted keyring'
+            'pipewire-audio: plays notification sounds with pw-play'
+            'libpulse: alternative notification player paplay'
+            'noto-fonts-emoji: emoji font')
+source=()
+sha256sums=()
+
+package() {
+    local project="$startdir/../.."
+    install -dm755 "$pkgdir/usr/share/yt-chatterino"
+    install -m644 "$project"/src/*.py* "$project"/src/*.png "$project"/src/*.svg \
+        "$project/src/ChatternoPing.wav" "$pkgdir/usr/share/yt-chatterino/"
+    install -Dm755 "$startdir/yt-chatterino" "$pkgdir/usr/bin/yt-chatterino"
+    install -Dm644 "$startdir/yt-chatterino.desktop" "$pkgdir/usr/share/applications/yt-chatterino.desktop"
+    install -Dm644 "$project/src/ytchatterino-logo.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/yt-chatterino.png"
+    install -dm755 "$pkgdir/usr/share/doc/yt-chatterino"
+    cp -r "$project/docs"/* "$project/Licenses" "$pkgdir/usr/share/doc/yt-chatterino/"
+}

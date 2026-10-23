@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=YT-Chatterino
+Comment=YouTube and Twitch chat
+Comment[pt_BR]=Chat do YouTube e da Twitch
+Exec=yt-chatterino
+Icon=yt-chatterino
+Terminal=false
+Categories=Network;Chat;
+StartupWMClass=Ytchatterino

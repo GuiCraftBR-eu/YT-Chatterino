@@ -46,4 +46,3 @@ requirements-build.txt   Dependências para gerar o pacote Windows
 Não envie chaves, tokens, JSONs OAuth ou configurações pessoais para o repositório.
 Os avisos de terceiros estão em [Licenses/NOTICE.txt](Licenses/NOTICE.txt).
 Este projeto não é afiliado à Twitch, ao YouTube ou ao Chatterino.
-

@@ -12,6 +12,8 @@ import weakref
 from tkinter import messagebox, simpledialog
 
 from ytchatterino_translations import PT_BR
+from ytchatterino_chat_translations import PT_BR_CHAT
+PT_BR.update(PT_BR_CHAT)
 
 _language = 'en'
 _widgets = weakref.WeakKeyDictionary()

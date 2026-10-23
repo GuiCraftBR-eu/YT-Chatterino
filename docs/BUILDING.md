@@ -37,4 +37,3 @@ O repositório contém o código e os recursos do aplicativo. Os JSONs OAuth,
 tokens, chaves, configurações, logs e dados da conta ficam no computador de
 cada usuário e não devem ser adicionados ao Git. O `.gitignore` cobre os
 nomes usados pelo aplicativo.
-

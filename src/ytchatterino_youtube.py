@@ -161,6 +161,7 @@ def parse_renderer(renderer, kind, historical=False):
     stamp = datetime.fromtimestamp(sent_at) if sent_at else datetime.now()
     result = {'id': renderer['id'], 'name': name,
               'user_id': renderer.get('authorExternalChannelId'),
+              'avatar': next(iter(image_urls(renderer.get('authorPhoto'))), None),
               'time': stamp.strftime('%I:%M %p').lower().lstrip('0'), 'text': text,
               'badges': badges, 'youtube_badges': images, 'native_emotes': emotes,
               'special': special, '_history': historical, '_youtube_web': True}
@@ -315,6 +316,14 @@ class YouTubeWebClient:
         if not self.continuation:
             raise YouTubeReadError('YouTube did not provide a live chat continuation.', retry=60)
         self.initial = True
+        self.initial_events = list(parse_actions(chat.get('actions'), historical=True))
+        if not self.initial_events:
+            for node in chat.get('items', []):
+                for kind, renderer in node.items():
+                    if isinstance(renderer, dict):
+                        message = parse_renderer(renderer, kind, historical=True)
+                        if message:
+                            self.initial_events.append(('msg', message))
         return info
 
     def poll(self):
@@ -334,7 +343,8 @@ class YouTubeWebClient:
         if not token:
             raise YouTubeReadError('The live chat has ended.', terminal=True)
         self.continuation = token
-        events = list(parse_actions(chat.get('actions'), historical=self.initial))
+        events = list(getattr(self, 'initial_events', [])) + list(parse_actions(chat.get('actions'), historical=self.initial))
+        self.initial_events = []
         self.initial = False
         return events, wait
 

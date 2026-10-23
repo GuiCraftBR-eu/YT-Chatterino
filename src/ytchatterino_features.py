@@ -22,6 +22,10 @@ import urllib.parse
 import urllib.request
 import webbrowser
 from ytchatterino_youtube import YouTubeWebClient
+from ytchatterino_chat import ChatTools
+import shutil
+import subprocess
+import sys
 from ytchatterino_i18n import tr, set_language, refresh_ui, number, language
 from concurrent.futures import ThreadPoolExecutor
 
@@ -410,6 +414,7 @@ class FeatureController:
         self.started = time.time()
         self.pending_operations = set()
         self.twitch_required = set()
+        self.chat_tools = ChatTools(self)
 
     def save(self):
         self.core.save_config(self.app.cfg)
@@ -422,6 +427,8 @@ class FeatureController:
         player_server = getattr(self, "player_server", None)
         if player_server:
             player_server.close()
+        for card in tuple(self.chat_tools.cards.values()):
+            card.close()
         self.google.cancel.set()
         for picker in tuple(self.pickers.values()):
             picker.close()
@@ -600,6 +607,7 @@ class FeatureController:
         pane.compose_entry.bind("<ISO_Left_Tab>", lambda event: self.complete_name(pane, -1))
         pane.compose_entry.bind("<Up>", lambda event: pane.compose_text.set(getattr(pane, "last_sent_text", "")))
         pane.compose_entry.bind("<Tab>", lambda event: self.complete_name(pane))
+        self.chat_tools.attach_reply_bar(pane)
 
     def complete_name(self, pane, direction=1):
         text = pane.compose_text.get()
@@ -659,6 +667,7 @@ class FeatureController:
         self.update_send_label(pane)
 
     def update_send_label(self, pane):
+        self.chat_tools.changed_target(pane)
         if getattr(pane, "sending", False):
             return
         index = pane.target_combo.current()
@@ -744,16 +753,17 @@ class FeatureController:
             self._send(pane, source, text)
         return "break"
 
-    def send(self, source, text):
+    def send(self, source, text, reply=None):
         now = time.monotonic()
         if now - self.last_send.get(source.key, -100) < 1.2:
             raise RuntimeError("Wait a moment before sending another message.")
         self.last_send[source.key] = now
         if source.platform == "twitch":
             identity = self.twitch_identity()
-            response = self.helix("chat/messages", "POST", body={
-                "broadcaster_id": self.broadcaster(source), "sender_id": identity["user_id"],
-                "message": text}, scope="user:write:chat")
+            body = {"broadcaster_id": self.broadcaster(source), "sender_id": identity["user_id"], "message": text}
+            if reply:
+                body["reply_parent_message_id"] = reply["id"]
+            response = self.helix("chat/messages", "POST", body=body, scope="user:write:chat")
             data = response.get("data", [])
             if not data or not data[0].get("is_sent"):
                 reason = data[0].get("drop_reason") or {} if data else {}
@@ -768,6 +778,8 @@ class FeatureController:
         if pane.closed or source not in pane.sources:
             return
         pane.sending = True
+        target = getattr(pane, "reply_target", None)
+        reply = dict(target[1]) if target and target[0] == source.key else None
         sent_at = time.time()
         pane.send_button.configure(state="disabled", text=tr("…"))
         def finished(value=None, error=None):
@@ -779,6 +791,8 @@ class FeatureController:
             if error:
                 self.notify(error, True)
                 return
+            if reply and getattr(pane, "reply_target", None) == target:
+                self.chat_tools.cancel_reply(pane)
             pane.last_sent_text = text
             if pane.compose_text.get().strip() == text:
                 pane.compose_text.set("")
@@ -797,10 +811,10 @@ class FeatureController:
                 own = {"id": value.get("message_id"), "time": self.core.clock(),
                        "name": auth.get("login", "You"), "login": auth.get("login", ""),
                        "user_id": uid, "badges": ["[HOST]"] if uid and uid == source.header_info.get("broadcaster_id") else [],
-                       "special": None, "text": text, "_own": True}
+                       "special": None, "text": text, "_own": True, "sent_at": sent_at, "reply": reply}
                 self.app.root.after(1500, lambda: source.publish("msg", own) if not source.closed else None)
             pane.compose_entry.focus_set()
-        self.async_action(("send", pane.uid), lambda: self.send(source, text), finished,
+        self.async_action(("send", pane.uid), lambda: self.send(source, text, reply), finished,
                           lambda error: finished(error=error))
 
     def publish_youtube_ack(self, source, own):
@@ -914,6 +928,10 @@ class FeatureController:
         users = self.settings["highlight"].get("users", {})
         menu.add_command(label=(tr("Remove user highlight" if name.lstrip("@").casefold() in users else "Highlight this user")),
                          command=lambda: self.highlight_user(name))
+        menu.add_command(label=tr("User information"), command=lambda: self.chat_tools.show_user(pane, source, message))
+        if source.platform == "twitch":
+            menu.add_command(label=tr("Reply to message"), command=lambda: self.chat_tools.start_reply(pane, source, message),
+                             state="disabled" if not message.get("id") or message.get("deleted") else "normal")
         menu.add_command(label=tr("Mention"), command=lambda: self.mention(pane, source, name))
         actions = self.app._menu(menu)
         restricted = (source.platform == "twitch" and "owner" in roles_for(message))
@@ -1108,6 +1126,7 @@ class FeatureController:
         return self.youtube("videos", "PUT", params={"part": "snippet"}, body={"id": source.video_id, "snippet": keep}, units=50)
 
     def pane_menu(self, pane, menu):
+        menu.add_command(label=tr("Message limit…"), command=lambda: self.chat_tools.pane_limit(pane))
         for source in pane.sources:
             actions = self.app._menu(menu)
             actions.add_command(label=tr("Edit title / category…" if source.platform == "twitch" else "Edit title…"),
@@ -1138,6 +1157,15 @@ class FeatureController:
         path = Path(chosen) if chosen and Path(chosen).is_file() else self.default_sound_path()
         def play():
             try:
+                if sys.platform != "win32":
+                    for name, args in (("pw-play", []), ("paplay", []), ("aplay", ["-q"])):
+                        player = shutil.which(name)
+                        if player and path.is_file():
+                            subprocess.run([player, *args, str(path)], timeout=10, check=False,
+                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            return
+                    self.app.call_ui(lambda: self.app.root.bell())
+                    return
                 import winsound
                 if path.is_file():
                     winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
@@ -1240,7 +1268,7 @@ class FeatureController:
         self.settings_content.pack(side="left", fill="both", expand=True)
         self.settings_pages = {}
         self.settings_buttons = {}
-        for label in ("Accounts", "Appearance", "Highlights", "Notifications", "Saved channels", "YouTube quota", "Keyboard shortcuts", "Tutorial"):
+        for label in ("Accounts", "Appearance", "Messages", "Highlights", "Notifications", "Saved channels", "YouTube quota", "Keyboard shortcuts", "Tutorial"):
             button = self.button(side, label, lambda value=label: self.select_settings(value))
             button.pack(fill="x", padx=5, pady=3)
             self.settings_buttons[label] = button
@@ -1261,7 +1289,7 @@ class FeatureController:
         heading = self.label(self.settings_content, section)
         heading.config(font=("Segoe UI", 14, "bold"))
         heading.pack(anchor="w", pady=(0, 12))
-        {"Accounts": self.accounts_page, "Appearance": self.appearance_page,
+        {"Accounts": self.accounts_page, "Appearance": self.appearance_page, "Messages": self.chat_tools.settings,
          "Highlights": self.highlights_page, "Notifications": self.notifications_page,
          "Saved channels": self.saved_channels_page, "YouTube quota": self.quota_page,
          "Keyboard shortcuts": self.shortcuts_page, "Tutorial": self.tutorial_page}[section](self.settings_content)

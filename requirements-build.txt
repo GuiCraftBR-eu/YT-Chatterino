@@ -1,3 +1,4 @@
 # Needed only to package the portable Windows application.
 pyinstaller
 tzdata
+Pillow

@@ -13,4 +13,3 @@ Primeira versão publicada neste repositório, reunindo os recursos já presente
 - Pacote portátil para Windows 11 x64, com manuais em português e inglês.
 
 A publicação organiza o código e a documentação; não adiciona mudanças de funcionamento ao executável existente.
-

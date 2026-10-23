@@ -1,0 +1,38 @@
+name: Native checks
+on:
+  push:
+    branches: [main, codex/v1.2.0]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install Pillow
+      - run: python -m unittest discover -s tests -v
+  arch-linux:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install native Arch dependencies
+        run: pacman -Syu --noconfirm --needed git python tk python-pillow python-keyring python-secretstorage xorg-server-xvfb xorg-xauth
+      - uses: actions/checkout@v4
+      - name: Run Tk UI and logic checks on Arch
+        run: xvfb-run -a python -m unittest discover -s tests -v
+      - name: Build native pacman package
+        run: |
+          useradd -m builder
+          mkdir /tmp/yt-chatterino-build
+          cp -r src docs Licenses packaging /tmp/yt-chatterino-build/
+          chown -R builder:builder /tmp/yt-chatterino-build
+          su builder -c 'cd /tmp/yt-chatterino-build/packaging/arch && makepkg --nodeps --nocheck'
+          pacman -Qip /tmp/yt-chatterino-build/packaging/arch/*.pkg.tar.zst
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YT-Chatterino-ArchLinux-1.2.0-pacman
+          path: /tmp/yt-chatterino-build/packaging/arch/*.pkg.tar.zst
