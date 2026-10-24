@@ -973,6 +973,15 @@ void Pane::setSources(QList<Source *> list) {
 }
 
 void Pane::refresh() {
+    input->setPlaceholderText(hub->cfg->T("Send a message…"));
+    sendButton->setText(hub->cfg->T("Send"));
+    searchInput->setPlaceholderText(hub->cfg->T("Search messages…"));
+    view->latest->setText(hub->cfg->T("↓ Latest"));
+    if (!reply.id.isEmpty()) {
+        replyLabel->setText(hub->cfg->T(
+            "Replying to @{name}: {body}",
+            {{"name", reply.login.isEmpty() ? reply.name : reply.login}, {"body", reply.text.left(120)}}));
+    }
     QStringList titles;
     for (auto source : sources) {
         if (source) {
@@ -1156,7 +1165,7 @@ static void loadUnlockedEmotes(Accounts *accounts, QPointer<QDialog> dialog,
             for (auto v : d["data"].toArray()) {
                 auto o = v.toObject();
                 Span e;
-                e.code = str(o["name"]);
+                e.code = emoteName(str(o["name"]));
                 e.urls = {"https://static-cdn.jtvnw.net/emoticons/v2/" + str(o["id"]) + "/default/dark/3.0"};
                 if (!e.code.isEmpty()) {
                     (*catalog)["__sub__" + e.code] = e;

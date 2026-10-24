@@ -68,4 +68,5 @@ class NativeTests : public QObject {
     void resizeBenchmark();
     void singleWordIrcAndSerializedRefresh();
     void threadCapKeepsRoot();
+    void failedEmotesRetryAndNativeCodesDecode();
 };

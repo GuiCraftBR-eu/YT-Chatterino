@@ -439,6 +439,7 @@ void NativeTests::threadWindowLiveUpdatesAndDeletedTarget() {
 }
 
 void NativeTests::settingsSearchLanguageAndFontControls() {
+    app->addWorkspace({twitch});
     app->showSettings("Display");
     auto *settings = app->settings.data();
     QVERIFY(settings);
@@ -451,9 +452,16 @@ void NativeTests::settingsSearchLanguageAndFontControls() {
     QCOMPARE(body->value(), 16);
     settings->search->setText("fonte nome");
     QVERIFY(settings->results->count() > 0);
+    settings->search->setText("timestamp");
+    QVERIFY(settings->results->count() > 0);
+    QVERIFY(!settings->results->item(0)->text().contains("clock"));
     app->cfg.data["language"] = "pt-BR";
     emit app->cfg.languageChanged();
     QCOMPARE(app->cfg.T("Appearance"), "Aparência");
+    QCOMPARE(app->currentPane()->sendButton->text(), "Enviar");
+    QCOMPARE(app->currentPane()->input->placeholderText(), "Enviar uma mensagem…");
+    settings->search->setText("horário");
+    QCOMPARE(settings->results->item(0)->data(Qt::UserRole).toString(), "Display");
 }
 
 void NativeTests::twitchSendReplyAndDrop() {

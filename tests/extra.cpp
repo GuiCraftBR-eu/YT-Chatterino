@@ -1,5 +1,49 @@
 #include "native_tests.hpp"
 
+void NativeTests::failedEmotesRetryAndNativeCodesDecode() {
+    QCOMPARE(emoteName("&lt;3"), "<3");
+    QCOMPARE(emoteName("&gt;("), ">(");
+    QImage image(72, 72, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::yellow);
+    QByteArray png;
+    QBuffer buffer(&png);
+    buffer.open(QIODevice::WriteOnly);
+    QVERIFY(image.save(&buffer, "PNG"));
+    auto *pane = app->addWorkspace({twitch})->focusedPane.data();
+    QString url = "https://fonts.gstatic.com/emoji.png";
+    bool fail = true;
+    int requests = 0;
+    app->net.transport = [&](QUrl, QByteArray, QByteArray, QMap<QByteArray, QByteArray>, BytesCallback done) {
+        ++requests;
+        auto bytes = fail ? QByteArray() : png;
+        auto error = fail ? QString("temporary fixture failure") : QString();
+        QTimer::singleShot(0, &app->net, [done, bytes, error] { done(bytes, error); });
+    };
+    Message m;
+    m.id = "image";
+    m.name = "Tester";
+    m.text = ":two_hearts:";
+    Span span;
+    span.start = 0;
+    span.end = m.text.size();
+    span.code = m.text;
+    span.urls = {url};
+    m.emotes = {span};
+    twitch->publish(m);
+    pane->view->document(0);
+    QTRY_VERIFY(app->images.failures.contains(url));
+    pane->view->document(0);
+    QVERIFY(!app->images.cache.contains(url));
+    fail = false;
+    app->images.failures[url] = QDateTime::currentSecsSinceEpoch() - 1;
+    app->images.retryExpired();
+    pane->view->document(0);
+    QTRY_VERIFY(app->images.cache.contains(url));
+    auto doc = pane->view->document(0);
+    QVERIFY(doc->toPlainText().contains(QChar::ObjectReplacementCharacter));
+    QCOMPARE(requests, 2);
+}
+
 void NativeTests::threadCapKeepsRoot() {
     app->cfg.data["message_limit"] = 100;
     Message root;

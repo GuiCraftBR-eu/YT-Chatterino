@@ -88,13 +88,14 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
         for (const auto &v : list) {
             auto row = v.toArray();
             if (row.size() >= 3) {
-                searchItems[row[0].toString()] << row[1].toString() + " " + row[2].toString();
+                searchItems[row[0].toString()] << row[1].toString() + '\t' + row[2].toString();
             }
         }
     }
-    searchItems["Display"] << "message font size username fonte nome mensagem"
-                           << "dates time seconds formato data am pm";
-    searchItems["Updates"] << "updates native automatic download atualizar atualizacoes";
+    searchItems["Display"] << "Message font size (pt)\tmessage font size username fonte nome mensagem"
+                           << "Date format\tdates time seconds formato data am pm";
+    searchItems["Updates"]
+        << "Check for updates automatically\tupdates native automatic download atualizar atualizacoes";
     rebuildLanguage();
 }
 
@@ -187,14 +188,15 @@ void SettingsWindow::searchSettings() {
     auto tokens = q.split(' ', Qt::SkipEmptyParts);
     for (auto i = searchItems.begin(); i != searchItems.end(); ++i) {
         for (const auto &entry : i.value()) {
-            QString hay = normalize(i.key() + ' ' + main->cfg.T(i.key()) + ' ' + entry);
+            QString label = entry.section('\t', 0, 0);
+            QString hay =
+                normalize(i.key() + ' ' + main->cfg.T(i.key()) + ' ' + entry + ' ' + main->cfg.T(label));
             bool match = true;
             for (const auto &token : tokens) {
                 match &= hay.contains(token);
             }
             if (match) {
-                auto *item =
-                    new QListWidgetItem(main->cfg.T(i.key()) + " — " + entry.section(' ', 0, 7), results);
+                auto *item = new QListWidgetItem(main->cfg.T(i.key()) + " — " + main->cfg.T(label), results);
                 item->setData(Qt::UserRole, i.key());
             }
         }

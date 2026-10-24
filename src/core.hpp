@@ -31,6 +31,7 @@ bool wordMatch(const QString &text, const QString &word);
 int codepointOffset(const QString &text, int cp);
 int characterCount(const QString &text);
 QString stripAt(QString value);
+QString emoteName(QString value);
 QIcon platformIcon(const QString &platform);
 void darkTitlebar(QWidget *window);
 

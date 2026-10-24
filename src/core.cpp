@@ -183,6 +183,14 @@ QString stripAt(QString value) {
     return value.toCaseFolded();
 }
 
+QString emoteName(QString value) {
+    return value.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&");
+}
+
 bool wordMatch(const QString &text, const QString &word) {
     const auto w = stripAt(word);
     return !w.isEmpty() &&

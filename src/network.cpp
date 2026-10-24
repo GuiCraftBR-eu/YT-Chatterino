@@ -108,8 +108,25 @@ Images::Images(Network *n, QObject *p) : QObject(p), net(n) {
                 entry->movie->setPaused(true);
             }
         }
+        retryExpired();
     });
     visibilityTimer.start();
+}
+
+void Images::retryExpired() {
+    auto now = QDateTime::currentSecsSinceEpoch();
+    QStringList expired;
+    for (auto i = failures.begin(); i != failures.end();) {
+        if (i.value() <= now) {
+            expired << i.key();
+            i = failures.erase(i);
+        } else {
+            ++i;
+        }
+    }
+    for (auto key : expired) {
+        emit ready(key);
+    }
 }
 
 bool Images::allowed(const QUrl &u) {
@@ -221,6 +238,7 @@ void Images::request(const QStringList &urls, int alternative) {
         } else {
             pending.remove(key);
             failures[key] = QDateTime::currentSecsSinceEpoch() + 90;
+            qWarning().noquote() << "Image load failed:" << QUrl(key).host() << error;
             emit ready(key);
         }
     });

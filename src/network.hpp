@@ -41,6 +41,7 @@ class Images : public QObject {
     QImage get(const QStringList &urls, bool animate = true);
     void request(const QStringList &urls, int alternative = 0);
     void trim();
+    void retryExpired();
     static bool allowed(const QUrl &url);
   signals:
     void ready(QString url);

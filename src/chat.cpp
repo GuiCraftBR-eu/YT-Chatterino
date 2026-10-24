@@ -908,6 +908,9 @@ void Hub::provider(Source *s, const QJsonValue &data, QString provider, QString 
         auto o = v.toObject();
         Span e;
         e.code = provider == "7tv" ? str(o["name"]) : provider == "bttv" ? str(o["code"]) : str(o["name"]);
+        if (provider == "twitch") {
+            e.code = emoteName(e.code);
+        }
         QString id = str(o["id"]);
         if (e.code.isEmpty() || id.isEmpty()) {
             continue;
