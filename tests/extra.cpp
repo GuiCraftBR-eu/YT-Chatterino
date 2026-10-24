@@ -1,5 +1,34 @@
 #include "native_tests.hpp"
 
+void NativeTests::threadCapKeepsRoot() {
+    app->cfg.data["message_limit"] = 100;
+    Message root;
+    root.id = "root";
+    root.name = "Parent";
+    root.login = "parent";
+    root.text = "Original message";
+    twitch->publish(root);
+    Message reply;
+    reply.id = "r1";
+    reply.name = "Reply";
+    reply.text = "First reply";
+    reply.source = twitch->key;
+    reply.reply = {{"id", "root"}, {"thread_id", "root"}, {"name", "Parent"}, {"text", "Original message"}};
+    twitch->publish(reply);
+    app->showThread(twitch, reply);
+    auto thread = app->threads.begin().value();
+    QVERIFY(thread);
+    for (int i = 2; i < 155; ++i) {
+        reply.id = "r" + QString::number(i);
+        twitch->publish(reply);
+    }
+    QCOMPARE(thread->pane->view->messages.size(), 100);
+    QCOMPARE(thread->pane->view->messages.first().id, "root");
+    QCOMPARE(thread->pane->view->messages.last().id, "r154");
+    emit app->cfg.appearanceChanged();
+    QCOMPARE(thread->pane->view->messages.first().id, "root");
+}
+
 void NativeTests::singleWordIrcAndSerializedRefresh() {
     auto p = parseIrc("@display-name=Test;id=one :test!test@host PRIVMSG #guicraft_ hello");
     QCOMPARE(p.channel, "guicraft_");

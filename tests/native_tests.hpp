@@ -67,4 +67,5 @@ class NativeTests : public QObject {
     void updateTransactionRollbackAndInvalidPaths();
     void resizeBenchmark();
     void singleWordIrcAndSerializedRefresh();
+    void threadCapKeepsRoot();
 };

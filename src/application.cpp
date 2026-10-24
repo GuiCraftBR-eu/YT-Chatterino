@@ -121,6 +121,8 @@ MainWindow::MainWindow(QString profile, bool testing)
     connect(&accounts, &Accounts::ready, this, [this] {
         for (auto s : hub.sources) {
             if (s->platform == "twitch") {
+                s->emoteLoaded.clear();
+                s->badgesLoaded = 0;
                 s->refreshHeader();
                 s->loadEmotes(s->room());
                 s->loadBadges();
@@ -1272,7 +1274,11 @@ ThreadWindow::ThreadWindow(MainWindow *m, Source *s, Message selected, QString i
     pane->threadId = root;
     pane->view->threadMode = true;
     layout->addWidget(pane, 1);
-    layout->addWidget(label(main->cfg, "Only messages retained in this app are available.", true));
+    auto *notice = label(main->cfg, "Only messages retained in this app are available.", true);
+    layout->addWidget(notice);
+    connect(&main->cfg, &Config::languageChanged, this, [this, notice] {
+        notice->setText(main->cfg.T("Only messages retained in this app are available."));
+    });
     parentMessage.id = root;
     parentMessage.source = s->key;
     bool direct = str(selected.reply["id"]) == root;
@@ -1299,6 +1305,7 @@ ThreadWindow::ThreadWindow(MainWindow *m, Source *s, Message selected, QString i
         rebuild();
     });
     connect(&main->cfg, &Config::languageChanged, this, &ThreadWindow::rebuild);
+    connect(&main->cfg, &Config::appearanceChanged, this, &ThreadWindow::rebuild);
     main->attachPane(pane);
     rebuild();
     resize(500, 420);
@@ -1328,6 +1335,8 @@ void ThreadWindow::incoming(Message m) {
     if (m.id == root) {
         parentMessage = m;
         rebuild();
+    } else if (pane->view->messages.size() >= main->cfg.cap(source->key)) {
+        rebuild();
     } else {
         pane->view->append(m);
     }
@@ -1356,6 +1365,9 @@ void ThreadWindow::rebuild() {
         }
     }
     pane->view->messageCap = main->cfg.cap(source->key);
+    if (rows.size() > pane->view->messageCap) {
+        rows.remove(1, rows.size() - pane->view->messageCap);
+    }
     pane->view->setMessages(rows);
     pane->reply = parentMessage;
     if (pane->reply.deleted) {

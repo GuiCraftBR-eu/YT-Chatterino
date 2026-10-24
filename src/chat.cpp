@@ -132,6 +132,8 @@ void Source::reconnect() {
     }
     ++generation;
     requesting = false;
+    emoteLoaded.clear();
+    badgesLoaded = 0;
     continuation.clear();
     retryMs = 5000;
     if (platform == "twitch") {
@@ -839,6 +841,10 @@ Hub::Hub(Config *c, Network *n, Accounts *a, Images *i, Quota *q, QObject *p)
         globalsLoading = false;
         globalsLoaded = 0;
         globalEmotes();
+        if (!testMode) {
+            liveTimer.start();
+            pollLive();
+        }
     });
 }
 

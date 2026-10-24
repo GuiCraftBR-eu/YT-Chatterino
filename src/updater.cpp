@@ -29,7 +29,9 @@ Updater::Updater(Config *c, Network *n, QWidget *w, QObject *p) : QObject(p), cf
 
 QString Updater::kind() const {
 #ifdef Q_OS_WIN
-    return "windows";
+    return QFileInfo::exists(QCoreApplication::applicationDirPath() + "/update-manifest.json")
+               ? "windows"
+               : "development";
 #elif defined(Q_OS_LINUX)
     return QCoreApplication::applicationDirPath() == "/usr/bin" ? "pacman" : "development";
 #else
@@ -445,6 +447,9 @@ void Updater::prepare(QByteArray bytes) {
 }
 
 static bool processAlive(qint64 pid) {
+    if (pid <= 0) {
+        return false;
+    }
 #ifdef Q_OS_WIN
     HANDLE process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, DWORD(pid));
     if (!process) {
@@ -459,6 +464,9 @@ static bool processAlive(qint64 pid) {
 }
 
 static void terminateChild(qint64 pid) {
+    if (pid <= 0) {
+        return;
+    }
 #ifdef Q_OS_WIN
     HANDLE p = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, DWORD(pid));
     if (p) {

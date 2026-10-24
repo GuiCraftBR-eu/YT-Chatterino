@@ -16,7 +16,7 @@ jobs:
         with:
           version: '6.8.3'
           arch: win64_mingw
-          modules: 'qtsvg qtimageformats'
+          modules: 'qtimageformats'
           tools: 'tools_mingw1310'
           cache: true
       - name: Configure and build C++20
