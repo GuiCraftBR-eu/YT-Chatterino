@@ -22,6 +22,7 @@ class Updater : public QObject {
     void render();
     void install();
     QString kind() const;
+    bool hasUpdate() const;
     static QJsonObject releaseInfo(const QJsonObject &data, const QString &current, const QString &kind,
                                    QString *error);
     static bool safePath(QString path);

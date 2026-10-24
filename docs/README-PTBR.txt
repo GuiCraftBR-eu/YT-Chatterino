@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.0.0 — WINDOWS 11 x64
+YT-CHATTERINO 2.0.1 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.0.0.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.0.1.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.

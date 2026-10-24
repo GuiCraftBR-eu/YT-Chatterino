@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+
+- Corrected an empty update-state mutation in the toolbar. An up-to-date or invalid version now keeps Install disabled.
+- Added a regression check for the complete toolbar-to-update-dialog path.
+
 ## 2.0.0
 
 - Replaced the Python/Tk application with a native C++20/Qt 6 implementation on Windows and Arch Linux.

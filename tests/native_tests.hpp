@@ -69,4 +69,5 @@ class NativeTests : public QObject {
     void singleWordIrcAndSerializedRefresh();
     void threadCapKeepsRoot();
     void failedEmotesRetryAndNativeCodesDecode();
+    void currentUpdateStateStaysEmptyAndCannotInstall();
 };

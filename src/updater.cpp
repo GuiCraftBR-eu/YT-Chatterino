@@ -45,6 +45,10 @@ void Updater::start() {
     }
 }
 
+bool Updater::hasUpdate() const {
+    return versionNewer(str(available.value("version")), APP_VERSION);
+}
+
 QJsonObject Updater::releaseInfo(const QJsonObject &d, const QString &current, const QString &kind,
                                  QString *error) {
     if (d["draft"].toBool() || d["prerelease"].toBool()) {
@@ -179,7 +183,7 @@ void Updater::render() {
         message = cfg->T("Verifying and preparing update…");
     } else if (!error.isEmpty()) {
         message = cfg->T(error);
-    } else if (available.isEmpty()) {
+    } else if (!hasUpdate()) {
         message = cfg->T("You are up to date.");
     } else {
         message = cfg->T(
@@ -187,13 +191,13 @@ void Updater::render() {
             {{"version", str(available["version"])}, {"date", cfg->date(str(available["published"]))}});
     }
     status->setText(message);
-    installButton->setEnabled(!available.isEmpty() && !busy);
+    installButton->setEnabled(hasUpdate() && !busy);
     installButton->setText(
         cfg->T(kind() == "development" ? "Open release page" : "Install update and restart"));
 }
 
 void Updater::install() {
-    if (busy || available.isEmpty()) {
+    if (busy || !hasUpdate()) {
         return;
     }
     if (kind() == "development") {

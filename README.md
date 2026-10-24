@@ -1,4 +1,4 @@
-# YT-Chatterino 2.0.0
+# YT-Chatterino 2.0.1
 
 A native **C++20 / Qt 6** desktop chat client for YouTube and Twitch, with a compact black interface inspired by Chatterino. The application no longer runs Python, Tk or a web view.
 
@@ -6,9 +6,9 @@ A native **C++20 / Qt 6** desktop chat client for YouTube and Twitch, with a com
 
 ## Run
 
-**Windows 11 x64:** download `YT-Chatterino-Windows11-2.0.0.zip`, extract the entire folder, then double-click `YT-Chatterino.exe`. Keep the DLLs and plugin folders beside it. No Python, compiler or terminal is required.
+**Windows 11 x64:** download `YT-Chatterino-Windows11-2.0.1.zip`, extract the entire folder, then double-click `YT-Chatterino.exe`. Keep the DLLs and plugin folders beside it. No Python, compiler or terminal is required.
 
-**Arch Linux x86_64:** download `yt-chatterino-2.0.0-1-x86_64.pkg.tar.zst`, then run `sudo pacman -U ./yt-chatterino-2.0.0-1-x86_64.pkg.tar.zst`. Launch YT-Chatterino from your application menu. It runs natively with Qt; Wine is not used. See [Arch instructions](docs/ARCH-LINUX.md).
+**Arch Linux x86_64:** download `yt-chatterino-2.0.1-1-x86_64.pkg.tar.zst`, then run `sudo pacman -U ./yt-chatterino-2.0.1-1-x86_64.pkg.tar.zst`. Launch YT-Chatterino from your application menu. It runs natively with Qt; Wine is not used. See [Arch instructions](docs/ARCH-LINUX.md).
 
 ## Connect
 

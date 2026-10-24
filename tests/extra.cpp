@@ -1,5 +1,28 @@
 #include "native_tests.hpp"
 
+void NativeTests::currentUpdateStateStaysEmptyAndCannotInstall() {
+    auto &u = app->updater;
+    u.available = {};
+    u.state = "current";
+    emit u.changed();
+    QVERIFY(u.available.isEmpty());
+    QVERIFY(!u.hasUpdate());
+    u.show();
+    QVERIFY(!u.installButton->isEnabled());
+    QCOMPARE(u.status->text(), "You are up to date.");
+    u.available = {{"version", QJsonValue::Null}};
+    u.render();
+    QVERIFY(!u.installButton->isEnabled());
+    QCOMPARE(u.status->text(), "You are up to date.");
+    u.available = {{"version", APP_VERSION}};
+    u.render();
+    QVERIFY(!u.hasUpdate());
+    u.available = {{"version", "9.0.0"}, {"published", "2026-10-24T12:00:00Z"}};
+    u.render();
+    QVERIFY(u.hasUpdate());
+    QVERIFY(u.installButton->isEnabled());
+}
+
 void NativeTests::failedEmotesRetryAndNativeCodesDecode() {
     QCOMPARE(emoteName("&lt;3"), "<3");
     QCOMPARE(emoteName("&gt;("), ">(");

@@ -92,9 +92,9 @@ MainWindow::MainWindow(QString profile, bool testing)
     connect(gear, &QWidget::customContextMenuRequested, this, [this] { gearMenu(); });
     connect(updateArrow, &QToolButton::clicked, &updater, &Updater::show);
     connect(&updater, &Updater::changed, this, [this] {
-        updateArrow->setVisible(!updater.available.isEmpty());
+        updateArrow->setVisible(updater.hasUpdate());
         updateArrow->setToolTip(
-            cfg.T("Update to {version}", {{"version", str(updater.available["version"])}}));
+            cfg.T("Update to {version}", {{"version", str(updater.available.value("version"))}}));
     });
     connect(&updater, &Updater::restartRequested, this, [this] {
         saveSession();
