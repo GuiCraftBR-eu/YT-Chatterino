@@ -77,6 +77,13 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
         search->clear();
         showPage(item->data(0, Qt::UserRole).toString());
     });
+    connect(navigation, &QTreeWidget::currentItemChanged, this,
+            [this](QTreeWidgetItem *item, QTreeWidgetItem *) {
+                if (item) {
+                    search->clear();
+                    showPage(item->data(0, Qt::UserRole).toString());
+                }
+            });
     connect(results, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
         QString page = item->data(Qt::UserRole).toString();
         search->clear();
@@ -133,6 +140,19 @@ void SettingsWindow::showPage(QString name) {
         name = "Accounts";
     }
     currentPage = name;
+    QTreeWidgetItem *selected = nullptr;
+    for (QTreeWidgetItemIterator it(navigation); *it; ++it) {
+        if ((*it)->data(0, Qt::UserRole).toString() == name && (!selected || (*it)->parent())) {
+            selected = *it;
+        }
+    }
+    {
+        QSignalBlocker block(navigation);
+        navigation->setCurrentItem(selected);
+        if (selected && selected->parent()) {
+            selected->parent()->setExpanded(true);
+        }
+    }
     if (!built.contains(name)) {
         auto *inner = buildPage(name);
         auto *scroll = new QScrollArea(this);

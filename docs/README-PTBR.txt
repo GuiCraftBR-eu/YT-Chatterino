@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.0.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.0.2 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.0.1.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.0.2.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -45,6 +45,8 @@ A seta para baixo aparece quando há uma versão nova. Clique nela e confirme.
 O aplicativo verifica o arquivo, faz backup da pasta, instala e reinicia. Se a nova versão
 não iniciar, a anterior é restaurada. Mantenha a pasta extraída gravável e feche outras cópias antes de atualizar.
 A versão portátil 1.x para Windows pode atualizar para esta versão. Instalações pelo código-fonte precisam de uma atualização manual pelo ZIP.
+Se a versão nativa 2.0.0/2.0.1 rejeitar um atalho .lnk durante a atualização, mova esse atalho para fora da pasta do aplicativo,
+tente atualizar novamente e depois coloque o atalho de volta. A versão 2.0.2 corrige a preservação de atalhos nas próximas atualizações.
 Os arquivos Source/*.py* são marcadores de compatibilidade não utilizados, exigidos pelo atualizador antigo;
 não são código Python executado pelo aplicativo. Todo o aplicativo e seu ambiente são nativos em C++/Qt.
 

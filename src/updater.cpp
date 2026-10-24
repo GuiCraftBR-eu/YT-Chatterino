@@ -254,12 +254,12 @@ bool Updater::copyTree(const QString &from, const QString &to, QString *error) {
         it.next();
         auto info = it.fileInfo();
         QString rel = QDir(from).relativeFilePath(info.absoluteFilePath());
-        if (!safePath(rel) || info.isSymLink()) {
+        if (!safePath(rel) || info.isSymbolicLink() || info.isJunction()) {
             *error = "Symbolic links are not allowed in an update.";
             return false;
         }
         QString target = to + '/' + rel;
-        if (info.isDir()) {
+        if (info.isDir() && !info.isShortcut()) {
             QDir().mkpath(target);
             continue;
         }
@@ -572,10 +572,10 @@ int Updater::applyUpdate(const QString &path, bool interactive) {
             it.next();
             auto info = it.fileInfo();
             QString rel = QDir(target).relativeFilePath(info.absoluteFilePath());
-            if (!safePath(rel) || info.isSymLink()) {
+            if (!safePath(rel) || info.isSymbolicLink() || info.isJunction()) {
                 throw std::runtime_error("Links are not allowed in the app folder.");
             }
-            if (info.isDir()) {
+            if (info.isDir() && !info.isShortcut()) {
                 if (QFileInfo(stage + '/' + rel).isFile()) {
                     throw std::runtime_error("An update file conflicts with an existing folder.");
                 }
@@ -632,7 +632,7 @@ int Updater::applyUpdate(const QString &path, bool interactive) {
         if (validated) {
             writeObject(container + "/failure.json", {{"error", QString::fromUtf8(e.what())}});
         }
-        if (moved) {
+        if (validated && QFileInfo(target + "/YT-Chatterino.exe").isFile()) {
             QProcess::startDetached(target + "/YT-Chatterino.exe", {"--profile", str(manifest["profile"])},
                                     target);
         }

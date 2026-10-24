@@ -1,5 +1,24 @@
 #include "native_tests.hpp"
 
+void NativeTests::settingsNavigationTracksShortcutsAndKeyboard() {
+    app->showSettings("Updates");
+    auto *settings = app->settings.data();
+    QVERIFY(settings);
+    QCOMPARE(settings->navigation->currentItem()->data(0, Qt::UserRole).toString(), "Updates");
+    app->showSettings("Display");
+    auto *display = settings->navigation->currentItem();
+    QVERIFY(display);
+    QVERIFY(display->parent());
+    QCOMPARE(display->data(0, Qt::UserRole).toString(), "Display");
+    settings->navigation->setFocus();
+    QTest::keyClick(settings->navigation, Qt::Key_Down);
+    QCOMPARE(settings->currentPage, "Messages");
+    QCOMPARE(settings->pages->currentWidget(), settings->built.value("Messages"));
+    settings->rebuildLanguage();
+    QCOMPARE(settings->navigation->currentItem()->data(0, Qt::UserRole).toString(), "Messages");
+    QCOMPARE(settings->pages->currentWidget(), settings->built.value("Messages"));
+}
+
 void NativeTests::currentUpdateStateStaysEmptyAndCannotInstall() {
     auto &u = app->updater;
     u.available = {};
@@ -312,12 +331,25 @@ void NativeTests::updateTransactionSuccessAndPreservation() {
                  {"files", QJsonArray{"YT-Chatterino.exe", "test-update-child", "update-manifest.json"}}});
     writeObject(target + "/private.json", {{"keep", true}});
     QDir().mkpath(target + "/empty-user-folder");
+#ifdef Q_OS_WIN
+    QVERIFY(QFile::link(QCoreApplication::applicationFilePath(), target + "/Launch.lnk"));
+    QVERIFY(QFileInfo(target + "/Launch.lnk").isShortcut());
+    QFile originalShortcut(target + "/Launch.lnk");
+    QVERIFY(originalShortcut.open(QIODevice::ReadOnly));
+    const auto shortcutBytes = originalShortcut.readAll();
+    originalShortcut.close();
+#endif
     writeObject(container + "/update.json", m);
     QVERIFY(Updater::validTransaction(m, container + "/update.json"));
     QCOMPARE(Updater::applyUpdate(container + "/update.json", false), 0);
     QVERIFY(readObject(target + "/private.json")["keep"].toBool());
     QVERIFY(QFileInfo(target + "/empty-user-folder").isDir());
     QVERIFY(QFileInfo::exists(str(m["backup"]) + "/private.json"));
+#ifdef Q_OS_WIN
+    QFile preservedShortcut(target + "/Launch.lnk");
+    QVERIFY(preservedShortcut.open(QIODevice::ReadOnly));
+    QCOMPARE(preservedShortcut.readAll(), shortcutBytes);
+#endif
     QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(container + "/child-running"), 3000);
 }
 

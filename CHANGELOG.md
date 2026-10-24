@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.2
+
+- Preserve Windows .lnk shortcut files during native updates while continuing to reject filesystem symbolic links and junctions.
+- Restart the original app when a validated update is rejected before the folder swap.
+- Keep the settings sidebar synchronized with shortcuts and search results; support keyboard navigation between settings pages.
+- Add settings navigation and real Windows shortcut preservation regression coverage.
+
 ## 2.0.1
 
 - Corrected an empty update-state mutation in the toolbar. An up-to-date or invalid version now keeps Install disabled.

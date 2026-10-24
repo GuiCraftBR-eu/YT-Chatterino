@@ -70,4 +70,5 @@ class NativeTests : public QObject {
     void threadCapKeepsRoot();
     void failedEmotesRetryAndNativeCodesDecode();
     void currentUpdateStateStaysEmptyAndCannotInstall();
+    void settingsNavigationTracksShortcutsAndKeyboard();
 };
