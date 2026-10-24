@@ -1,6 +1,6 @@
 # Run makepkg -si as your regular user from this directory.
 pkgname=yt-chatterino
-pkgver=1.2.2
+pkgver=1.3.0
 pkgrel=1
 pkgdesc='Native YouTube and Twitch chat viewer inspired by Chatterino'
 arch=('any')

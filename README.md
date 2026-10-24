@@ -6,7 +6,7 @@ Chat de **YouTube e Twitch** em uma interface escura inspirada no Chatterino.
 
 **[Baixar a versão mais recente](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/latest)**
 
-1. Na página da versão, baixe `YT-Chatterino-Windows11-1.2.2.zip` em **Assets**.
+1. Na página da versão, baixe `YT-Chatterino-Windows11-1.3.0.zip` em **Assets**.
 2. Clique com o botão direito no ZIP e selecione **Extrair tudo**.
 3. Abra a pasta extraída e execute **YT-Chatterino.exe**.
 
@@ -15,8 +15,8 @@ O pacote é destinado ao Windows 11 x64 (Intel/AMD).
 
 ## Arch Linux nativo
 
-Baixe o pacote `yt-chatterino-1.2.2-1-any.pkg.tar.zst` na mesma página e instale
-com `sudo pacman -U ./yt-chatterino-1.2.2-1-any.pkg.tar.zst`.
+Baixe o pacote `yt-chatterino-1.3.0-1-any.pkg.tar.zst` na mesma página e instale
+com `sudo pacman -U ./yt-chatterino-1.3.0-1-any.pkg.tar.zst`.
 O menu de aplicativos terá **YT-Chatterino**. Não usa Wine.
 Também há um `.tar.gz` com o código e o PKGBUILD para compilar/instalar com `makepkg -si`.
 Veja o [guia do Arch Linux](docs/ARCH-LINUX.md) para dependências, chaveiro e sons.
@@ -40,6 +40,9 @@ Quem usa 1.2.1 ou anterior precisa instalar a 1.2.2 manualmente uma vez.
 - Datas em DD/MM/AAAA por padrão e formatos de horário de 12/24 horas, com segundos opcionais.
 - Saldo do YouTube exibido apenas quando o painel focado inclui um chat do YouTube.
 - Respostas reais da Twitch pelo menu de clique direito nas mensagens.
+- Conversas de respostas da Twitch com clique esquerdo no texto, histórico retido e envio.
+- YouTube continua conectado nas abas em segundo plano; a pausa manual é opcional.
+- Restauração da posição/tamanho da janela e fontes independentes para mensagens e nomes.
 - Cartão de usuário ao clicar no nome, com perfil público e mensagens retidas.
 - Histórico recente ao abrir chats, quando disponível.
 - Limite padrão de 2.000 mensagens por painel, configurável em **Configurações → Aparência → Mensagens**.

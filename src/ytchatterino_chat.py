@@ -55,7 +55,9 @@ def parse_privmsg(line, decode_tags, parse_badges, parse_emotes, parse_gifs):
         reply = {"id": tags["reply-parent-msg-id"], "user_id": tags.get("reply-parent-user-id"),
                  "login": tags.get("reply-parent-user-login", ""),
                  "name": tags.get("reply-parent-display-name") or tags.get("reply-parent-user-login", ""),
-                 "text": tags.get("reply-parent-msg-body", "")}
+                 "text": tags.get("reply-parent-msg-body", ""),
+                 "thread_id": tags.get("reply-thread-parent-msg-id") or None,
+                 "thread_login": tags.get("reply-thread-parent-user-login", "")}
     return channel, {"id": tags.get("id"), "name": tags.get("display-name") or login,
         "login": login, "user_id": tags.get("user-id"), "room_id": tags.get("room-id"),
         "time": date.strftime("%H:%M:%S"), "sent_at": stamp or date.timestamp(),
@@ -73,7 +75,7 @@ def recent_twitch(channel, limit, parser):
     params = urllib.parse.urlencode({"limit": min(1000, max(1, limit)),
         "hide_moderated_messages": "true", "hide_moderation_messages": "true"})
     request = urllib.request.Request(HISTORY_URL + channel + "?" + params,
-                                     headers={"User-Agent": "YT-Chatterino/1.2.0"})
+                                     headers={"User-Agent": "YT-Chatterino/1.3.0"})
     with urllib.request.urlopen(request, timeout=8) as response:
         raw = response.read(4 * 1024 * 1024 + 1)
     if len(raw) > 4 * 1024 * 1024:
@@ -107,6 +109,7 @@ class ChatTools:
         self.owner, self.app, self.core = owner, owner.app, owner.core
         self.cards = OrderedDict()
         self.profiles = OrderedDict()
+        self.threads = OrderedDict()
 
     def attach_reply_bar(self, pane):
         pane.reply_target = None
@@ -125,12 +128,16 @@ class ChatTools:
         pane.reply_target = (source.key, dict(message))
         pane.reply_label.configure(text=tr("Replying to @{name}: {body}",
             name=message.get("login") or message["name"], body=message.get("text", "")[:100]))
-        pane.reply_bar.pack(side="bottom", fill="x", after=pane.composer)
+        if not pane.detached:
+            pane.reply_bar.pack(side="bottom", fill="x", after=pane.composer)
         self.owner.update_send_label(pane)
         pane.compose_entry.focus_set()
 
     def cancel_reply(self, pane):
-        pane.reply_target = None
+        if pane.detached:
+            pane.thread_window.reset_reply()
+        else:
+            pane.reply_target = None
         pane.reply_bar.pack_forget()
         return "break"
 
@@ -180,7 +187,7 @@ class ChatTools:
             lambda result: complete(result), lambda error: complete(error=error))
 
     def apply_limits(self):
-        for pane in self.app.all_panes():
+        for pane in self.app.display_panes():
             cap = message_limit(self.app.cfg, pane.setting_key)
             pane.pending_events = deque(pane.pending_events, maxlen=cap)
             pane.text.configure(state="normal")
@@ -194,6 +201,8 @@ class ChatTools:
                 source.seen.popitem(last=False)
         for card in tuple(self.cards.values()):
             card.refresh_messages()
+        for thread in tuple(self.threads.values()):
+            thread.trim()
 
     def pane_limit(self, pane):
         value = simpledialog.askinteger(tr("Message limit"), tr("Retained messages in this pane (100–20000):"),
@@ -232,6 +241,25 @@ class ChatTools:
         for card in tuple(self.cards.values()):
             if card.source is source and same_user(message, card.message):
                 card.schedule_refresh()
+        for thread in tuple(self.threads.values()):
+            thread.on_message(source, message)
+
+    def show_thread(self, source, message):
+        if source.platform != 'twitch' or not message.get('reply'):
+            return
+        from ytchatterino_threads import collect_thread, ThreadWindow
+        root_id, messages = collect_thread(source.history, message)
+        if not root_id:
+            return
+        key = (source.key, root_id)
+        if key in self.threads:
+            self.threads[key].window.lift()
+            return self.threads[key]
+        while len(self.threads) >= 8:
+            next(iter(self.threads.values())).close()
+        thread = ThreadWindow(self, source, message, root_id, messages)
+        self.threads[key] = thread
+        return thread
 
     def show_user(self, pane, source, message):
         key = (source.key, message.get("user_id") or message.get("login") or message.get("name"))
@@ -338,7 +366,8 @@ class UserCard:
         self.text.pack(side="left", fill="both", expand=True)
         self.text.tag_configure("time", foreground=self.core.DIM)
         color = message.get("color") or "#df8060"
-        self.text.tag_configure("name", foreground=color if re.fullmatch(r"#[0-9a-fA-F]{6}", color) else "#df8060")
+        self.text.tag_configure("name", foreground=color if re.fullmatch(r"#[0-9a-fA-F]{6}", color) else "#df8060",
+                                font=tools.app.fonts['username'])
         self.text.tag_configure("alt", background=self.core.ALT)
         self.refresh_messages()
 

@@ -199,7 +199,8 @@ def prepare_update(info, target, progress=lambda done, total: None, downloader=d
                 raise ValueError('The update version does not match the release.')
             required = ('ytchatterino_features.py', 'ytchatterino_chat.py', 'ytchatterino_update.py',
                         'ytchatterino_i18n.py', 'ytchatterino_settings.py', 'ytchatterino_youtube.py',
-                        'ytchatterino_translations.py', 'ytchatterino_chat_translations.py')
+                        'ytchatterino_translations.py', 'ytchatterino_chat_translations.py',
+                        'ytchatterino_window.py', 'ytchatterino_threads.py')
             if any(not (source/name).is_file() for name in required):
                 raise ValueError('The update source is incomplete.')
         manifest = {'kind':kind, 'target':str(target), 'stage':str(stage), 'container':str(container),

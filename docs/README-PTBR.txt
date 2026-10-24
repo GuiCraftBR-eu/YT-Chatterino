@@ -3,7 +3,7 @@ Atualizado em: 23 de outubro de 2026
 
 INÍCIO RÁPIDO
 =============
-1. Clique com o botão direito em YT-Chatterino-Windows11-1.2.2.zip > Extrair Tudo.
+1. Clique com o botão direito em YT-Chatterino-Windows11-1.3.0.zip > Extrair Tudo.
 2. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe.
 
@@ -113,8 +113,7 @@ RECURSOS E CONTROLES DO DIA A DIA
 - Salve canais em Ações do canal; abra-os em Configurações > Canais salvos.
   O YouTube só procura lives atuais ao clicar em Abrir e permite escolher
   entre transmissões simultâneas. A Twitch também abre offline.
-- Chats ocultos do YouTube pausam automaticamente. A Twitch permanece
-  conectada. Pause cada chat do YouTube no menu do cabeçalho, ou todos pelo
+- YouTube e Twitch continuam conectados nas abas em segundo plano. Pause cada chat do YouTube no menu do cabeçalho, ou todos pelo
   menu do botão direito na engrenagem. Os intervalos individuais respeitam
   o tempo recomendado pelo YouTube.
 - Ctrl+F busca no painel; Ctrl+Shift+F busca em todos. Ctrl+F5 reconecta.
@@ -176,7 +175,7 @@ Mensagens históricas não acionam sons.
 DOWNLOAD NATIVO PARA ARCH LINUX
 ==============================
 Há um pacote separado de Arch Linux na página da versão no GitHub. Instale
-yt-chatterino-1.2.2-1-any.pkg.tar.zst com pacman -U, ou compile o PKGBUILD incluído
+yt-chatterino-1.3.0-1-any.pkg.tar.zst com pacman -U, ou compile o PKGBUILD incluído
 no código-fonte .tar.gz com makepkg -si. Não usa Wine. Consulte o arquivo
 docs/ARCH-LINUX.md desse download para dependências, chaveiro seguro e sons.
 
@@ -216,7 +215,7 @@ e de código-fonte precisam de permissão de escrita na pasta do aplicativo.
 Versões 1.2.1 e anteriores exigem uma atualização manual para a 1.2.2 primeiro.
 
 Aparência > Exibição agora tem Formato de data (padrão DD/MM/YYYY, ou seja,
-dia/mês/ano) e Formato do horário: HH:mm, HH:mm:ss, hh:mm AM/PM ou hh:mm:ss AM/PM.
+dia/mês/ano) e Formato do horário: HH:mm, HH:mm:ss, hh:mm am/pm ou hh:mm:ss am/pm.
 Clique em Aplicar para atualizar as mensagens já mantidas, inclusive horários
 ocultos. Datas dos cartões de usuário e dos avisos de atualização seguem o
 formato escolhido. Textos de mensagens e formatos da API e do armazenamento
@@ -226,3 +225,27 @@ O saldo do YouTube aparece apenas quando o painel focado inclui o YouTube.
 A seta de atualização continua disponível ao ver a Twitch. A inicialização adia
 trabalho de tradução e descompactação até ele ser necessário; a preparação dos
 padrões de emotes ocorre fora da interface.
+
+
+VERSÃO 1.3.0: CHATS EM SEGUNDO PLANO, JANELA E CONVERSAS DE RESPOSTAS
+
+O YouTube continua lendo quando outra aba é selecionada ou o aplicativo é
+minimizado. Pausar/Retomar e Pausar todos continuam funcionando manualmente.
+A leitura não consome a cota da API de dados. A janela principal lembra o
+tamanho, a posição e o estado maximizado. Fechar enquanto minimizada mantém
+a última posição normal ou maximizada.
+
+Configurações > Aparência > Exibição tem tamanhos separados para a fonte das
+mensagens e dos nomes (7 a 48 pt). Ctrl++ e Ctrl+- ajustam ambos; Ctrl+0 restaura
+ambos para 12 pt. Mensagens, seleções e imagens existentes são preservadas.
+Os horários de 12 horas usam am/pm em letras minúsculas.
+
+Clique com o botão esquerdo no texto de uma resposta da Twitch ou na linha
+de contexto para abrir a conversa. A janela exibe as mensagens ainda mantidas
+e novas respostas; o campo inferior envia uma resposta naquela conversa.
+Não há recurso de assinatura da conversa. Arraste para selecionar e copiar
+normalmente; clicar no nome continua abrindo o cartão do usuário.
+Histórico removido pelo limite ou indisponível não pode ser recuperado. Se a
+mensagem original estiver ausente, aparece o contexto fornecido pela Twitch,
+ou uma indicação de mensagem indisponível. O leitor do YouTube não fornece
+metadados equivalentes para conversas de respostas.

@@ -59,3 +59,22 @@ Startup timings vary with caches; live checks confirm a responsive first window.
 Updater checks run after the first window appears. They never block startup on
 GitHub or download automatically without confirmation. Regression transports
 for sending/moderation/editing are mocked; live UI checks do not post to chat.
+
+
+## v1.3.0 checks
+
+A fresh Windows run on 23/10/2026 measured 20.41 s for v1.2.2 and 20.87 s for
+v1.3.0 using the same 2,000-message, 189-step resize script, including settling.
+The roughly 2% difference is small; this release does not claim a resize gain.
+Do not compare these totals to earlier sessions as a controlled speed ratio.
+
+Changing message/username fonts now changes shared Tk fonts in place. It avoids
+rebuilding retained history or invalidating emote image caches. Appearance only
+recalculates spacing, timestamp visibility and row backgrounds when their values
+change. Alternating backgrounds follow complete messages, including reply lines.
+
+Reply windows reuse chat connections, decoded images and the renderer. At most
+eight thread windows can be open; messages/queues follow the channel's configured
+cap. New messages append incrementally. Opening a thread scans retained history;
+it does not request a full server archive. Background YouTube polling continues,
+while invisible main tabs defer rendering until shown.

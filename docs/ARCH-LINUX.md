@@ -5,15 +5,15 @@ executable, an embedded Windows runtime, or an emulator.
 
 ## Install
 
-For the ready-built pacman package, download `yt-chatterino-1.2.2-1-any.pkg.tar.zst`:
+For the ready-built pacman package, download `yt-chatterino-1.3.0-1-any.pkg.tar.zst`:
 
 ```sh
-sudo pacman -U ./yt-chatterino-1.2.2-1-any.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-1.3.0-1-any.pkg.tar.zst
 ```
 
 The source download below is an alternative if you prefer to build it locally.
 
-Download and extract `YT-Chatterino-ArchLinux-1.2.2.tar.gz`. From the extracted folder:
+Download and extract `YT-Chatterino-ArchLinux-1.3.0.tar.gz`. From the extracted folder:
 
 ```sh
 sudo pacman -S --needed base-devel python tk python-pillow python-keyring python-secretstorage ttf-dejavu
@@ -45,7 +45,7 @@ Tk uses X11 or XWayland under Wayland. Install/enable your compositor's XWayland
 
 ## Português brasileiro
 
-Baixe e extraia o arquivo `YT-Chatterino-ArchLinux-1.2.2.tar.gz`.
+Baixe e extraia o arquivo `YT-Chatterino-ArchLinux-1.3.0.tar.gz`.
 Instale as dependências com o comando `pacman` acima, entre em `packaging/arch`
 e execute `makepkg -si` como seu usuário normal. Abra **YT-Chatterino** pelo menu
 de aplicativos ou pelo comando `yt-chatterino`.

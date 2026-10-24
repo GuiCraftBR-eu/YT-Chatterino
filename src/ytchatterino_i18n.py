@@ -22,7 +22,7 @@ _refreshing = False
 _patterns = []
 DATE_FORMATS = {'DD/MM/YYYY': '%d/%m/%Y', 'MM/DD/YYYY': '%m/%d/%Y',
                 'YYYY-MM-DD': '%Y-%m-%d', 'DD.MM.YYYY': '%d.%m.%Y'}
-TIME_FORMATS = ('HH:mm', 'HH:mm:ss', 'hh:mm AM/PM', 'hh:mm:ss AM/PM')
+TIME_FORMATS = ('HH:mm', 'HH:mm:ss', 'hh:mm am/pm', 'hh:mm:ss am/pm')
 _date_format, _time_format = 'DD/MM/YYYY', 'HH:mm'
 _clock_pattern = re.compile(r'(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([ap]m))?', re.I)
 
@@ -64,6 +64,8 @@ def set_datetime_formats(appearance):
     requested = appearance.get('date_format', 'DD/MM/YYYY')
     _date_format = requested if isinstance(requested, str) and requested in DATE_FORMATS else 'DD/MM/YYYY'
     requested = appearance.get('time_format', 'HH:mm')
+    if isinstance(requested, str):
+        requested = requested.replace('AM/PM', 'am/pm')
     _time_format = requested if requested in TIME_FORMATS else 'HH:mm'
 
 
@@ -96,8 +98,8 @@ def display_time(value, sent_at=None):
     if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
         return str(value)
     suffix = f':{second:02}' if ':ss' in _time_format else ''
-    if 'AM/PM' in _time_format:
-        return f'{hour % 12 or 12}:{minute:02}{suffix} ' + ('PM' if hour >= 12 else 'AM')
+    if 'am/pm' in _time_format:
+        return f'{hour % 12 or 12}:{minute:02}{suffix} ' + ('pm' if hour >= 12 else 'am')
     return f'{hour:02}:{minute:02}{suffix}'
 
 

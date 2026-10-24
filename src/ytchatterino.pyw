@@ -41,6 +41,7 @@ from ytchatterino_i18n import tr, set_language, install_ui, number, language, di
 from ytchatterino_features import FeatureController, parse_twitch_gifs, fit_photo
 from ytchatterino_chat import message_limit, parse_privmsg
 from ytchatterino_youtube import YouTubeWebClient, YouTubeReadError, WEB_POLL_SECONDS
+from ytchatterino_window import WindowState
 
 DATA_HOME = os.path.abspath(os.environ.get("YTCHATTERINO_DATA_DIR") or os.path.expanduser("~"))
 CONFIG_PATH = os.path.join(DATA_HOME, ".ytchatterino.json")
@@ -49,7 +50,7 @@ EDGE = "#333333"  # only used for the thin outline of the input box
 TAB_BLUE, ACCENT, ALT, HEADER_BG = "#4a9cdb", "#2aa8ff", "#0e0e0e", "#111111"
 PALETTE = ["#ff7f50", "#1e90ff", "#00ff7f", "#daa520", "#ff69b4", "#a070ff",
            "#00ced1", "#9acd32", "#ff5a36", "#5f9ea0", "#e08a3c", "#e05d5d"]
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.3.0"
 QUOTA_PATH = os.path.join(DATA_HOME, ".ytchatterino_quota.json")
 LOG_PATH = os.path.join(DATA_HOME, ".ytchatterino_error.log")
 APP_ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ytchatterino.ico")
@@ -1514,10 +1515,9 @@ class PhotoBank:
         self.closed = False
 
     def emote(self, urls, payload, view):
-        size = view.fonts["normal"].metrics("linespace")
         is_gif = any("giphy.com/" in url for url in urls)
         resize = view._resize_gif_photo if is_gif else view._resize_emote_photo
-        key = (urls, size, is_gif, view.appearance.get("emote_size", 36), getattr(view, "image_profile", "chat"))
+        key = (urls, is_gif, view.appearance.get("emote_size", 36), getattr(view, "image_profile", "chat"))
         entry = self.entries.get(key)
         if entry is None:
             raw = payload.get("raw") if isinstance(payload, dict) else payload
@@ -1684,7 +1684,7 @@ class ChatSource:
                 interval = max(WEB_POLL_SECONDS, float(saved.get("web_poll_interval_seconds", WEB_POLL_SECONDS)))
             except (TypeError, ValueError):
                 interval = WEB_POLL_SECONDS
-            self.worker = WebChatWorker(self.video_id, self.q, interval, start_paused=True)
+            self.worker = WebChatWorker(self.video_id, self.q, interval, start_paused=self.manual_paused)
         if self.platform == "twitch":
             self.app.features.chat_tools.source_history(self, TwitchIRCManager.parse_message)
         self.worker.start()
@@ -1697,8 +1697,7 @@ class ChatSource:
         if self.platform == "twitch":
             self.worker.set_paused(False)
         else:
-            visible = any(view.active for view in self.views)
-            self.worker.set_paused(self.manual_paused or not visible)
+            self.worker.set_paused(self.manual_paused)
 
     def request_emotes(self, channel_id=None, force=False):
         if channel_id:
@@ -1782,6 +1781,8 @@ class ChatSource:
         event = (self.app.message_sequence, kind, value, self)
         self.history.append(event)
         for view in tuple(self.views):
+            if view.detached:
+                continue
             if view.active:
                 view.pending_events.append(event)
             elif kind == "msg" and view.accepts(value):
@@ -1802,7 +1803,8 @@ class ChatSource:
                 self.request_emotes(value["channel_id"])
             for view in tuple(self.views):
                 view.refresh_header()
-                self.app.refresh_workspace_title(view.workspace)
+                if not view.detached:
+                    self.app.refresh_workspace_title(view.workspace)
         elif kind == "room_id":
             self.request_emotes(value)
             self.request_badges(value)
@@ -2053,8 +2055,10 @@ class ChatWorkspace(tk.Frame):
 
 
 class ChatTab(tk.Frame):
-    def __init__(self, parent, sources, fonts, sb_style, appearance, pane_id=None):
+    def __init__(self, parent, sources, fonts, sb_style, appearance, pane_id=None, thread_window=None):
         super().__init__(parent, bg=BG, highlightthickness=1, highlightbackground=HEADER_BG)
+        self.thread_window = thread_window
+        self.detached = thread_window is not None
         self.workspace = parent
         self.app = parent.app
         self.uid = pane_id or uuid.uuid4().hex
@@ -2111,6 +2115,8 @@ class ChatTab(tk.Frame):
         self._jump_placed = False
         self._jump_offset = None
         self.resize_surface = None
+        self.font_after_id = None
+        self._reply_click = None
 
         self.header = tk.Frame(self, bg=HEADER_BG, pady=4, cursor="arrow")
         self.header.pack(side="top", fill="x")
@@ -2154,7 +2160,7 @@ class ChatTab(tk.Frame):
         self.text.tag_configure("sys", foreground="#a1a1a8")
         self.text.tag_configure("sys_err", foreground="#ff6b6b")
         self.text.tag_configure("badge", foreground="#bf94ff", font=fonts["bold"])
-        self.text.tag_configure("name", font=fonts["bold"])
+        self.text.tag_configure("name", font=fonts["username"])
         self.text.tag_configure("source_twitch", foreground="#b99aff")
         self.text.tag_configure("source_youtube", foreground="#ff7777")
         self.text.tag_configure("super", background="#4a3b00", foreground="#ffd84d")
@@ -2168,6 +2174,7 @@ class ChatTab(tk.Frame):
         self.text.bind("<Control-C>", self.copy_selection)
         self.text.bind("<Control-Insert>", self.copy_selection)
         self.text.bind("<Button-1>", self._left_click)
+        self.text.bind("<ButtonRelease-1>", self._left_release)
         self.text.bind("<FocusIn>", lambda event: self.app.focus_pane(self), add="+")
         self.text.bind("<Button-3>", self._text_menu)
         for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>", "<Prior>", "<Next>", "<Home>", "<End>"):
@@ -2552,7 +2559,44 @@ class ChatTab(tk.Frame):
     def _left_click(self, event):
         self.finish_resize()
         self.app.focus_pane(self)
-        return self.app.features.chat_tools.click_user(self, event)
+        self._reply_click = None
+        tools = self.app.features.chat_tools
+        result = tools.click_user(self, event)
+        if result:
+            return result
+        index = self.text.index(f"@{event.x},{event.y}")
+        record = tools.record_at(self, index)
+        if not self.detached and record and record[0].platform == "twitch" and record[1].get("reply"):
+            self._reply_click = (event.x, event.y, record)
+
+    def _left_release(self, event):
+        pending, self._reply_click = self._reply_click, None
+        if (pending and abs(pending[0]-event.x) <= 4 and abs(pending[1]-event.y) <= 4
+                and not self.text.tag_ranges("sel")):
+            self.app.features.chat_tools.show_thread(*pending[2])
+
+    def prepare_font_change(self):
+        self.finish_resize()
+        if self.font_after_id is not None:
+            self._restore_font_view()
+        self._font_follow = self.follow_tail and not self.text.tag_ranges("sel")
+        self.text.mark_set("__font_anchor", self.text.index("@0,0"))
+        self.text.mark_gravity("__font_anchor", "left")
+
+    def finish_font_change(self):
+        self.font_after_id = self.after_idle(self._restore_font_view)
+
+    def _restore_font_view(self):
+        if self.font_after_id is not None:
+            self.after_cancel(self.font_after_id)
+            self.font_after_id = None
+        if self.closed:
+            return
+        if self._font_follow:
+            self.text.see("end")
+        elif "__font_anchor" in self.text.mark_names():
+            self.text.yview("__font_anchor")
+        self.text.mark_unset("__font_anchor")
 
     def _begin(self, seq=None):
         self.row_serial += 1
@@ -2685,9 +2729,9 @@ class ChatTab(tk.Frame):
             self.text.tag_configure(tag, foreground=color)
             self.name_tags.add(tag)
         reply = m.get("reply")
-        if reply:
+        if reply and not self.detached:
             self._ins(str(tr("↪ Replying to @{name}: {body}", name=reply.get("name") or reply.get("login", ""),
-                             body=reply.get("text", "")[:180])) + "\n", "sys", *alt)
+                             body=reply.get("text", "")[:180])) + "\n", "sys", "reply_context", *alt)
         self._insert_time(m["time"], m.get("sent_at"), alt)
         if len(self.sources) > 1:
             label = self._render_source.name
@@ -2765,18 +2809,24 @@ class ChatTab(tk.Frame):
     def set_appearance(self, appearance):
         self.finish_resize()
         self.appearance = appearance
-        gap = 1 if appearance.get("compact_spacing") else 3
-        self.text.configure(spacing1=gap, spacing3=gap)
-        self.text.tag_configure(
-            "time", foreground=DIM,
-            elide=not appearance.get("show_timestamps", True))
-        self.text.tag_remove("alt", "1.0", "end")
-        if appearance.get("alternate_rows", True):
-            lines = int(self.text.index("end-1c").split(".")[0])
-            for line in range(2, lines + 1, 2):
-                self.text.tag_add("alt", f"{line}.0", f"{line}.end+1c")
-
-        size = (self.fonts["normal"].metrics("linespace"), self.appearance.get("emote_size", 36), self.appearance.get("badge_size", 18))
+        state = (appearance.get("compact_spacing", False), appearance.get("show_timestamps", True),
+                 appearance.get("alternate_rows", True))
+        old = getattr(self, "_appearance_render_state", (None, None, None))
+        if state[0] != old[0]:
+            gap = 1 if state[0] else 3
+            self.text.configure(spacing1=gap, spacing3=gap)
+        if state[1] != old[1]:
+            self.text.tag_configure("time", foreground=DIM, elide=not state[1])
+        if state[2] != old[2]:
+            self.text.tag_remove("alt", "1.0", "end")
+            if state[2]:
+                rows = list(self.row_marks)
+                first = self.row-len(rows)
+                for i, (marker, _) in enumerate(rows):
+                    if (first+i) % 2:
+                        self.text.tag_add("alt", marker, rows[i+1][0] if i+1 < len(rows) else "end-1c")
+        self._appearance_render_state = state
+        size = (appearance.get("emote_size", 36), appearance.get("badge_size", 18))
         if getattr(self, "_image_font_size", size) != size:
             self.load_recent()
         self._image_font_size = size
@@ -2825,7 +2875,7 @@ class ChatTab(tk.Frame):
 
     def set_active(self, active):
         active = bool(active) and not self.closed
-        if active and not self.active:
+        if active and not self.active and not self.detached:
             events = [event for source in self.sources for event in source.history if event[0] > self.last_seq]
             cap = message_limit(self.app.cfg, self.setting_key)
             self.pending_events = deque(sorted(events, key=lambda event: event[0])[-cap:], maxlen=cap)
@@ -2857,7 +2907,7 @@ class ChatTab(tk.Frame):
     def close(self):
         if self.closed:
             return
-        for attribute in ("resize_after_id", "resize_restore_id", "viewport_after_id", "header_after_id"):
+        for attribute in ("resize_after_id", "resize_restore_id", "viewport_after_id", "header_after_id", "font_after_id"):
             timer = getattr(self, attribute, None)
             if timer is not None:
                 self.after_cancel(timer)
@@ -2902,7 +2952,8 @@ class ChatTab(tk.Frame):
             source.views.add(self)
             source.ensure_worker()
         self.refresh_header()
-        self.load_recent()
+        if not self.detached:
+            self.load_recent()
         if not initial:
             self.app.prune_sources()
             self.app.refresh_workspace_title(self.workspace)
@@ -2996,6 +3047,9 @@ class ChatTab(tk.Frame):
             self._end(self._batch_bottom)
 
     def load_recent(self):
+        if self.detached:
+            self.thread_window.rebuild()
+            return
         self.clear_messages(reset_sequence=True)
         events = [event for source in self.sources for event in source.history]
         cap = message_limit(self.app.cfg, self.setting_key)
@@ -3114,6 +3168,15 @@ def style_titlebar(root):
 
 
 
+def font_sizes(appearance):
+    def value(key):
+        try:
+            return max(7, min(48, int(appearance.get(key, appearance.get("font_size", 12)))))
+        except (TypeError, ValueError, OverflowError):
+            return 12
+    return value("message_font_size"), value("username_font_size")
+
+
 class App:
     def __init__(self, root):
         self.root = root
@@ -3123,6 +3186,7 @@ class App:
         self.sources = {}
         self.message_sequence = 0
         self.current_workspace = None
+        self.extra_panes = set()
         self.session_after_id = None
         self.pump_after_id = None
         self.next_quota_update = 0.0
@@ -3143,6 +3207,10 @@ class App:
                            "show_timestamps": True, "alternate_rows": True, "badge_size": 18, "emote_size": 36,
                            "date_format": "DD/MM/YYYY", "time_format": "HH:mm"}
         self.appearance.update(self.cfg.get("appearance", {}))
+        old_size = self.appearance.get("font_size", 12)
+        self.appearance.setdefault("message_font_size", old_size)
+        self.appearance.setdefault("username_font_size", old_size)
+        self.appearance["time_format"] = str(self.appearance.get("time_format", "HH:mm")).replace("AM/PM", "am/pm")
         set_datetime_formats(self.appearance)
         self.tabs = []
         self.current = None
@@ -3150,6 +3218,7 @@ class App:
         root.geometry("520x760")
         root.minsize(340, 300)
         root.configure(bg=BG)
+        self.window_state = WindowState(root, self.cfg.get("session", {}))
         # default colors for every plain Tk widget, including the API-key dialog
         for opt, val in (("*Background", BG), ("*Foreground", FG), ("*activeBackground", "#1f1f1f"),
                          ("*activeForeground", FG), ("*insertBackground", FG),
@@ -3157,9 +3226,11 @@ class App:
                          ("*selectForeground", FG)):
             root.option_add(opt, val)
 
-        font_size = max(7, min(30, int(self.appearance.get("font_size", 12))))
+        font_size, username_size = font_sizes(self.appearance)
+        self.appearance.update(message_font_size=font_size, username_font_size=username_size, font_size=font_size)
         self.fonts = {"normal": tkfont.Font(family="Segoe UI", size=font_size),
                       "bold": tkfont.Font(family="Segoe UI", size=font_size, weight="bold"),
+                      "username": tkfont.Font(family="Segoe UI", size=username_size, weight="bold"),
                       "emoji": tkfont.Font(family="Segoe UI Emoji", size=font_size + 5)}
 
         style = ttk.Style()
@@ -3769,26 +3840,32 @@ class App:
         save_config(self.cfg)
 
     def change_font(self, d):
-        size = max(7, min(30, self.fonts["normal"].cget("size") + d))
-        self.fonts["normal"].configure(size=size)
-        self.fonts["bold"].configure(size=size)
-        self.fonts["emoji"].configure(size=size + 5)
-        self.appearance["font_size"] = size
-        self.cfg["appearance"] = self.appearance
-        save_config(self.cfg)
-        for pane in self.all_panes():
-            pane.set_appearance(self.appearance)
+        self.apply_font_sizes(self.fonts["normal"].cget("size") + d,
+                              self.fonts["username"].cget("size") + d)
 
     def reset_font(self):
-        size = 12
-        self.fonts["normal"].configure(size=size)
-        self.fonts["bold"].configure(size=size)
-        self.fonts["emoji"].configure(size=size + 5)
-        self.appearance["font_size"] = size
+        self.apply_font_sizes(12, 12)
+
+    def apply_font_sizes(self, message, username, persist=True):
+        message, username = font_sizes({"message_font_size":message, "username_font_size":username})
+        changed = (message != self.fonts["normal"].cget("size") or username != self.fonts["username"].cget("size"))
+        if changed:
+            for pane in self.display_panes():
+                pane.prepare_font_change()
+            self.fonts["normal"].configure(size=message)
+            self.fonts["bold"].configure(size=message)
+            self.fonts["username"].configure(size=username)
+            self.fonts["emoji"].configure(size=message + 5)
+            for pane in self.display_panes():
+                pane.finish_font_change()
+        self.appearance.update(font_size=message, message_font_size=message, username_font_size=username)
         self.cfg["appearance"] = self.appearance
-        save_config(self.cfg)
-        for pane in self.all_panes():
-            pane.set_appearance(self.appearance)
+        if persist:
+            save_config(self.cfg)
+        ui = getattr(self.features, "settings_ui", None)
+        page = ui.pages.get("Display") if ui else None
+        if page is not None and page.winfo_exists() and hasattr(page.inner, "refresh_settings"):
+            page.inner.refresh_settings()
 
     def show_appearance(self):
         self.features.show_settings("Appearance")
@@ -4241,7 +4318,7 @@ class App:
                     source.handle_event(kind, value)
                 except Exception:
                     self._log_exc(*sys.exc_info())
-        panes = [pane for pane in self.all_panes() if pane.active]
+        panes = [pane for pane in self.display_panes() if pane.active]
         if panes:
             start = self._pane_cursor % len(panes)
             panes = panes[start:] + panes[:start]
@@ -4294,6 +4371,9 @@ class App:
     def all_panes(self):
         return [pane for workspace in self.tabs for pane in workspace.panes]
 
+    def display_panes(self):
+        return self.all_panes() + [pane for pane in self.extra_panes if not pane.closed]
+
     def call_ui(self, callback):
         if not self._closing:
             self.ui_queue.put(callback)
@@ -4329,12 +4409,14 @@ class App:
         self.session_after_id = None
         if self._restoring:
             return
+        window = self.window_state.snapshot()
         self.cfg["session"] = {
             "version": 1,
             "sources": [source.spec() for source in self.sources.values() if source.views],
             "tabs": [workspace.serialize() for workspace in self.tabs if workspace.tree],
             "active": self.current_workspace.uid if self.current_workspace else None,
-            "geometry": self.root.geometry(),
+            "geometry": window["geometry"],
+            "window": window,
         }
         save_config(self.cfg)
 
@@ -4343,15 +4425,6 @@ class App:
         if not isinstance(session, dict) or session.get("version") != 1:
             self._restoring = False
             return
-        geometry = session.get("geometry", "")
-        if isinstance(geometry, str) and re.fullmatch(r"\d{3,5}x\d{3,5}(?:[+-]\d+){0,2}", geometry):
-            width, height = map(int, geometry.split("+")[0].split("-")[0].split("x"))
-            width = min(max(width, 340), self.root.winfo_screenwidth())
-            height = min(max(height, 300), self.root.winfo_screenheight())
-            location = re.fullmatch(r"\d+x\d+([+-]\d+)?([+-]\d+)?", geometry)
-            x = max(0, min(int(location[1] or 0), self.root.winfo_screenwidth() - width))
-            y = max(0, min(int(location[2] or 0), self.root.winfo_screenheight() - height))
-            self.root.geometry(f"{width}x{height}+{x}+{y}")
         source_map = {}
         saved_sources = session.get("sources", [])
         for spec in (saved_sources if isinstance(saved_sources, list) else [])[:128]:
@@ -4424,6 +4497,10 @@ class App:
 
     def focus_pane(self, pane, focus_text=False):
         if pane is None or pane.closed:
+            return
+        if getattr(pane, "detached", False):
+            if focus_text:
+                pane.text.focus_set()
             return
         if pane.workspace is not self.current_workspace:
             self.select(pane)

@@ -3,7 +3,7 @@ Updated: 23 October 2026
 
 QUICK START
 ===========
-1. Right-click YT-Chatterino-Windows11-1.2.2.zip > Extract All.
+1. Right-click YT-Chatterino-Windows11-1.3.0.zip > Extract All.
 2. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe.
 
@@ -106,7 +106,7 @@ EVERYDAY FEATURES AND CONTROLS
 - Save channels in Channel actions; open them in Settings > Saved channels.
   YouTube checks current broadcasts only when you click Open and allows
   choosing among simultaneous broadcasts. Twitch opens while offline too.
-- Hidden YouTube chats pause automatically. Twitch stays connected. Pause
+- YouTube and Twitch stay connected in background tabs. Pause
   individual YouTube chats in the header menu, or all in the gear's right-click
   menu. Per-chat reading intervals respect YouTube's recommended timing.
 - Ctrl+F searches a pane; Ctrl+Shift+F searches all chats. Ctrl+F5 reconnects.
@@ -162,7 +162,7 @@ messages provided by its chat page. Historical messages do not trigger sounds.
 NATIVE ARCH LINUX DOWNLOAD
 =========================
 A separate Arch Linux package is available on the GitHub release page.
-Install yt-chatterino-1.2.2-1-any.pkg.tar.zst using pacman -U, or build the
+Install yt-chatterino-1.3.0-1-any.pkg.tar.zst using pacman -U, or build the
 PKGBUILD in the source tar.gz with makepkg -si. No Wine is used. See
 docs/ARCH-LINUX.md in that download for dependencies, encrypted keyring and sound.
 
@@ -198,7 +198,7 @@ folder is required for portable/source updates. Version 1.2.1 and earlier need
 one manual update to 1.2.2 before these controls are available.
 
 Appearance > Display now has Date format (default DD/MM/YYYY) and Timestamp
-format: HH:mm, HH:mm:ss, hh:mm AM/PM or hh:mm:ss AM/PM. Apply changes to update
+format: HH:mm, HH:mm:ss, hh:mm am/pm or hh:mm:ss am/pm. Apply changes to update
 the messages already retained, including timestamps currently hidden. Dates in
 user cards and update notices follow your selected format. Chat message text
 and API/storage formats remain unchanged.
@@ -206,3 +206,23 @@ and API/storage formats remain unchanged.
 The YouTube balance is visible only when the focused pane includes YouTube.
 The update arrow remains available when viewing Twitch. Startup defers unused
 translation and archive work; emote pattern compilation runs off the UI thread.
+
+
+VERSION 1.3.0: BACKGROUND CHATS, WINDOW AND REPLY THREADS
+
+YouTube keeps reading when another tab is selected or the app is minimized.
+Manual Pause/Resume and Pause all still work. Reading uses no Data API quota.
+The main window remembers its normal size/position and maximized state.
+Closing while minimized keeps the last normal/maximized placement.
+
+Settings > Appearance > Display has separate message and username font sizes
+(7–48 pt). Ctrl++ and Ctrl+- adjust both; Ctrl+0 resets both to 12 pt. Existing
+messages, selections and images stay intact. Twelve-hour clocks use am/pm.
+
+Left-click a Twitch reply's body or its reply-context line to open the thread.
+The window shows available retained messages and new replies; its bottom input
+sends a reply to that conversation. There is no thread-subscription feature.
+Drag to select/copy as usual; clicking a username still opens the user card.
+Pruned or unavailable history cannot be recovered. A missing parent uses the
+context supplied by Twitch, or an unavailable-message label. YouTube does not
+provide equivalent reply-thread metadata to this reader.

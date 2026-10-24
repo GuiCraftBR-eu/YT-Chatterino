@@ -431,6 +431,8 @@ class FeatureController:
             player_server.close()
         for card in tuple(self.chat_tools.cards.values()):
             card.close()
+        for thread in tuple(self.chat_tools.threads.values()):
+            thread.close()
         self.google.cancel.set()
         for picker in tuple(self.pickers.values()):
             picker.close()
@@ -893,7 +895,7 @@ class FeatureController:
             pane.text.tag_raise(higher)
 
     def refresh_highlights(self):
-        for pane in self.app.all_panes():
+        for pane in self.app.display_panes():
             pane.finish_resize()
             for tag in pane.text.tag_names():
                 if tag.startswith("__highlight_"):
@@ -935,6 +937,8 @@ class FeatureController:
         if source.platform == "twitch":
             menu.add_command(label=tr("Reply to message"), command=lambda: self.chat_tools.start_reply(pane, source, message),
                              state="disabled" if not message.get("id") or message.get("deleted") else "normal")
+            if message.get('reply') and not pane.detached:
+                menu.add_command(label=tr('Open reply thread'), command=lambda: self.chat_tools.show_thread(source, message))
         menu.add_command(label=tr("Mention"), command=lambda: self.mention(pane, source, name))
         actions = self.app._menu(menu)
         restricted = (source.platform == "twitch" and "owner" in roles_for(message))
@@ -1029,6 +1033,8 @@ class FeatureController:
             if matches:
                 message.update(text=tr("[message deleted]"), native_emotes=[], gifs=[], deleted=True)
                 affected.append(message)
+        for thread in tuple(self.chat_tools.threads.values()):
+            thread.redact(source, target)
         for pane in tuple(source.views):
             for message in affected:
                 seq = message.get("_seq")
@@ -1321,7 +1327,7 @@ class FeatureController:
         refresh_ui()
         # Re-render cached history so app-authored status lines change language.
         # Connections and unsent drafts stay intact.
-        for pane in self.app.all_panes():
+        for pane in self.app.display_panes():
             pane.refresh_header()
             pane.load_recent()
         self.app.update_quota()
@@ -1387,7 +1393,7 @@ class FeatureController:
             ("Connect Twitch", "1. Open Settings → Accounts → Twitch sign-in / permissions.\n2. Approve the code in your browser using your own Twitch account.\n3. Press Ctrl+T and enter @channel_name or a Twitch link.\n4. Type below the chat and press Enter. Extra permissions are requested when needed.\n\nNo developer account, Client ID or token needs to be pasted. Sign-in is saved for your Windows user."),
             ("Connect YouTube", "To read: press Ctrl+T and paste the LIVE VIDEO link. No API key or Google sign-in is needed.\n\nTo send or moderate:\n1. In Google Cloud, create a project and enable YouTube Data API v3.\n2. Configure Google Auth Platform. If the app is in Testing, add your Google account as a test user.\n3. Create an OAuth client of type Desktop app and download its JSON.\n4. In Accounts, choose that JSON, then Sign in to YouTube. Select the YouTube channel you use to chat or moderate.\n\nEach friend uses their own project / JSON. Never share your tokens."),
             ("Moderate / edit channels", "1. Sign in to the account that owns or moderates the channel (Accounts).\n2. Right-click a user's message → Moderation → delete, timeout or ban. Approve extra Twitch permissions if requested.\n3. Right-click the pane header → Channel actions to edit title / category.\n\nPlatforms check your permissions. Being a moderator does not automatically allow title/category editing. Twitch cannot delete the broadcaster's own messages through this API.\n\nYouTube actions consume quota; click the YT balance above the chats for an estimate. Reading stays at 0 units."),
-            ("Tabs, splits and saved channels", "Ctrl+T adds chats; choose separate tabs, side by side, stacked or a mixed feed. Middle-click empty tab-bar space to add a chat.\n\nDrag tabs to reorder; scroll over tabs to switch. Drag dividers to resize panes. Right-click a pane header for layout actions.\n\nSave a channel from Channel actions; open it later in Settings → Saved channels. YouTube checks for current broadcasts only when you click Open.\n\nHidden YouTube chats pause automatically. Twitch stays connected. Ctrl+F5 reconnects the current pane."),
+            ("Tabs, splits and saved channels", "Ctrl+T adds chats; choose separate tabs, side by side, stacked or a mixed feed. Middle-click empty tab-bar space to add a chat.\n\nDrag tabs to reorder; scroll over tabs to switch. Drag dividers to resize panes. Right-click a pane header for layout actions.\n\nSave a channel from Channel actions; open it later in Settings → Saved channels. YouTube checks for current broadcasts only when you click Open.\n\nYouTube and Twitch stay connected in background tabs. Pause YouTube manually from Channel actions when needed. Ctrl+F5 reconnects the current pane."),
             ("Emotes, highlights and alerts", "Click ☺ beside Send to browse emotes. Tab / Shift+Tab completes emotes or @names. BTTV and 7TV need no extra sign-in.\n\nSettings → Appearance changes language, Always on top, badges and emote sizes.\n\nRight-click a user to highlight them; Settings → Highlights adds roles and words. Notifications controls sounds and Twitch live alerts. YouTube has no live alerts.\n\nCtrl+F searches a pane; Ctrl+Shift+F searches all chats. More keys are listed in Keyboard shortcuts.")
         )
         selector = ttk.Combobox(parent, state="readonly", values=[tr(title) for title, _ in topics], width=43)
@@ -1430,7 +1436,11 @@ class FeatureController:
         row = tk.Frame(parent, bg=self.core.BG)
         row.pack(fill="x", pady=10)
         sizes = {}
-        for index, (key, label, default, low, high) in enumerate((("badge_size", "Badge height (px)", 18, 10, 64), ("emote_size", "Emote height (px)", 36, 16, 128))):
+        for index, (key, label, default, low, high) in enumerate((
+                ("message_font_size", "Message font size (pt)", 12, 7, 48),
+                ("username_font_size", "Username font size (pt)", 12, 7, 48),
+                ("badge_size", "Badge height (px)", 18, 10, 64),
+                ("emote_size", "Emote height (px)", 36, 16, 128))):
             self.label(row, label).grid(row=index, column=0, sticky="w", pady=5)
             value = tk.StringVar(value=str(self.app.appearance.get(key, default)))
             sizes[key] = (value, low, high)
@@ -1445,7 +1455,15 @@ class FeatureController:
                                                        ("Timestamp format", time_format, TIME_FORMATS))):
             self.label(formats, label).grid(row=i, column=0, sticky="w", pady=5)
             ttk.Combobox(formats, state="readonly", values=choices, textvariable=variable, width=20).grid(row=i, column=1, padx=10)
-        self.label(parent, "HH = 24-hour; hh with AM/PM = 12-hour. Add :ss to show seconds.", dim=True).pack(anchor="w")
+        self.label(parent, "HH = 24-hour; hh with am/pm = 12-hour. Add :ss to show seconds.", dim=True).pack(anchor="w")
+        baseline = {key: variable.get() for key, (variable, _, _) in sizes.items()}
+        def refresh_page():
+            for key, (variable, _, _) in sizes.items():
+                actual = str(self.app.appearance.get(key, baseline[key]))
+                if variable.get() == baseline[key]:
+                    variable.set(actual)
+                baseline[key] = actual
+        parent.refresh_settings = refresh_page
         def apply():
             parsed = {}
             try:
@@ -1455,8 +1473,9 @@ class FeatureController:
                         raise ValueError()
                     parsed[key] = value
             except ValueError:
-                self.notify("Badge height must be 10–64 px; emote height must be 16–128 px.")
+                self.notify("Font sizes must be 7–48 pt; badges 10–64 px; emotes 16–128 px.")
                 return
+            self.app.apply_font_sizes(parsed.pop('message_font_size'), parsed.pop('username_font_size'), persist=False)
             self.app.appearance.update({key: variable.get() for key, variable in variables.items()})
             self.app.appearance.update(parsed)
             old_time = self.app.appearance.get("time_format", "HH:mm")
@@ -1464,7 +1483,7 @@ class FeatureController:
             set_datetime_formats(self.app.appearance)
             self.app.cfg["appearance"] = self.app.appearance
             self.save()
-            for pane in self.app.all_panes():
+            for pane in self.app.display_panes():
                 pane.set_appearance(self.app.appearance)
                 if old_time != time_format.get():
                     pane.refresh_timestamps()
@@ -1472,6 +1491,8 @@ class FeatureController:
                 card.refresh_messages()
                 card.load()
             self.refresh_highlights()
+            refresh_page()
+            self.app.updater.render()
         self.button(parent, "Apply", apply).pack(anchor="e", pady=12)
 
     def highlights_page(self, parent):

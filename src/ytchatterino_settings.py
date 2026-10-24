@@ -23,6 +23,8 @@ SEARCH_ITEMS = (
     ('Display', 'Alternate message backgrounds', 'background alternate rows color fundo linhas alternadas cor'),
     ('Display', 'Badge height (px)', 'badge size height moderator vip sub emblemas tamanho altura moderador'),
     ('Display', 'Emote height (px)', 'emote emoji size height gif animation tamanho altura animacao'),
+    ('Display', 'Message font size (pt)', 'message body text font size zoom tamanho fonte mensagem texto letras'),
+    ('Display', 'Username font size (pt)', 'username nickname name font size tamanho fonte nome usuario apelido'),
     ('Display', 'Text size: Ctrl++ / Ctrl+- · Ctrl+0 resets. Images keep their aspect ratio.', 'font text zoom size tamanho fonte texto letras'),
     ('Messages', 'Default message limit per pane', 'limit cap history memory performance cache count 2000 limite mensagens historico memoria desempenho quantidade'),
     ('Messages', 'Load recent Twitch messages when opening a channel', 'history recent old previous past historico recentes antigas anteriores twitch robotty'),

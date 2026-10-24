@@ -45,10 +45,10 @@ class FormatTests(unittest.TestCase):
         self.assertEqual(display_time('1:02:03 pm'),'13:02:03')
         self.assertEqual(display_time('12:00 am'),'00:00:00')
         set_datetime_formats({'time_format':'hh:mm:ss AM/PM'})
-        self.assertEqual(display_time('00:02:04'),'12:02:04 AM')
-        self.assertEqual(display_time('12:02:04'),'12:02:04 PM')
+        self.assertEqual(display_time('00:02:04'),'12:02:04 am')
+        self.assertEqual(display_time('12:02:04'),'12:02:04 pm')
         set_datetime_formats({'time_format':'hh:mm AM/PM'})
-        self.assertEqual(display_time('21:04:05'),'9:04 PM')
+        self.assertEqual(display_time('21:04:05'),'9:04 pm')
 
     def test_epoch_takes_priority_and_language_is_independent(self):
         stamp=datetime(2026,1,9,13,2,47).timestamp()
@@ -173,7 +173,8 @@ class UpdateTests(unittest.TestCase):
         source=self.root/'payload'/'YT-Chatterino-1.2.3'/'src';source.mkdir(parents=True)
         for name in ('ytchatterino.pyw','ytchatterino_features.py','ytchatterino_chat.py',
                      'ytchatterino_update.py','ytchatterino_i18n.py','ytchatterino_settings.py',
-                     'ytchatterino_youtube.py','ytchatterino_translations.py','ytchatterino_chat_translations.py'):
+                     'ytchatterino_youtube.py','ytchatterino_translations.py','ytchatterino_chat_translations.py',
+                     'ytchatterino_window.py','ytchatterino_threads.py'):
             (source/name).write_text('APP_VERSION = "1.2.3"\n')
         archive=self.root/'payload.tar.gz'
         with tarfile.open(archive,'w:gz') as opened:opened.add(source.parent,arcname=source.parent.name)
@@ -222,7 +223,7 @@ class FormatUiTests(unittest.TestCase):
         self.assertEqual(str(self.pane.text.tag_cget('time','elide')),'1')
         set_datetime_formats({'time_format':'hh:mm AM/PM'});self.pane.refresh_timestamps()
         appearance['show_timestamps']=True;self.pane.set_appearance(appearance)
-        self.assertIn('1:02 PM',self.pane.text.get('1.0','end'))
+        self.assertIn('1:02 pm',self.pane.text.get('1.0','end'))
         self.assertTrue(self.pane.text.tag_ranges('time'))
 
     def test_quota_visible_only_for_focused_youtube_pane(self):

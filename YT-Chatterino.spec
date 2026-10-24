@@ -8,7 +8,7 @@ a = Analysis(
     [str(source / 'ytchatterino.pyw')],
     pathex=[str(source)], binaries=[],
     datas=[(str(source / name), '.') for name in assets] + collect_data_files('tzdata'),
-    hiddenimports=['ytchatterino_features', 'ytchatterino_settings', 'ytchatterino_update', 'ytchatterino_chat', 'ytchatterino_youtube', 'ytchatterino_i18n', 'ytchatterino_translations', 'tzdata', 'PIL.Image', 'PIL.PngImagePlugin', 'PIL.JpegImagePlugin'],
+    hiddenimports=['ytchatterino_features', 'ytchatterino_settings', 'ytchatterino_update', 'ytchatterino_chat', 'ytchatterino_threads', 'ytchatterino_window', 'ytchatterino_youtube', 'ytchatterino_i18n', 'ytchatterino_translations', 'tzdata', 'PIL.Image', 'PIL.PngImagePlugin', 'PIL.JpegImagePlugin'],
     hookspath=[], hooksconfig={}, runtime_hooks=[], excludes=[],
     noarchive=False, optimize=0,
 )

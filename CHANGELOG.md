@@ -1,5 +1,22 @@
 # Histórico de versões
 
+## 1.3.0
+
+- YouTube continua lendo mensagens em abas ocultas e com a janela minimizada;
+  as pausas manuais continuam disponíveis.
+- Restaura a posição, o tamanho normal e o estado maximizado da janela. No Windows,
+  usa o posicionamento nativo para respeitar monitores adicionais e mudanças de tela.
+- am/pm em letras minúsculas, inclusive nas mensagens já mantidas.
+- Tamanhos independentes da fonte das mensagens e dos nomes em Aparência → Exibição.
+  Alterar fontes preserva imagens, mensagens, seleção e posição de leitura.
+- Clique esquerdo no corpo/contexto de uma resposta da Twitch abre a conversa,
+  com mensagens retidas, atualização ao vivo e campo para responder. Sem assinatura
+  de conversa. Clique no nome continua abrindo o cartão do usuário.
+- Conversas e filas têm limites; a janela reutiliza o renderizador de emotes,
+  badges e animações, sem criar outra conexão de chat.
+- Corrige fundos alternados ao mudar Aparência em mensagens com contexto de resposta.
+- Amplia testes de histórico, permissões, atualização, fontes, janelas e conversas.
+
 ## 1.2.2
 
 - Atualizador pelo aplicativo: verificação em segundo plano, seta de download,
