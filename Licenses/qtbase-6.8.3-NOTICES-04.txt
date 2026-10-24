@@ -1,0 +1,1371 @@
+
+===== qtbase-everywhere-src-6.8.3/examples/widgets/dialogs/licensewizard/licensewizard.cpp =====
+
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
+
+#include <QtWidgets>
+#if defined(QT_PRINTSUPPORT_LIB)
+#include <QtPrintSupport/qtprintsupportglobal.h>
+#if QT_CONFIG(printdialog)
+#include <QPrinter>
+#include <QPrintDialog>
+#endif
+#endif
+
+#include "licensewizard.h"
+
+QString emailRegExp = QStringLiteral(".+@.+");
+
+//! [0] //! [1] //! [2]
+LicenseWizard::LicenseWizard(QWidget *parent)
+    : QWizard(parent)
+{
+//! [0]
+    setPage(Page_Intro, new IntroPage);
+    setPage(Page_Evaluate, new EvaluatePage);
+    setPage(Page_Register, new RegisterPage);
+    setPage(Page_Details, new DetailsPage);
+    setPage(Page_Conclusion, new ConclusionPage);
+//! [1]
+
+    setStartId(Page_Intro);
+//! [2]
+
+//! [3]
+#ifndef Q_OS_MAC
+//! [3] //! [4]
+    setWizardStyle(ModernStyle);
+#endif
+//! [4] //! [5]
+    setOption(HaveHelpButton, true);
+//! [5] //! [6]
+    setPixmap(QWizard::LogoPixmap, QPixmap(":/images/logo.png"));
+
+//! [7]
+    connect(this, &QWizard::helpRequested, this, &LicenseWizard::showHelp);
+//! [7]
+
+    setWindowTitle(tr("License Wizard"));
+//! [8]
+}
+//! [6] //! [8]
+
+//! [9] //! [10]
+void LicenseWizard::showHelp()
+//! [9] //! [11]
+{
+    static QString lastHelpMessage;
+
+    QString message;
+
+    switch (currentId()) {
+    case Page_Intro:
+        message = tr("The decision you make here will affect which page you "
+                     "get to see next.");
+        break;
+//! [10] //! [11]
+    case Page_Evaluate:
+        message = tr("Make sure to provide a valid email address, such as "
+                     "toni.buddenbrook@example.de.");
+        break;
+    case Page_Register:
+        message = tr("If you don't provide an upgrade key, you will be "
+                     "asked to fill in your details.");
+        break;
+    case Page_Details:
+        message = tr("Make sure to provide a valid email address, such as "
+                     "thomas.gradgrind@example.co.uk.");
+        break;
+    case Page_Conclusion:
+        message = tr("You must accept the terms and conditions of the "
+                     "license to proceed.");
+        break;
+//! [12] //! [13]
+    default:
+        message = tr("This help is likely not to be of any help.");
+    }
+//! [12]
+
+    if (lastHelpMessage == message)
+        message = tr("Sorry, I already gave what help I could. "
+                     "Maybe you should try asking a human?");
+
+//! [14]
+    QMessageBox::information(this, tr("License Wizard Help"), message);
+//! [14]
+
+    lastHelpMessage = message;
+//! [15]
+}
+//! [13] //! [15]
+
+//! [16]
+IntroPage::IntroPage(QWidget *parent)
+    : QWizardPage(parent)
+{
+    setTitle(tr("Introduction"));
+    setPixmap(QWizard::WatermarkPixmap, QPixmap(":/images/watermark.png"));
+
+    topLabel = new QLabel(tr("This wizard will help you register your copy of "
+                             "<i>Super Product One</i>&trade; or start "
+                             "evaluating the product."));
+    topLabel->setWordWrap(true);
+
+    registerRadioButton = new QRadioButton(tr("&Register your copy"));
+    evaluateRadioButton = new QRadioButton(tr("&Evaluate the product for 30 "
+                                              "days"));
+    registerRadioButton->setChecked(true);
+
+    QVBoxLayout *layout = new QVBoxLayout;
+    layout->addWidget(topLabel);
+    layout->addWidget(registerRadioButton);
+    layout->addWidget(evaluateRadioButton);
+    setLayout(layout);
+}
+//! [16] //! [17]
+
+//! [18]
+int IntroPage::nextId() const
+//! [17] //! [19]
+{
+    if (evaluateRadioButton->isChecked()) {
+        return LicenseWizard::Page_Evaluate;
+    } else {
+        return LicenseWizard::Page_Register;
+    }
+}
+//! [18] //! [19]
+
+//! [20]
+EvaluatePage::EvaluatePage(QWidget *parent)
+    : QWizardPage(parent)
+{
+    setTitle(tr("Evaluate <i>Super Product One</i>&trade;"));
+    setSubTitle(tr("Please fill both fields. Make sure to provide a valid "
+                   "email address (e.g., john.smith@example.com)."));
+
+    nameLabel = new QLabel(tr("N&ame:"));
+    nameLineEdit = new QLineEdit;
+//! [20]
+    nameLabel->setBuddy(nameLineEdit);
+
+    emailLabel = new QLabel(tr("&Email address:"));
+    emailLineEdit = new QLineEdit;
+    emailLineEdit->setValidator(new QRegularExpressionValidator(QRegularExpression(emailRegExp), this));
+    emailLabel->setBuddy(emailLineEdit);
+
+//! [21]
+    registerField("evaluate.name*", nameLineEdit);
+    registerField("evaluate.email*", emailLineEdit);
+//! [21]
+
+    QGridLayout *layout = new QGridLayout;
+    layout->addWidget(nameLabel, 0, 0);
+    layout->addWidget(nameLineEdit, 0, 1);
+    layout->addWidget(emailLabel, 1, 0);
+    layout->addWidget(emailLineEdit, 1, 1);
+    setLayout(layout);
+//! [22]
+}
+//! [22]
+
+//! [23]
+int EvaluatePage::nextId() const
+{
+    return LicenseWizard::Page_Conclusion;
+}
+//! [23]
+
+RegisterPage::RegisterPage(QWidget *parent)
+    : QWizardPage(parent)
+{
+    setTitle(tr("Register Your Copy of <i>Super Product One</i>&trade;"));
+    setSubTitle(tr("If you have an upgrade key, please fill in "
+                   "the appropriate field."));
+
+    nameLabel = new QLabel(tr("N&ame:"));
+    nameLineEdit = new QLineEdit;
+    nameLabel->setBuddy(nameLineEdit);
+
+    upgradeKeyLabel = new QLabel(tr("&Upgrade key:"));
+    upgradeKeyLineEdit = new QLineEdit;
+    upgradeKeyLabel->setBuddy(upgradeKeyLineEdit);
+
+    registerField("register.name*", nameLineEdit);
+    registerField("register.upgradeKey", upgradeKeyLineEdit);
+
+    QGridLayout *layout = new QGridLayout;
+    layout->addWidget(nameLabel, 0, 0);
+    layout->addWidget(nameLineEdit, 0, 1);
+    layout->addWidget(upgradeKeyLabel, 1, 0);
+    layout->addWidget(upgradeKeyLineEdit, 1, 1);
+    setLayout(layout);
+}
+
+//! [24]
+int RegisterPage::nextId() const
+{
+    if (upgradeKeyLineEdit->text().isEmpty()) {
+        return LicenseWizard::Page_Details;
+    } else {
+        return LicenseWizard::Page_Conclusion;
+    }
+}
+//! [24]
+
+DetailsPage::DetailsPage(QWidget *parent)
+    : QWizardPage(parent)
+{
+    setTitle(tr("Fill In Your Details"));
+    setSubTitle(tr("Please fill all three fields. Make sure to provide a valid "
+                   "email address (e.g., tanaka.aya@example.co.jp)."));
+
+    companyLabel = new QLabel(tr("&Company name:"));
+    companyLineEdit = new QLineEdit;
+    companyLabel->setBuddy(companyLineEdit);
+
+    emailLabel = new QLabel(tr("&Email address:"));
+    emailLineEdit = new QLineEdit;
+    emailLineEdit->setValidator(new QRegularExpressionValidator(QRegularExpression(emailRegExp), this));
+    emailLabel->setBuddy(emailLineEdit);
+
+    postalLabel = new QLabel(tr("&Postal address:"));
+    postalLineEdit = new QLineEdit;
+    postalLabel->setBuddy(postalLineEdit);
+
+    registerField("details.company*", companyLineEdit);
+    registerField("details.email*", emailLineEdit);
+    registerField("details.postal*", postalLineEdit);
+
+    QGridLayout *layout = new QGridLayout;
+    layout->addWidget(companyLabel, 0, 0);
+    layout->addWidget(companyLineEdit, 0, 1);
+    layout->addWidget(emailLabel, 1, 0);
+    layout->addWidget(emailLineEdit, 1, 1);
+    layout->addWidget(postalLabel, 2, 0);
+    layout->addWidget(postalLineEdit, 2, 1);
+    setLayout(layout);
+}
+
+//! [25]
+int DetailsPage::nextId() const
+{
+    return LicenseWizard::Page_Conclusion;
+}
+//! [25]
+
+ConclusionPage::ConclusionPage(QWidget *parent)
+    : QWizardPage(parent)
+{
+    setTitle(tr("Complete Your Registration"));
+    setPixmap(QWizard::WatermarkPixmap, QPixmap(":/images/watermark.png"));
+
+    bottomLabel = new QLabel;
+    bottomLabel->setWordWrap(true);
+
+    agreeCheckBox = new QCheckBox(tr("I agree to the terms of the license"));
+
+    registerField("conclusion.agree*", agreeCheckBox);
+
+    QVBoxLayout *layout = new QVBoxLayout;
+    layout->addWidget(bottomLabel);
+    layout->addWidget(agreeCheckBox);
+    setLayout(layout);
+}
+
+//! [26]
+int ConclusionPage::nextId() const
+{
+    return -1;
+}
+//! [26]
+
+//! [27]
+void ConclusionPage::initializePage()
+{
+    QString licenseText;
+
+    if (wizard()->hasVisitedPage(LicenseWizard::Page_Evaluate)) {
+        licenseText = tr("<u>Evaluation License Agreement:</u> "
+                         "You can use this software for 30 days and make one "
+                         "backup, but you are not allowed to distribute it.");
+    } else if (wizard()->hasVisitedPage(LicenseWizard::Page_Details)) {
+//! [accessField]
+        const QString emailAddress = field("details.email").toString();
+        licenseText = tr("<u>First-Time License Agreement:</u> "
+                         "You can use this software subject to the license "
+                         "you will receive by email sent to %1.").arg(emailAddress);
+//! [accessField]
+    } else {
+        licenseText = tr("<u>Upgrade License Agreement:</u> "
+                         "This software is licensed under the terms of your "
+                         "current license.");
+    }
+    bottomLabel->setText(licenseText);
+}
+//! [27]
+
+//! [28]
+void ConclusionPage::setVisible(bool visible)
+{
+    QWizardPage::setVisible(visible);
+
+    if (visible) {
+//! [29]
+        wizard()->setButtonText(QWizard::CustomButton1, tr("&Print"));
+        wizard()->setOption(QWizard::HaveCustomButton1, true);
+        connect(wizard(), &QWizard::customButtonClicked,
+                this, &ConclusionPage::printButtonClicked);
+//! [29]
+    } else {
+        wizard()->setOption(QWizard::HaveCustomButton1, false);
+        disconnect(wizard(), &QWizard::customButtonClicked,
+                   this, &ConclusionPage::printButtonClicked);
+    }
+}
+//! [28]
+
+void ConclusionPage::printButtonClicked()
+{
+#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printdialog)
+    QPrinter printer;
+    QPrintDialog dialog(&printer, this);
+    if (dialog.exec())
+        QMessageBox::warning(this, tr("Print License"),
+                             tr("As an environmentally friendly measure, the "
+                                "license text will not actually be printed."));
+#endif
+}
+
+
+===== qtbase-everywhere-src-6.8.3/examples/widgets/dialogs/licensewizard/licensewizard.h =====
+
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
+
+#ifndef LICENSEWIZARD_H
+#define LICENSEWIZARD_H
+
+#include <QWizard>
+
+QT_BEGIN_NAMESPACE
+class QCheckBox;
+class QLabel;
+class QLineEdit;
+class QRadioButton;
+QT_END_NAMESPACE
+
+//! [0] //! [1]
+class LicenseWizard : public QWizard
+{
+//! [0]
+    Q_OBJECT
+
+public:
+//! [2]
+    enum { Page_Intro, Page_Evaluate, Page_Register, Page_Details,
+           Page_Conclusion };
+//! [2]
+
+    LicenseWizard(QWidget *parent = nullptr);
+
+private slots:
+    void showHelp();
+//! [3]
+};
+//! [1] //! [3]
+
+//! [4]
+class IntroPage : public QWizardPage
+{
+    Q_OBJECT
+
+public:
+    IntroPage(QWidget *parent = nullptr);
+
+    int nextId() const override;
+
+private:
+    QLabel *topLabel;
+    QRadioButton *registerRadioButton;
+    QRadioButton *evaluateRadioButton;
+};
+//! [4]
+
+//! [5]
+class EvaluatePage : public QWizardPage
+{
+    Q_OBJECT
+
+public:
+    EvaluatePage(QWidget *parent = nullptr);
+
+    int nextId() const override;
+
+private:
+    QLabel *nameLabel;
+    QLabel *emailLabel;
+    QLineEdit *nameLineEdit;
+    QLineEdit *emailLineEdit;
+};
+//! [5]
+
+class RegisterPage : public QWizardPage
+{
+    Q_OBJECT
+
+public:
+    RegisterPage(QWidget *parent = nullptr);
+
+    int nextId() const override;
+
+private:
+    QLabel *nameLabel;
+    QLabel *upgradeKeyLabel;
+    QLineEdit *nameLineEdit;
+    QLineEdit *upgradeKeyLineEdit;
+};
+
+class DetailsPage : public QWizardPage
+{
+    Q_OBJECT
+
+public:
+    DetailsPage(QWidget *parent = nullptr);
+
+    int nextId() const override;
+
+private:
+    QLabel *companyLabel;
+    QLabel *emailLabel;
+    QLabel *postalLabel;
+    QLineEdit *companyLineEdit;
+    QLineEdit *emailLineEdit;
+    QLineEdit *postalLineEdit;
+};
+
+//! [6]
+class ConclusionPage : public QWizardPage
+{
+    Q_OBJECT
+
+public:
+    ConclusionPage(QWidget *parent = nullptr);
+
+    void initializePage() override;
+    int nextId() const override;
+    void setVisible(bool visible) override;
+
+private slots:
+    void printButtonClicked();
+
+private:
+    QLabel *bottomLabel;
+    QCheckBox *agreeCheckBox;
+};
+//! [6]
+
+#endif
+
+
+===== qtbase-everywhere-src-6.8.3/examples/widgets/dialogs/licensewizard/licensewizard.pro =====
+
+QT += widgets printsupport
+
+HEADERS       = licensewizard.h
+SOURCES       = licensewizard.cpp \
+                main.cpp
+RESOURCES     = licensewizard.qrc
+
+# install
+target.path = $$[QT_INSTALL_EXAMPLES]/widgets/dialogs/licensewizard
+INSTALLS += target
+
+
+===== qtbase-everywhere-src-6.8.3/examples/widgets/dialogs/licensewizard/licensewizard.qrc =====
+
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+    <file>images/logo.png</file>
+    <file>images/watermark.png</file>
+</qresource>
+</RCC>
+
+
+===== qtbase-everywhere-src-6.8.3/examples/widgets/doc/src/licensewizard.qdoc =====
+
+// Copyright (C) 2016 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GFDL-1.3-no-invariants-only
+
+/*!
+    \example dialogs/licensewizard
+    \title License Wizard Example
+    \examplecategory {User Interface Components}
+    \ingroup examples-dialogs
+
+    \brief The License Wizard example shows how to implement complex wizards in
+    Qt.
+
+    \image licensewizard-example.png Screenshot of the License Wizard example
+
+    Most wizards have a linear structure, with page 1 followed by
+    page 2 and so on until the last page. The
+    \l{dialogs/trivialwizard}{Trivial Wizard} example shows how to create
+    such wizards.
+
+    Some wizards are more complex in that they allow different
+    traversal paths based on the information provided by the user.
+    The License Wizard example illustrates this. It provides several
+    wizard pages; depending on which options are selected, the user
+    can reach different pages.
+
+    \image licensewizard-flow.png The License Wizard pages
+
+    The example consists of the following classes:
+
+    \list
+    \li \c LicenseWizard inherits QWizard and implements a non-linear
+       five-page wizard that leads the user through the process of
+       choosing a license agreement.
+    \li \c IntroPage, \c EvaluatePage, \c RegisterPage, \c
+       DetailsPage, and \c ConclusionPage are QWizardPage subclasses
+       that implement the wizard pages.
+    \endlist
+
+    \section1 The LicenseWizard Class
+
+    The \c LicenseWizard class derives from QWizard and provides a
+    five-page wizard that guides the user through the process of
+    registering their copy of a fictitious software product. Here's
+    the class definition:
+
+    \snippet dialogs/licensewizard/licensewizard.h 1
+
+    The class's public API is limited to a constructor and an enum.
+    The enum defines the IDs associated with the various pages:
+
+    \table
+    \header \li Class name \li Enum value \li Page ID
+    \row \li \c IntroPage \li \c Page_Intro \li 0
+    \row \li \c EvaluatePage \li \c Page_Evaluate \li 1
+    \row \li \c RegisterPage \li \c Page_Register \li 2
+    \row \li \c DetailsPage \li \c Page_Details \li 3
+    \row \li \c ConclusionPage \li \c Page_Conclusion \li 4
+    \endtable
+
+    For this example, the IDs are arbitrary. The only constraints are
+    that they must be unique and different from -1. IDs allow us to
+    refer to pages.
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 2
+
+    In the constructor, we create the five pages, insert them into
+    the wizard using QWizard::setPage(), and set \c Page_Intro to be
+    the first page.
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 3
+    \snippet dialogs/licensewizard/licensewizard.cpp 4
+
+    We set the style to \l{QWizard::}{ModernStyle} on all platforms
+    except \macos,
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 5
+    \snippet dialogs/licensewizard/licensewizard.cpp 6
+
+    We configure the QWizard to show a \uicontrol Help button, which is
+    connected to our \c showHelp() slot. We also set the
+    \l{QWizard::}{LogoPixmap} for all pages that have a header (i.e.,
+    \c EvaluatePage, \c RegisterPage, and \c DetailsPage).
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 9
+    \snippet dialogs/licensewizard/licensewizard.cpp 11
+    \dots
+    \snippet dialogs/licensewizard/licensewizard.cpp 13
+
+    In \c showHelp(), we display help texts that are appropriate for
+    the current page. If the user clicks \uicontrol Help twice for the same
+    page, we say, "Sorry, I already gave what help I could. Maybe you
+    should try asking a human?"
+
+    \section1 The IntroPage Class
+
+    The pages are defined in \c licensewizard.h and implemented in \c
+    licensewizard.cpp, together with \c LicenseWizard.
+
+    Here's the definition and implementation of \c{IntroPage}:
+
+    \snippet dialogs/licensewizard/licensewizard.h 4
+    \codeline
+    \snippet dialogs/licensewizard/licensewizard.cpp 16
+
+    A page inherits from QWizardPage. We set a
+    \l{QWizardPage::}{title} and a
+    \l{QWizard::WatermarkPixmap}{watermark pixmap}. By not setting
+    any \l{QWizardPage::}{subTitle}, we ensure that no header is
+    displayed for this page. (On Windows, it is customary for wizards
+    to display a watermark pixmap on the first and last pages, and to
+    have a header on the other pages.)
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 17
+    \snippet dialogs/licensewizard/licensewizard.cpp 19
+
+    The \c nextId() function returns the ID for \c EvaluatePage if
+    the \uicontrol{Evaluate the product for 30 days} option is checked;
+    otherwise it returns the ID for \c RegisterPage.
+
+    \section1 The EvaluatePage Class
+
+    The \c EvaluatePage is slightly more involved:
+
+    \snippet dialogs/licensewizard/licensewizard.h 5
+    \codeline
+    \snippet dialogs/licensewizard/licensewizard.cpp 20
+    \dots
+    \snippet dialogs/licensewizard/licensewizard.cpp 21
+    \dots
+    \snippet dialogs/licensewizard/licensewizard.cpp 22
+
+    First, we set the page's \l{QWizardPage::}{title}
+    and \l{QWizardPage::}{subTitle}.
+
+    Then we create the child widgets, create \l{Registering and Using
+    Fields}{wizard fields} associated with them, and put them into
+    layouts. The fields are created with an asterisk (\c
+    *) next to their name. This makes them \l{mandatory fields}, that
+    is, fields that must be filled before the user can press the
+    \uicontrol Next button (\uicontrol Continue on \macos). The fields' values
+    can be accessed from any other page using QWizardPage::field().
+
+    Resetting the page amounts to clearing the two text fields.
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 23
+
+    The next page is always the \c ConclusionPage.
+
+    \section1 The ConclusionPage Class
+
+    The \c RegisterPage and \c DetailsPage are very similar to \c
+    EvaluatePage. Let's go directly to the \c ConclusionPage:
+
+    \snippet dialogs/licensewizard/licensewizard.h 6
+
+    This time, we reimplement QWizardPage::initializePage() and
+    QWidget::setVisible(), in addition to
+    \l{QWizardPage::}{nextId()}. We also declare a private slot:
+    \c printButtonClicked().
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 18
+
+    The default implementation of QWizardPage::nextId() returns
+    the page with the next ID, or -1 if the current page has the
+    highest ID. This behavior would work here, because \c
+    Page_Conclusion equals 5 and there is no page with a higher ID,
+    but to avoid relying on such subtle behavior, we reimplement
+    \l{QWizardPage::}{nextId()} to return -1.
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 27
+
+    We use QWizard::hasVisitedPage() to determine the type of
+    license agreement the user has chosen. If the user filled the \c
+    EvaluatePage, the license text refers to an Evaluation License
+    Agreement. If the user filled the \c DetailsPage, the license
+    text is a First-Time License Agreement. If the user provided an
+    upgrade key and skipped the \c DetailsPage, the license text is
+    an Update License Agreement.
+
+    \snippet dialogs/licensewizard/licensewizard.cpp 28
+
+    We want to display a \uicontrol Print button in the wizard when the \c
+    ConclusionPage is up. One way to accomplish this is to reimplement
+    QWidget::setVisible():
+
+    \list
+    \li If the page is shown, we set the \l{QWizard::}{CustomButton1} button's
+       text to \uicontrol{\underline{P}rint}, we enable the \l{QWizard::}{HaveCustomButton1}
+       option, and we connect the QWizard's \l{QWizard::}{customButtonClicked()}
+       signal to our \c printButtonClicked() slot.
+    \li If the page is hidden, we disable the \l{QWizard::}{HaveCustomButton1}
+       option and disconnect the \c printButtonClicked() slot.
+    \endlist
+
+    \sa QWizard, {Trivial Wizard Example}
+*/
+
+
+===== qtbase-everywhere-src-6.8.3/licenseRule.json =====
+
+[
+    {
+        "comment" : ["file_pattern_ending: strings matched against the end of a file name.",
+                     "location keys: regular expression matched against the beginning of",
+                     "the file path (relative to the git submodule root).",
+                     "spdx: list of SPDX-License-Expression's allowed in the matching files.",
+                     "-------------------------------------------------------",
+                     "Files with the following endings are Build System licensed,",
+                     "unless they are examples",
+                     "Files with other endings can also be build system files"
+                     ],
+        "file_pattern_ending" : ["CMakeLists.txt", ".cmake", ".pro", ".pri", ".prf",
+                     "configure", "configure.bat", "cmake.in", "plist.in", "CMakeLists.txt.in"],
+        "location" : {
+            "" : {
+                "comment" : "Default",
+                "file type" : "build system",
+                "spdx"      : ["BSD-3-Clause"]
+            },
+            "(.*)(examples/|snippets/)" : {
+                "comment" : "Example takes precedence",
+                "file type" : "examples and snippets",
+                "spdx" : ["LicenseRef-Qt-Commercial OR BSD-3-Clause"]
+            },
+            "cmake/QtPublicGitHelpers.cmake" : {
+                "comment" : "MIT licensed copied parts",
+                "file type" : "build system",
+                "spdx" : ["BSD-3-Clause AND MIT"]
+            },
+            "cmake/QtPublicSbomGenerationHelpers.cmake" : {
+                "comment" : "MIT licensed copied parts",
+                "file type" : "build system",
+                "spdx" : ["MIT AND BSD-3-Clause"]
+            },
+            "cmake/QtPublicSbomOpsHelpers.cmake" : {
+                "comment" : "MIT licensed copied parts",
+                "file type" : "build system",
+                "spdx" : ["MIT AND BSD-3-Clause"]
+            },
+            "tests/auto/cmake/test_plugin_shared_static_flavor\\.cmake" : {
+                "comment" : "Exception. This is a test file.",
+                "file type" : "test",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR GPL-3.0-only"]
+            }
+        }
+    },
+    {
+        "comments" : ["Files with the following endings are Tool licensed,",
+                      "unless they are examples.",
+                      "Files with other endings can also be tool files."],
+        "file_pattern_ending" : [".sh", ".py", ".pl", ".bat", ".ps1"],
+        "location" :{
+            "" : {
+                "comment" : "Default",
+                "file type" : "tools and utils",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0"]
+            },
+            "(.*)(examples/|snippets/)" : {
+                "comment" : "Example takes precedence",
+                "file type" : "examples and snippets",
+                "spdx" : ["LicenseRef-Qt-Commercial OR BSD-3-Clause"]
+            },
+            "tests/auto/tools/uic/baseline/config\\.ui\\.py" : {
+                "comment" : "This is a test file",
+                "file type" : "test",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only"]
+            }
+        }
+    },
+    {
+        "comment" : "Files with the following endings are Documentation licensed.",
+        "file_pattern_ending" : [".qdoc", ".qdocinc" , ".qdocconf", ".txt", "README", "qt_attribution.json"],
+        "location" :{
+            "" : {
+                "comment" : "",
+                "file type" : "documentation",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR GFDL-1.3-no-invariants-only"]
+            },
+            "tests/auto/corelib/mimetypes/qmimedatabase/test\\.txt" : {
+                "comment" : "Exception. This is a test file",
+                "file type" : "test",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only"]
+            }
+        }
+    },
+    {
+        "comment" : ["All other files",
+                     "The licensing is defined only by the file location in the Qt module repository.",
+                     "NO <file_pattern_ending> key for this case!",
+                     "This needs to be the last entry of the file."],
+        "location" : {
+            "" : {
+                "comment" : "Default",
+                "file type" : "module and plugin",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only"]
+            },
+            "src/" : {
+                "comment" : "Default",
+                "file type" : "module and plugin",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only"]
+            },
+            "plugins/" : {
+                "comment" : "Default",
+                "file type" : "module and plugin",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only"]
+            },
+            "src/plugins/platforms/wasm/" : {
+                "comment" : "Exception for wasm",
+                "file type" : "module and plugin",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only"]
+            },
+            "src/dbus/dbus_minimal_p\\.h" : {
+                "comment" : "Exception",
+                "file type" : "module and plugin",
+                "spdx" : ["AFL-2.1 OR GPL-2.0-or-later"]
+            },
+            "src/entrypoint/qtentrypoint_win\\.cpp" : {
+                "comment" : "Exception: https://doc.qt.io/qt-6/qtentrypoint.html",
+                "file type" : "module and plugin",
+                "spdx" : ["LicenseRef-Qt-Commercial OR BSD-3-Clause"]
+            },
+            "src/android/java/src/org/qtproject/qt/android/bindings/" : {
+                "comment" : "Exception: compiled alongside with user code",
+                "file type" : "module and plugin",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR BSD-3-Clause"]
+            },
+            "src/corelib/(time|text)/q.*_data_p\\.h" : {
+                "comment" : "generated from Unicode CLDR data",
+                "file type" : "module and plugin",
+                "spdx"      : ["Unicode-3.0"]
+            },
+            "src/corelib/text/qunicodetables.*" : {
+                "comment" : "Contains data extracted from UCD, under Unicode-3.0",
+                "file type" : "module and plugin",
+                "spdx"      : ["Unicode-3.0"]
+            },
+            "src/tools/" : {
+                "comment" : "Default",
+                "file type" : "tools and utils",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0"]
+            },
+            "tests/" : {
+                "comment" : "Default",
+                "file type" : "test",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only"]
+            },
+            "cmake/qbatchedtestrunner\\.in\\.cpp" : {
+                "comment" : "Compiled into internal tests if QT_BUILD_TESTS_BATCHED is enabled.",
+                "file type" : "test",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only"]
+            },
+            "tests/auto/testlib/selftests/catch_p_p\\.h" : {
+                "comment" : "Exception",
+                "file type" : "test",
+                "spdx" : ["BSL-1.0"]
+            },
+            "(.*)(examples/|snippets/)" : {
+                "comment" : "Default",
+                "file type" : "examples and snippets",
+                "spdx" : ["LicenseRef-Qt-Commercial OR BSD-3-Clause"]
+            },
+            "config\\.tests/" : {
+                "comment" : "Default",
+                "file type" : "build system",
+                "spdx" : ["BSD-3-Clause"]
+            },
+            "config\\.tests/no_direct_extern_access/" : {
+                "comment" : "Exception",
+                "file type" : "build system",
+                "spdx" : ["MIT"]
+            },
+            "src/corelib/Qt6CoreResourceInit\\.in\\.cpp" : {
+                "comment" : "Helper file statically compiled into user executables",
+                "file type" : "module and plugin",
+                "spdx" : ["LicenseRef-Qt-Commercial OR BSD-3-Clause"]
+            },
+            "qmake/" : {
+                "comment" : "Default",
+                "file type" : "tools and utils",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0"]
+            },
+            "util/" : {
+                "comment" : "Default",
+                "file type" : "util",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0"]
+            },
+            "util/locale_database/testlocales/localemodel.cpp" : {
+                "comment" : "Exception: this contains CLDR-generated code",
+                "file type" : "util",
+                "spdx" : ["Unicode-3.0"]
+            },
+            "util/wasm/batchedtestrunner/" : {
+                "comment" : "Exception: this is a helper tool",
+                "file type" : "util",
+                "spdx" : ["LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0"]
+            },
+            "util/x86simdgen/header" : {
+                "comment" : "Exception for file generation",
+                "file type" : "util",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only"]
+            },
+            "util/glgen/qopenglextensions\\.(h|cpp)\\.header" : {
+                "comment" : "Exception, for file generation",
+                "file type" : "util",
+                "spdx"      : ["LicenseRef-Qt-Commercial OR BSD-3-Clause"]
+            },
+            "src/gui/painting/qimagescale.cpp" : {
+                "comment" : "Info from qt_attribution.json",
+                "file type" : "module and plugin",
+                "spdx" : ["BSD-2-Clause AND Imlib2"]
+            },
+            "src/gui/painting/qgrayraster.c" : {
+                "comment" : "Info from qt_attribution.json",
+                "file type" : "module and plugin",
+                "spdx" : ["FTL OR GPL-2.0-only"]
+            },
+            "src/corelib/kernel/qeventdispatcher_cf_p.h" : {
+                "comment" : "Info from qt_attribution.json",
+                "file type" : "module and plugin",
+                "spdx" : ["BSD-3-Clause"]
+            },
+            "src/plugins/platforms/cocoa/qcocoa(application|eventdispatcher|introspection|systemtrayicon.mm)" : {
+                "comment" : "Info from qt_attribution.json",
+                "file type" : "module and plugin",
+                "spdx" : ["BSD-3-Clause"]
+            }
+        }
+    }
+]
+
+
+===== qtbase-everywhere-src-6.8.3/src/3rdparty/D3D12MemoryAllocator/LICENSE.txt =====
+
+Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+===== qtbase-everywhere-src-6.8.3/src/3rdparty/D3D12MemoryAllocator/qt_attribution.json =====
+
+[
+    {
+        "Id": "d3d12memoryallocator",
+        "Name": "D3D12 Memory Allocator",
+        "QDocModule": "qtgui",
+        "Description": "D3D12 Memory Allocator",
+        "QtUsage": "Memory management for the D3D12 backend of QRhi.",
+
+        "Homepage": "https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator",
+        "Version": "f128d39b7a95b4235bd228d231646278dc6c24b2",
+        "PURL": "pkg:github/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator@$<VERSION>",
+        "License": "MIT License",
+        "LicenseId": "MIT",
+        "LicenseFile": "LICENSE.txt",
+        "Copyright": "Copyright (c) 2019-2022 Advanced Micro Devices, Inc. All rights reserved.",
+        "Comment": "no relevant CPE found"
+    }
+]
+
+
+===== qtbase-everywhere-src-6.8.3/src/3rdparty/VulkanMemoryAllocator/LICENSE.txt =====
+
+Copyright (c) 2017-2019 Advanced Micro Devices, Inc. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+===== qtbase-everywhere-src-6.8.3/src/3rdparty/VulkanMemoryAllocator/qt_attribution.json =====
+
+[
+    {
+        "Id": "vulkanmemoryallocator",
+        "Name": "Vulkan Memory Allocator",
+        "QDocModule": "qtgui",
+        "Description": "Vulkan Memory Allocator",
+        "QtUsage": "Memory management for the Vulkan backend of QRhi.",
+
+        "Homepage": "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator",
+        "Version": "3.0.1",
+        "PURL": "pkg:github/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator@v$<VERSION>",
+        "License": "MIT License",
+        "LicenseId": "MIT",
+        "LicenseFile": "LICENSE.txt",
+        "Copyright": "Copyright (c) 2017-2024 Advanced Micro Devices, Inc. All rights reserved.",
+        "Comment": "no relevant CPE found"
+    }
+]
+
+
+===== qtbase-everywhere-src-6.8.3/src/3rdparty/android/LICENSE =====
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+
+===== qtbase-everywhere-src-6.8.3/src/3rdparty/android/qt_attribution.json =====
+
+{
+    "Id": "android-native-style",
+    "Name": "Native Style for Android",
+    "QDocModule": "qtgui",
+    "QtUsage": "Used in Android platform plugin.",
+
+    "License": "Apache License 2.0",
+    "LicenseId": "Apache-2.0",
+    "LicenseFile": "LICENSE",
+    "Copyright": "Copyright (C) 2005 The Android Open Source Project",
+    "Comment": "no relevant PURL or CPE found"
+}
+
+
+===== qtbase-everywhere-src-6.8.3/src/3rdparty/blake2/COPYING =====
+
+CC0 1.0 Universal
+
+Statement of Purpose
+
+The laws of most jurisdictions throughout the world automatically confer
+exclusive Copyright and Related Rights (defined below) upon the creator and
+subsequent owner(s) (each and all, an "owner") of an original work of
+authorship and/or a database (each, a "Work").
+
+Certain owners wish to permanently relinquish those rights to a Work for the
+purpose of contributing to a commons of creative, cultural and scientific
+works ("Commons") that the public can reliably and without fear of later
+claims of infringement build upon, modify, incorporate in other works, reuse
+and redistribute as freely as possible in any form whatsoever and for any
+purposes, including without limitation commercial purposes. These owners may
+contribute to the Commons to promote the ideal of a free culture and the
+further production of creative, cultural and scientific works, or to gain
+reputation or greater distribution for their Work in part through the use and
+efforts of others.
+
+For these and/or other purposes and motivations, and without any expectation
+of additional consideration or compensation, the person associating CC0 with a
+Work (the "Affirmer"), to the extent that he or she is an owner of Copyright
+and Related Rights in the Work, voluntarily elects to apply CC0 to the Work
+and publicly distribute the Work under its terms, with knowledge of his or her
+Copyright and Related Rights in the Work and the meaning and intended legal
+effect of CC0 on those rights.
+
+1. Copyright and Related Rights. A Work made available under CC0 may be
+protected by copyright and related or neighboring rights ("Copyright and
+Related Rights"). Copyright and Related Rights include, but are not limited
+to, the following:
+
+  i. the right to reproduce, adapt, distribute, perform, display, communicate,
+  and translate a Work;
+
+  ii. moral rights retained by the original author(s) and/or performer(s);
+
+  iii. publicity and privacy rights pertaining to a person's image or likeness
+  depicted in a Work;
+
+  iv. rights protecting against unfair competition in regards to a Work,
+  subject to the limitations in paragraph 4(a), below;
+
+  v. rights protecting the extraction, dissemination, use and reuse of data in
+  a Work;
+
+  vi. database rights (such as those arising under Directive 96/9/EC of the
+  European Parliament and of the Council of 11 March 1996 on the legal
+  protection of databases, and under any national implementation thereof,
+  including any amended or successor version of such directive); and
+
+  vii. other similar, equivalent or corresponding rights throughout the world
+  based on applicable law or treaty, and any national implementations thereof.
+
+2. Waiver. To the greatest extent permitted by, but not in contravention of,
+applicable law, Affirmer hereby overtly, fully, permanently, irrevocably and
+unconditionally waives, abandons, and surrenders all of Affirmer's Copyright
+and Related Rights and associated claims and causes of action, whether now
+known or unknown (including existing as well as future claims and causes of
+action), in the Work (i) in all territories worldwide, (ii) for the maximum
+duration provided by applicable law or treaty (including future time
+extensions), (iii) in any current or future medium and for any number of
+copies, and (iv) for any purpose whatsoever, including without limitation
+commercial, advertising or promotional purposes (the "Waiver"). Affirmer makes
+the Waiver for the benefit of each member of the public at large and to the
+detriment of Affirmer's heirs and successors, fully intending that such Waiver
+shall not be subject to revocation, rescission, cancellation, termination, or
+any other legal or equitable action to disrupt the quiet enjoyment of the Work
+by the public as contemplated by Affirmer's express Statement of Purpose.
+
+3. Public License Fallback. Should any part of the Waiver for any reason be
+judged legally invalid or ineffective under applicable law, then the Waiver
+shall be preserved to the maximum extent permitted taking into account
+Affirmer's express Statement of Purpose. In addition, to the extent the Waiver
+is so judged Affirmer hereby grants to each affected person a royalty-free,
+non transferable, non sublicensable, non exclusive, irrevocable and
+unconditional license to exercise Affirmer's Copyright and Related Rights in
+the Work (i) in all territories worldwide, (ii) for the maximum duration
+provided by applicable law or treaty (including future time extensions), (iii)
+in any current or future medium and for any number of copies, and (iv) for any
+purpose whatsoever, including without limitation commercial, advertising or
+promotional purposes (the "License"). The License shall be deemed effective as
+of the date CC0 was applied by Affirmer to the Work. Should any part of the
+License for any reason be judged legally invalid or ineffective under
+applicable law, such partial invalidity or ineffectiveness shall not
+invalidate the remainder of the License, and in such case Affirmer hereby
+affirms that he or she will not (i) exercise any of his or her remaining
+Copyright and Related Rights in the Work or (ii) assert any associated claims
+and causes of action with respect to the Work, in either case contrary to
+Affirmer's express Statement of Purpose.
+
+4. Limitations and Disclaimers.
+
+  a. No trademark or patent rights held by Affirmer are waived, abandoned,
+  surrendered, licensed or otherwise affected by this document.
+
+  b. Affirmer offers the Work as-is and makes no representations or warranties
+  of any kind concerning the Work, express, implied, statutory or otherwise,
+  including without limitation warranties of title, merchantability, fitness
+  for a particular purpose, non infringement, or the absence of latent or
+  other defects, accuracy, or the present or absence of errors, whether or not
+  discoverable, all to the greatest extent permissible under applicable law.
+
+  c. Affirmer disclaims responsibility for clearing rights of other persons
+  that may apply to the Work or any use thereof, including without limitation
+  any person's Copyright and Related Rights in the Work. Further, Affirmer
+  disclaims responsibility for obtaining any necessary consents, permissions
+  or other rights required for any use of the Work.
+
+  d. Affirmer understands and acknowledges that Creative Commons is not a
+  party to this document and has no duty or obligation with respect to this
+  CC0 or use of the Work.
+
+For more information, please see
+<http://creativecommons.org/publicdomain/zero/1.0/>
+
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+

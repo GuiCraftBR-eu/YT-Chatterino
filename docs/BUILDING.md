@@ -1,49 +1,33 @@
-# Executar e empacotar o YT-Chatterino
+# Build the native application
 
-## Executar pelo código-fonte
+Requirements: CMake 3.24+, C++20 compiler, Qt 6.5+ Core/Gui/Widgets/Network/Svg; Qt Test for tests. Release Windows binaries use unmodified Qt 6.8.3 and MinGW GCC 13.1 x64. Python is not a build or runtime requirement for this application.
 
-No Windows, instale o Python com Tcl/Tk e abra um terminal na raiz do repositório:
+## Windows
 
-```powershell
-py src/ytchatterino.pyw
-```
-
-Mantenha todos os arquivos Python, o ícone, os logotipos e `ChatternoPing.wav`
-juntos na pasta src/. A leitura dos chats do YouTube usa apenas o link da live.
-Consulte [README-PTBR.txt](README-PTBR.txt) ou [README.txt](README.txt) para
-conectar as contas e configurar envio de mensagens e moderação.
-
-## Criar o executável portátil
-
-Execute no Windows, com o Python e os arquivos do repositório:
+Install Qt 6.8.3 MinGW x64 with SVG/imageformats and the matching MinGW 13.1 compiler. Add Qt/bin and MinGW/bin to PATH. In a developer PowerShell:
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
-.\.venv\Scripts\python.exe -m PyInstaller --noconfirm YT-Chatterino.spec
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/mingw_64
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
+windeployqt --release --no-opengl-sw --no-system-d3d-compiler --dir dist/YT-Chatterino build/YT-Chatterino.exe
+Copy-Item build/YT-Chatterino.exe dist/YT-Chatterino/
 ```
 
-O resultado fica em `dist\YT-Chatterino\`. Copie `docs/README.txt`,
-`docs/README-PTBR.txt` e a pasta `Licenses` para essa pasta antes de distribuí-la.
-Compacte a pasta inteira: o executável precisa da pasta `_internal` ao lado.
+Deploy shared Qt and GCC runtime libraries. Keep plugins in their original folders. The Windows resource embeds the app icon and version. Run tests with the same Qt/compiler DLLs on PATH and `QT_QPA_PLATFORM=offscreen` if there is no desktop.
 
-As licenças dos componentes incluídos devem corresponder às versões usadas
-no seu ambiente de compilação. A pasta `Licenses` contém os avisos do pacote
-Windows distribuído com este projeto.
+## Arch Linux
 
-## Arquivos pessoais
-
-O repositório contém o código e os recursos do aplicativo. Os JSONs OAuth,
-tokens, chaves, configurações, logs e dados da conta ficam no computador de
-cada usuário e não devem ser adicionados ao Git. O `.gitignore` cobre os
-nomes usados pelo aplicativo.
-
-## Testes
-
-```powershell
-py -m unittest discover -s tests -v
+```sh
+sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-svg qt6-imageformats libsecret ttf-dejavu
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build build --parallel 2
+QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+./build/yt-chatterino
 ```
 
-No Linux sem sessão gráfica, use `xvfb-run -a python -m unittest discover -s tests -v`.
-O workflow `Native checks` executa esses testes no Windows e no Arch Linux e gera
-o pacote pacman. As instruções do Linux estão em [ARCH-LINUX.md](ARCH-LINUX.md).
+Build the pacman package as a regular user with `cd packaging/arch && makepkg -si`. The PKGBUILD uses this local checkout. Native CI builds and tests on Windows and Arch before attaching an Arch package to a release.
+
+`--profile /absolute/directory` uses an isolated `.ytchatterino.json` and an independent encrypted credential namespace. Test fixtures never require real tokens. Do not check private profiles or OAuth JSON into Git.
+
+Modules: `core` (data/parsing/settings), `network` (HTTP/images), `accounts` (OAuth/vault), `chat` (sources/actions), `view` (virtual chat/panes), `application`/`settings` (windows), `updater` (verified transactions). CMake's `APP_VERSION` is the single application version.

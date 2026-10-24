@@ -1,0 +1,323 @@
+
+===== qtbase-everywhere-src-6.8.3/LICENSES/LicenseRef-BSD-3-Clause-with-PCRE2-Binary-Like-Packages-Exception.txt =====
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+    3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+EXEMPTION FOR BINARY LIBRARY-LIKE PACKAGES
+------------------------------------------
+
+The second condition in the BSD licence (covering binary redistributions) does not apply all the way down a chain of software. If binary package A includes PCRE2, it must respect the condition, but if package B is software that includes package A, the condition is not imposed on package B unless it uses PCRE2 independently.
+
+
+===== qtbase-everywhere-src-6.8.3/LICENSES/LicenseRef-ICC-License.txt =====
+
+For the file sRGB2014.icc:
+
+Copyright International Color Consortium, 2015
+
+This profile is made available by the International Color Consortium, and may be copied,
+distributed, embedded, made, used, and sold without restriction. Altered versions of this
+profile shall have the original identification and copyright information removed and
+shall not be misrepresented as the original profile.
+
+(original source location: http://www.color.org/srgbprofiles.xalter)
+
+
+===== qtbase-everywhere-src-6.8.3/LICENSES/LicenseRef-Lcs-Telegraphics.txt =====
+
+The text and information contained in this file may be freely used,
+copied, or distributed without compensation or licensing restrictions.
+
+
+===== qtbase-everywhere-src-6.8.3/LICENSES/LicenseRef-Qt-Commercial.txt =====
+
+Licensees holding valid commercial Qt licenses may use this software in
+accordance with the the terms contained in a written agreement between
+you and The Qt Company. Alternatively, the terms and conditions that were
+accepted by the licensee when buying and/or downloading the
+software do apply.
+
+For the latest licensing terms and conditions, see https://www.qt.io/terms-conditions.
+For further information use the contact form at https://www.qt.io/contact-us.
+
+
+===== qtbase-everywhere-src-6.8.3/LICENSES/LicenseRef-SHA1-Public-Domain.txt =====
+
+100% free public domain implementation of the SHA-1 algorithm
+by Dominik Reichl <dominik.reichl@t-online.de>
+Web: http://www.dominik-reichl.de/
+
+
+===== qtbase-everywhere-src-6.8.3/cmake/3rdparty/extra-cmake-modules/COPYING-CMAKE-SCRIPTS =====
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. The name of the author may not be used to endorse or promote products 
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+===== qtbase-everywhere-src-6.8.3/cmake/3rdparty/extra-cmake-modules/qt_attribution.json =====
+
+{
+    "Id": "extra-cmake-modules",
+    "Name": "extra-cmake-modules",
+    "QDocModule": "qtcore",
+    "QtUsage": "Used as part of the build system.",
+
+    "Description": "Additional CMake modules.",
+    "Homepage": "https://api.kde.org/ecm/",
+    "Version": "5.84.0",
+
+    "License": "BSD-3-Clause",
+    "LicenseId": "BSD-3-Clause",
+    "LicenseFile": "COPYING-CMAKE-SCRIPTS",
+    "Copyright": "Copyright © 2011-2018 The KDE community"
+}
+
+
+===== qtbase-everywhere-src-6.8.3/cmake/3rdparty/kwin/COPYING-CMAKE-SCRIPTS =====
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. The name of the author may not be used to endorse or promote products 
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+===== qtbase-everywhere-src-6.8.3/cmake/3rdparty/kwin/qt_attribution.json =====
+
+{
+    "Id": "kwin",
+    "Name": "KWin",
+    "QDocModule": "qtcore",
+    "QtUsage": "Used as part of the build system.",
+
+    "Description": "Additional CMake modules for graphics system dependencies.",
+    "Homepage": "https://www.kde.org/",
+    "Version": "5.13.4",
+
+    "License": "BSD-3-Clause",
+    "LicenseId": "BSD-3-Clause",
+    "LicenseFile": "COPYING-CMAKE-SCRIPTS",
+    "Copyright": "Copyright 2014 Alex Merry <alex.merry@kde.org>
+Copyright 2014 Martin Gräßlin <mgraesslin@kde.org>,
+Copyright (c) 2006,2007 Laurent Montel, <montel@kde.org>"
+}
+
+
+===== qtbase-everywhere-src-6.8.3/cmake/QtPublicSbomLicenseHelpers.cmake =====
+
+# Copyright (C) 2024 The Qt Company Ltd.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Adds a license id and its text to the sbom.
+function(_qt_internal_sbom_add_license)
+    if(NOT QT_GENERATE_SBOM)
+        return()
+    endif()
+
+    set(opt_args
+        NO_LICENSE_REF_PREFIX
+    )
+    set(single_args
+        LICENSE_ID
+        LICENSE_PATH
+        EXTRACTED_TEXT
+    )
+    set(multi_args
+    )
+    cmake_parse_arguments(PARSE_ARGV 0 arg "${opt_args}" "${single_args}" "${multi_args}")
+    _qt_internal_validate_all_args_are_parsed(arg)
+
+    if(NOT arg_LICENSE_ID)
+        message(FATAL_ERROR "LICENSE_ID must be set")
+    endif()
+
+    if(NOT arg_TEXT AND NOT arg_LICENSE_PATH)
+        message(FATAL_ERROR "Either TEXT or LICENSE_PATH must be set")
+    endif()
+
+    # Sanitize the content a bit.
+    if(arg_TEXT)
+        set(text "${arg_TEXT}")
+        string(REPLACE ";" "$<SEMICOLON>" text "${text}")
+        string(REPLACE "\"" "\\\"" text "${text}")
+    else()
+        file(READ "${arg_LICENSE_PATH}" text)
+        string(REPLACE ";" "$<SEMICOLON>" text "${text}")
+        string(REPLACE "\"" "\\\"" text "${text}")
+    endif()
+
+    set(license_id "${arg_LICENSE_ID}")
+    if(NOT arg_NO_LICENSE_REF_PREFIX)
+        set(license_id "LicenseRef-${license_id}")
+    endif()
+
+    _qt_internal_sbom_generate_add_license(
+        LICENSE_ID "${license_id}"
+        EXTRACTED_TEXT "<text>${text}</text>"
+    )
+endfunction()
+
+# Get a qt spdx license expression given the id.
+function(_qt_internal_sbom_get_spdx_license_expression id out_var)
+    set(license "")
+
+    # The default for modules / plugins
+    if(id STREQUAL "QT_DEFAULT" OR id STREQUAL "QT_COMMERCIAL_OR_LGPL3")
+        set(license "LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only")
+
+    # For commercial only entities
+    elseif(id STREQUAL "QT_COMMERCIAL")
+        set(license "LicenseRef-Qt-Commercial")
+
+    # For GPL3 only modules
+    elseif(id STREQUAL "QT_COMMERCIAL_OR_GPL3")
+        set(license "LicenseRef-Qt-Commercial OR GPL-3.0-only")
+
+    # For tools and apps
+    elseif(id STREQUAL "QT_COMMERCIAL_OR_GPL3_WITH_EXCEPTION")
+        set(license "LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0")
+
+    # For things like the qtmain library
+    elseif(id STREQUAL "QT_COMMERCIAL_OR_BSD3")
+        set(license "LicenseRef-Qt-Commercial OR BSD-3-Clause")
+
+    # For documentation
+    elseif(id STREQUAL "QT_COMMERCIAL_OR_GFDL1_3")
+        set(license "LicenseRef-Qt-Commercial OR GFDL-1.3-no-invariants-only")
+
+    # For examples and the like
+    elseif(id STREQUAL "BSD3")
+        set(license "BSD-3-Clause")
+
+    endif()
+
+    if(NOT license)
+        message(FATAL_ERROR "No SPDX license expression found for id: ${id}")
+    endif()
+
+    set(${out_var} "${license}" PARENT_SCOPE)
+endfunction()
+
+# Joins two license IDs with the given ${op}, avoiding parenthesis when possible.
+function(_qt_internal_sbom_join_two_license_ids_with_op left_id op right_id out_var)
+    if(NOT left_id)
+        set(${out_var} "${right_id}" PARENT_SCOPE)
+        return()
+    endif()
+
+    if(NOT right_id)
+        set(${out_var} "${left_id}" PARENT_SCOPE)
+        return()
+    endif()
+
+    set(value "(${left_id}) ${op} (${right_id})")
+    set(${out_var} "${value}" PARENT_SCOPE)
+endfunction()
+
+
+===== qtbase-everywhere-src-6.8.3/coin/instructions/prepare_license_test.yaml =====
+
+type: Group
+instructions:
+    - type: ChangeDirectory
+      directory: "{{.AgentWorkingDir}}"
+    - type: EnvironmentVariable
+      variableName: QTQA_LICHECK_BRANCH
+      variableValue: "{{ slice .Env.TESTED_MODULE_BRANCH_COIN 5 }}"
+      enable_if:
+        condition: runtime
+        env_var: TESTED_MODULE_BRANCH_COIN
+        contains_value: "tqtc/"
+    - type: EnvironmentVariable
+      variableName: QTQA_LICHECK_BRANCH
+      variableValue: "{{ .Env.TESTED_MODULE_BRANCH_COIN }}"
+      disable_if:
+        condition: runtime
+        env_var: TESTED_MODULE_BRANCH_COIN
+        contains_value: "tqtc/"
+
+    # The command must not have whitespace directly after any piping,
+    # as whitespace directly after pipes will be interpreted as part of the command.
+    - type: ExecuteCommand
+      command: ["bash", "-c", "git clone --depth=1 -b {{ .Env.QTQA_LICHECK_BRANCH }} git://{{.Env.QT_COIN_GIT_DAEMON}}/qt-project/qt/qtqa qt/qtqa-latest ||git clone --depth=1 -b dev git://{{.Env.QT_COIN_GIT_DAEMON}}/qt-project/qt/qtqa qt/qtqa-latest"]
+      maxTimeInSeconds: 600
+      maxTimeBetweenOutput: 600
+      userMessageOnFailure: >
+              Failed to clone qtqa sources. Please investigate why.
+      disable_if:
+        condition: property
+        property: host.os
+        equals_value: Windows
+    - type: ExecuteCommand
+      command: ["cmd.exe", "/C", "git clone --depth=1 -b {{ .Env.QTQA_LICHECK_BRANCH }} git://{{.Env.QT_COIN_GIT_DAEMON}}/qt-project/qt/qtqa qt/qtqa-latest ||git clone --depth=1 -b dev git://{{.Env.QT_COIN_GIT_DAEMON}}/qt-project/qt/qtqa qt/qtqa-latest"]
+      executeCommandArgumentSplitingBehavior: SplitAfterVariableSubstitution
+      maxTimeInSeconds: 600
+      maxTimeBetweenOutput: 600
+      userMessageOnFailure: >
+            Failed to clone qtqa sources. Please investigate why.
+      enable_if:
+        condition: property
+        property: host.os
+        equals_value: Windows
+    - type: EnvironmentVariable
+      variableName: QT_MODULE_TO_TEST
+      variableValue: "{{.SourceDir}}"
+      userMessageOnFailure: >
+              Failed to set QT_MODULE_TO_TEST environment variable. This should not happen.
+
+
+===== qtbase-everywhere-src-6.8.3/coin/instructions/run_license_check.yaml =====
+
+type: Group
+instructions:
+    - !include "{{qt/qtbase}}/prepare_license_test.yaml"
+    - type: ExecuteCommand
+      command: perl qt/qtqa-latest/tests/prebuild/license/tst_licenses.pl
+      maxTimeInSeconds: 7200
+      maxTimeBetweenOutput: 120
+      userMessageOnFailure: >
+           Failed to run license check script.
+

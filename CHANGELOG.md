@@ -1,76 +1,11 @@
-# Histórico de versões
+# Changelog
 
-## 1.3.0
+## 2.0.0
 
-- YouTube continua lendo mensagens em abas ocultas e com a janela minimizada;
-  as pausas manuais continuam disponíveis.
-- Restaura a posição, o tamanho normal e o estado maximizado da janela. No Windows,
-  usa o posicionamento nativo para respeitar monitores adicionais e mudanças de tela.
-- am/pm em letras minúsculas, inclusive nas mensagens já mantidas.
-- Tamanhos independentes da fonte das mensagens e dos nomes em Aparência → Exibição.
-  Alterar fontes preserva imagens, mensagens, seleção e posição de leitura.
-- Clique esquerdo no corpo/contexto de uma resposta da Twitch abre a conversa,
-  com mensagens retidas, atualização ao vivo e campo para responder. Sem assinatura
-  de conversa. Clique no nome continua abrindo o cartão do usuário.
-- Conversas e filas têm limites; a janela reutiliza o renderizador de emotes,
-  badges e animações, sem criar outra conexão de chat.
-- Corrige fundos alternados ao mudar Aparência em mensagens com contexto de resposta.
-- Amplia testes de histórico, permissões, atualização, fontes, janelas e conversas.
+- Replaced the Python/Tk application with a native C++20/Qt 6 implementation on Windows and Arch Linux.
+- Ported account storage, public YouTube reading, shared Twitch IRC, sending/moderation, metadata edits, emotes/badges/GIFs, saved channels, layouts, reply threads, user cards, search/filters/highlights, sounds, appearance, translations and automatic updates.
+- Virtualized message layout, bounded the document/image caches, paused offscreen animations and batched Twitch live checks.
+- Added paginated emote browsing, preserved Chatterino shortcuts, native window/icon metadata, update file-preservation and rollback tests.
+- Preserved compatible 1.x settings and encrypted accounts. Source installs and old Arch packages need one manual native upgrade; Windows portable updates remain supported.
 
-## 1.2.2
-
-- Atualizador pelo aplicativo: verificação em segundo plano, seta de download,
-  confirmação, integridade SHA-256, backup, substituição e reinício automático.
-- Atualização de pacotes nativos do Arch pelo pacman com autorização do polkit.
-- Datas da interface em DD/MM/AAAA por padrão, com quatro formatos em Aparência.
-- Horários configuráveis de 12/24 horas, com ou sem segundos; atualizam mensagens
-  já mantidas usando o horário original quando disponível.
-- Saldo do YouTube visível apenas para o painel focado que inclui YouTube.
-- Trabalho de tradução/descompactação adiado; padrões de emotes preparados em
-  segundo plano e reutilizados; elimina recálculos repetidos de destaques.
-- Ampliação das verificações de recursos existentes, formatos, atualização,
-  arquivos privados preservados, falhas de instalação e restauração de arquivos.
-
-## 1.2.1
-
-- Configurações reorganizadas: Aparência reúne Exibição, Mensagens e Destaques.
-- Busca nas configurações por nomes e palavras-chave em inglês e português,
-  com atalho Ctrl+F, resultados navegáveis e indicação do controle encontrado.
-- Páginas criadas sob demanda, com preservação de rascunhos ao alternar páginas.
-- Redimensionamento usa apenas o trecho visível durante o arrasto; restaura o
-  histórico completo, a seleção e a posição ao terminar. Atualizações de mensagens
-  e animações são adiadas durante o arrasto, sem desconectar os leitores.
-- Atualizações de tamanho e de quebra do cabeçalho são agrupadas para reduzir
-  trabalho repetido. Detalhes da medição em docs/PERFORMANCE.md.
-- Testes de busca, navegação, tradução, seleção, imagens e redimensionamento.
-
-## 1.2.0
-
-- Respostas reais da Twitch: clique direito na mensagem → Responder à mensagem.
-  O campo de envio mostra o destinatário; Esc ou × cancela a resposta.
-- Exibição do contexto de respostas recebidas, inclusive no histórico recente.
-- Cartões de usuário com clique esquerdo no nome, em Twitch e YouTube.
-  Perfil público, avatar, dados disponíveis, destaques, menção, controles de moderação
-  e até 500 mensagens desse usuário ainda retidas no canal.
-- Carregamento opcional de até 200 mensagens recentes da Twitch pelo serviço usado
-  pelo Chatterino; mantém ordem e evita duplicar mensagens do chat ao vivo.
-- Carregamento das mensagens iniciais fornecidas pela página do YouTube.
-- Limite padrão de 2.000 mensagens por painel, com ajuste global de 100 a 20.000
-  e substituição por painel. Textos, referências de imagens e tags antigas são removidos.
-- Edição nativa para Arch Linux: pacote pacman, PKGBUILD, lançador, ícone,
-  login salvo em chaveiro criptografado e sons com players Linux.
-- Testes automatizados em Windows e em um contêiner Arch Linux com Tk/Xvfb.
-
-## 1.1.0
-
-Primeira versão publicada neste repositório, reunindo os recursos já presentes no aplicativo:
-
-- Leitura pública do YouTube pelo link da live, sem chave de API.
-- Chats Twitch e YouTube com abas, divisão de painéis e mistura de canais.
-- Envio, moderação e edição de canais conforme as permissões das plataformas.
-- Emotes, badges, animações, autocompletar e seletor de emotes.
-- Canais salvos, destaques, filtros, pesquisa e notificações configuráveis.
-- Português brasileiro e inglês, tutorial nas configurações e manter no topo.
-- Pacote portátil para Windows 11 x64, com manuais em português e inglês.
-
-A publicação organiza o código e a documentação; não adiciona mudanças de funcionamento ao executável existente.
+Earlier Python releases remain available through the repository's 1.x tags.

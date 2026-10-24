@@ -1,55 +1,17 @@
-# Arch Linux (native)
+# Arch Linux — native C++ / Qt
 
-This edition uses Arch's native Python and Tk. It does not use Wine, a Windows
-executable, an embedded Windows runtime, or an emulator.
-
-## Install
-
-For the ready-built pacman package, download `yt-chatterino-1.3.0-1-any.pkg.tar.zst`:
+Download `yt-chatterino-2.0.0-1-x86_64.pkg.tar.zst` from the release and install it with:
 
 ```sh
-sudo pacman -U ./yt-chatterino-1.3.0-1-any.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.0.0-1-x86_64.pkg.tar.zst
 ```
 
-The source download below is an alternative if you prefer to build it locally.
+Launch YT-Chatterino from the desktop application menu, or run `yt-chatterino`. Qt runs directly on Linux; Wine and Python are not used. Dependencies are installed through pacman. Both X11 and Wayland can use the Qt platform plugins supplied by Arch.
 
-Download and extract `YT-Chatterino-ArchLinux-1.3.0.tar.gz`. From the extracted folder:
+Install/unlock a Secret Service compatible keyring (`gnome-keyring` or a compatible KDE setup) to retain sign-ins. `secret-tool` comes from libsecret. Without a working keyring, sign-ins last for the current session and the app reports the storage error; it does not save plaintext tokens.
 
-```sh
-sudo pacman -S --needed base-devel python tk python-pillow python-keyring python-secretstorage ttf-dejavu
-cd packaging/arch
-makepkg -si
-```
+Notification sounds use `pw-play`, `paplay` or `aplay` when available. Install `noto-fonts-emoji` for color emoji. In-app package updates use `pkexec pacman -U` and require polkit authorization; manual pacman installation also works.
 
-Run **YT-Chatterino** from the application menu, or use `yt-chatterino`.
-Run `makepkg` as your regular user. It asks for administrator access only when
-installing the generated package through pacman. To uninstall: `sudo pacman -R yt-chatterino`.
+The 1.x package contained Python files and used architecture `any`. Install v2 once with pacman because the old updater cannot recognize native x86_64 packages. Your home profile and compatible keyring credentials are retained. No manual profile deletion is needed.
 
-For a portable source launch (after installing dependencies):
-
-```sh
-python src/ytchatterino.pyw
-```
-
-## Saved accounts and sounds
-
-Sign in separately on Linux. Windows credentials cannot be transferred.
-Unlock your desktop keyring (GNOME Keyring/Secret Service or KWallet) to keep
-sign-ins saved. If no supported encrypted keyring is available, the app keeps
-the account for the current run and reports the storage failure; it never saves
-tokens in plaintext. Some desktop setups need `gnome-keyring` installed and started
-by their session manager. Do not use a plaintext keyring backend.
-
-Sounds use `pw-play`, `paplay`, or `aplay`, when available. The desktop bell is a fallback.
-Tk uses X11 or XWayland under Wayland. Install/enable your compositor's XWayland support if needed.
-
-## Português brasileiro
-
-Baixe e extraia o arquivo `YT-Chatterino-ArchLinux-1.3.0.tar.gz`.
-Instale as dependências com o comando `pacman` acima, entre em `packaging/arch`
-e execute `makepkg -si` como seu usuário normal. Abra **YT-Chatterino** pelo menu
-de aplicativos ou pelo comando `yt-chatterino`.
-
-Não precisa de Wine. Conecte suas contas novamente no Linux e desbloqueie o
-chaveiro do ambiente gráfico para salvar o login. Se o chaveiro seguro não
-estiver disponível, o login dura somente até fechar o aplicativo.
+To build from source, see BUILDING.md or run `makepkg -si` in packaging/arch as a regular user.

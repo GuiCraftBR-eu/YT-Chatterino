@@ -7,4 +7,5 @@ Exec=yt-chatterino
 Icon=yt-chatterino
 Terminal=false
 Categories=Network;Chat;
-StartupWMClass=Ytchatterino
+StartupWMClass=YT-Chatterino
+StartupNotify=true

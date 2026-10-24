@@ -1,0 +1,70 @@
+#pragma once
+#include "application.hpp"
+#include <QtTest>
+using namespace yc;
+
+class NativeTests : public QObject {
+    Q_OBJECT
+    QTemporaryDir temp;
+    std::unique_ptr<MainWindow> app;
+    Source *twitch = nullptr;
+    QStringList unexpectedRequests;
+    void authenticate();
+  private slots:
+    void init();
+    void cleanup();
+    void videoLinks_data();
+    void videoLinks();
+    void twitchLinks_data();
+    void twitchLinks();
+    void embeddedJsonBalancesStrings();
+    void ircReplyBadgesEmotes();
+    void ircAstralOffsetsAndAction();
+    void twitchGifKeepsSignedUrlAndRejectsOtherHosts();
+    void youtubeRunsBadgesAndUnicode();
+    void youtubePaidPrefixMovesEmotes();
+    void messageRoundTrip();
+    void datesAndLowercaseTime_data();
+    void datesAndLowercaseTime();
+    void midnightNoonAndLegacyFontMigration();
+    void quotaMigrationAndPacificReset();
+    void highlightRoleNicknameWordsAndBoundaries();
+    void filtersAndSystemVisibility();
+    void retentionDedupAndSeenBounded();
+    void moderationDoesNotCreateReplyMetadata();
+    void moderationHidesReplyContext();
+    void nestedThreadsMissingRootAndCycle();
+    void publicBrowserUrlsNoCredentials();
+    void imageHostValidation();
+    void viewportCapCopyAndTimestampToggle();
+    void independentFontsAndShortcuts();
+    void largePaneCapRetainsHistoryAcrossAppearance();
+    void layoutMixSplitAndLegacySession();
+    void emptyWindowKeepsAddControls();
+    void threadWindowLiveUpdatesAndDeletedTarget();
+    void settingsSearchLanguageAndFontControls();
+    void twitchSendReplyAndDrop();
+    void deletedReplyCannotBecomeTopLevelSend();
+    void twitchModerationPermissionsAndDuration();
+    void twitchBroadcasterDeletionProtected();
+    void youtubeSendingCostsAndPayload();
+    void youtubeModerationMapsWebMessageId();
+    void youtubeBanCostsAndDuration();
+    void titleUpdatesPreserveYouTubeSnippet();
+    void twitchTitleRequiresBroadcaster();
+    void youtubePollContinuesUnfocusedAndManualPauseStops();
+    void sourceSessionAndWindowGeometry();
+    void updateVersionAndAssetValidation();
+    void updateArchivePaths();
+    void secureNamespaceAndNoTokensInSettings();
+    void animatedImagesCompositeAndResume();
+    void completionAndPickerPagination();
+    void liveAlertsBatchClosedWatchesAndInitialSilence();
+    void reconnectIgnoresStaleYouTubeReply();
+    void rejectedTwitchAuthStopsRetry();
+    void zoomSelectionAndLastTabControls();
+    void updateTransactionSuccessAndPreservation();
+    void updateTransactionRollbackAndInvalidPaths();
+    void resizeBenchmark();
+    void singleWordIrcAndSerializedRefresh();
+};

@@ -1,93 +1,46 @@
-# YT-Chatterino
+# YT-Chatterino 2.0.0
 
-Chat de **YouTube e Twitch** em uma interface escura inspirada no Chatterino.
+A native **C++20 / Qt 6** desktop chat client for YouTube and Twitch, with a compact black interface inspired by Chatterino. The application no longer runs Python, Tk or a web view.
 
-## Baixar para Windows 11
+[Download the latest release](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/latest) · [Português do Brasil](docs/README-PTBR.txt) · [Build instructions](docs/BUILDING.md)
 
-**[Baixar a versão mais recente](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/latest)**
+## Run
 
-1. Na página da versão, baixe `YT-Chatterino-Windows11-1.3.0.zip` em **Assets**.
-2. Clique com o botão direito no ZIP e selecione **Extrair tudo**.
-3. Abra a pasta extraída e execute **YT-Chatterino.exe**.
+**Windows 11 x64:** download `YT-Chatterino-Windows11-2.0.0.zip`, extract the entire folder, then double-click `YT-Chatterino.exe`. Keep the DLLs and plugin folders beside it. No Python, compiler or terminal is required.
 
-Não é necessário instalar Python. Mantenha a pasta `_internal` ao lado do executável.
-O pacote é destinado ao Windows 11 x64 (Intel/AMD).
+**Arch Linux x86_64:** download `yt-chatterino-2.0.0-1-x86_64.pkg.tar.zst`, then run `sudo pacman -U ./yt-chatterino-2.0.0-1-x86_64.pkg.tar.zst`. Launch YT-Chatterino from your application menu. It runs natively with Qt; Wine is not used. See [Arch instructions](docs/ARCH-LINUX.md).
 
-## Arch Linux nativo
+## Connect
 
-Baixe o pacote `yt-chatterino-1.3.0-1-any.pkg.tar.zst` na mesma página e instale
-com `sudo pacman -U ./yt-chatterino-1.3.0-1-any.pkg.tar.zst`.
-O menu de aplicativos terá **YT-Chatterino**. Não usa Wine.
-Também há um `.tar.gz` com o código e o PKGBUILD para compilar/instalar com `makepkg -si`.
-Veja o [guia do Arch Linux](docs/ARCH-LINUX.md) para dependências, chaveiro e sons.
+Press **Ctrl+T** and paste a YouTube live-video URL or a Twitch `@channel`/URL. YouTube public reading needs no API key or Google account. For Twitch, open Settings → Accounts and approve the sign-in in your browser.
 
-## Atualizações pelo aplicativo
+To send or moderate on YouTube, choose your own Google **Desktop OAuth client JSON** in Accounts and sign in. Enable YouTube Data API v3 in that client’s Google Cloud project. Accounts → Connection tutorial explains the steps. Never send your private JSON or saved tokens to friends.
 
-A partir da 1.2.2, a seta **⬇** aparece quando há uma versão nova. Clique nela e
-confirme **Instalar atualização e reiniciar**. Também há **Configurações → Atualizações**.
-No Arch instalado por pacman, o polkit pede autorização para atualizar o pacote.
-Quem usa 1.2.1 ou anterior precisa instalar a 1.2.2 manualmente uma vez.
+## Features
 
-## Recursos
+- Tabs you can drag and switch with the mouse wheel; horizontal/vertical splits and mixed channel feeds.
+- Shared asynchronous Twitch IRC connection and independent public YouTube readers. Background tabs keep reading; YouTube can be paused manually.
+- Native Twitch/YouTube emotes and badges, BTTV/7TV, animated emotes and received Twitch subscriber GIFs. Size controls, Tab completion and a searchable paginated emote picker.
+- Sending, Twitch replies, retained reply-thread windows, user cards, permission-aware moderation, title edits and Twitch category edits.
+- Recent chat history when available; default 2,000 messages per pane, with configurable limits from 100 to 20,000.
+- Copy/select messages, pane/all-chat search, filters, username/role/phrase highlights and configurable sounds.
+- Twitch live alerts, saved channels, English/PT-BR, settings search, separate message/name fonts and customizable dates/timestamps.
+- Restored layout/window position, always on top, encrypted account storage, YouTube action-quota estimate and confirmed automatic updates.
 
-- Chats do YouTube e da Twitch, com abas, painéis divididos e chats misturados.
-- Leitura de chats públicos do YouTube pelo link da live, sem chave de API.
-- Emotes BTTV, 7TV e Twitch, animações, badges e seletor de emotes.
-- Envio de mensagens e moderação conforme as permissões da conta conectada.
-- Configurações com busca em inglês e português; Exibição, Mensagens e Destaques em Aparência.
-- Destaques, filtros, pesquisa, sons, canais salvos e atalhos de teclado.
-- Interface em português brasileiro ou inglês, com opção de manter no topo.
-- Datas em DD/MM/AAAA por padrão e formatos de horário de 12/24 horas, com segundos opcionais.
-- Saldo do YouTube exibido apenas quando o painel focado inclui um chat do YouTube.
-- Respostas reais da Twitch pelo menu de clique direito nas mensagens.
-- Conversas de respostas da Twitch com clique esquerdo no texto, histórico retido e envio.
-- YouTube continua conectado nas abas em segundo plano; a pausa manual é opcional.
-- Restauração da posição/tamanho da janela e fontes independentes para mensagens e nomes.
-- Cartão de usuário ao clicar no nome, com perfil público e mensagens retidas.
-- Histórico recente ao abrir chats, quando disponível.
-- Limite padrão de 2.000 mensagens por painel, configurável em **Configurações → Aparência → Mensagens**.
-  O menu do cabeçalho permite um limite específico para cada painel.
+Dates default to DD/MM/YYYY; 12-hour timestamps use lowercase am/pm. Default highlight color is `#227400`; the default sound is `ChatternoPing.wav`.
 
-Para conectar contas e moderar, abra **Configurações → Tutorial** no aplicativo.
-As ações de envio e moderação no YouTube exigem um cliente Google OAuth próprio
-e consomem a cota do projeto. A leitura pública não consome essa cota.
+## Upgrade from 1.x
 
-## Guias
+Your settings, saved layouts, channels and encrypted sign-ins are reused under the same OS user. Keep a backup of your old app folder and profile before a major upgrade.
 
-- [Manual em português](docs/README-PTBR.txt)
-- [English manual](docs/README.txt)
-- [Executar o código e gerar o EXE](docs/BUILDING.md)
-- [Instalar no Arch Linux](docs/ARCH-LINUX.md)
-- [Histórico de versões](CHANGELOG.md)
-- [Medição de desempenho](docs/PERFORMANCE.md)
+- **Windows portable:** the 1.x updater can install this native release. The ZIP contains unused `Source/*.py*` version markers solely for the old updater’s validation. They are not executed; no Python runtime is included. Future updates use the C++ updater.
+- **Old Windows source installs:** extract the native Windows ZIP and launch its EXE once. The old Python source updater cannot install a native runtime.
+- **Arch 1.x:** install the new x86_64 package once with pacman. The old updater only recognizes architecture-independent Python packages. Future native updates use pacman after system authorization.
 
-## Organização
+## Limits
 
-```text
-src/                     Código Python, ícones, logotipos e som
-docs/                    Manuais e instruções de compilação
-Licenses/                Avisos e licenças dos componentes distribuídos
-YT-Chatterino.spec       Configuração do PyInstaller
-requirements-build.txt   Dependências para gerar o pacote Windows
-packaging/arch/          Pacote nativo, lançador e integração ao menu do Arch
-tests/                   Testes de lógica e da interface Tk
-```
+YouTube public-page reading can break when YouTube changes its site. Moderation/sending still use the official authenticated APIs. Quota is an estimate for this app and any manually entered external usage, not your project’s authoritative balance.
 
-Não envie chaves, tokens, JSONs OAuth ou configurações pessoais para o repositório.
-Os avisos de terceiros estão em [Licenses/NOTICE.txt](Licenses/NOTICE.txt).
-Este projeto não é afiliado à Twitch, ao YouTube ou ao Chatterino.
+Recent Twitch history depends on `recent-messages.robotty.de`; no account tokens are sent there. Threads show messages retained by this app, not an unlimited server archive. YouTube does not expose Twitch-style reply-thread metadata. Subscriber GIFs can be received; sending them remains an official Twitch browser action. API permissions and channel roles determine what moderation and editing actions are allowed.
 
-### Histórico e dados de usuários
-
-O histórico da Twitch usa o serviço público independente
-[recent-messages.robotty.de](https://recent-messages.robotty.de/), também usado pelo Chatterino.
-Ele recebe o nome do canal, sem tokens de conta. Pode ser desativado em **Aparência → Mensagens**.
-Não é um arquivo completo: canais podem não ter mensagens anteriores disponíveis.
-O YouTube fornece uma janela recente de mensagens pelo próprio chat público.
-
-Cartões mostram os dados fornecidos pelas plataformas e as mensagens mantidas
-nesta sessão. A Twitch informa os meses de inscrição nas tags das mensagens,
-mas não expõe publicamente todos os detalhes de inscrição de outros usuários.
-Os detalhes adicionais de canais do YouTube usam o login Google já configurado
-e custam 1 unidade de API por perfil consultado (com cache). Sem login, ainda é
-possível ver o nome, ID, emblemas e mensagens retidas.
+This project is independent of Chatterino, Twitch, YouTube, BTTV and 7TV. Third-party library notices and source information are in [Licenses](Licenses/NOTICE.txt). The project owner has not selected a general redistribution license for the application source.

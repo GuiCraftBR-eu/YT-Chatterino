@@ -1,14 +1,26 @@
-Bundled components include Python 3.14.7, Tcl/Tk 9.0.4, OpenSSL 3.5.7, zlib-ng,
-Microsoft Visual C runtime components, tzdata 2026.5, and the PyInstaller
-6.22.3 bootloader/runtime hooks. Their respective licenses apply.
-PyInstaller's bootloader exception permits distribution of the bundled app.
-https://www.python.org/
-https://www.tcl-lang.org/
-https://www.openssl.org/
-https://zlib.net/
-https://pyinstaller.org/
-https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist
+YT-Chatterino 2.0.0 — native library notices
 
-Version 1.2.0 also bundles Pillow 13.0.0 on Windows. See Pillow-LICENSE.txt.
-The native Arch package uses system libraries and their system license files.
+The application dynamically links unmodified Qt 6.8.3 Core/Gui/Widgets/Network/Svg
+and Qt image/platform/TLS plugins. Qt is used under LGPL 3.0; the complete
+upstream license texts and bundled third-party notices are included in the
+qtbase/qtsvg/qtimageformats notices. The SBOM files identify the shipped builds.
 
+Qt source archives, matching the Windows binaries, are available from:
+https://download.qt.io/archive/qt/6.8/6.8.3/submodules/qtbase-everywhere-src-6.8.3.tar.xz
+https://download.qt.io/archive/qt/6.8/6.8.3/submodules/qtsvg-everywhere-src-6.8.3.tar.xz
+https://download.qt.io/archive/qt/6.8/6.8.3/submodules/qtimageformats-everywhere-src-6.8.3.tar.xz
+They are also distributed with this release as a separate library-sources asset.
+No Qt library changes were made. Users may replace the shared libraries with
+compatible modified builds and debug those modifications, including reverse
+engineering needed for that purpose. Rebuild instructions and application source
+are in the repository. No library replacement is blocked by the updater or app.
+
+The MinGW GCC 13.1 runtime uses the GCC Runtime Library Exception, GPL3/LGPL3,
+and the accompanying MinGW-w64/winpthreads terms. Copies are included here.
+
+Application source: https://github.com/GuiCraftBR-eu/YT-Chatterino
+The project owner has not selected a general application-source license.
+These library licenses do not assign the owner's application/artwork rights.
+Twitch/YouTube/provider artwork and emotes belong to their respective owners.
+Python, Tk, Pillow, PyInstaller and OpenSSL are not shipped in the native app.
+Windows TLS uses Schannel. Arch uses its distribution's Qt libraries/licenses.
