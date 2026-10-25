@@ -38,6 +38,8 @@ A leitura pública do YouTube não exige login nem chave de API e não usa unida
 
 O **Tutorial**, nas configurações, explica as conexões e os recursos. As credenciais usam o armazenamento protegido do sistema; não compartilhe tokens, perfis ou seu JSON OAuth. No Arch, salvar acessos exige um [chaveiro compatível](docs/ARCH-LINUX.md).
 
+**Google bloqueou o login com 403 / `access_denied`?** Se o projeto estiver em teste, seu responsável precisa adicionar a conta Google exata em **Google Auth Platform → Público-alvo → Usuários de teste**. Depois, cancele o login pendente e tente novamente. Veja o [guia de solução](docs/GOOGLE-LOGIN.md), incluindo a opção de usar seu próprio projeto.
+
 ## O que você pode fazer
 
 - **Organizar os chats:** abas, painéis lado a lado ou empilhados e painel misto.

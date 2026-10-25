@@ -62,3 +62,12 @@ GIFs are supported; sending GIFs uses Twitch's browser. YouTube site changes can
 The build is unsigned: Windows may show an unknown publisher warning. Do not disable your
 security tools. Download only from https://github.com/GuiCraftBR-eu/YT-Chatterino/releases
 Library notices are in Licenses. Source/build instructions are in the GitHub repository.
+
+GOOGLE: ACCESS BLOCKED (403 / access_denied)
+If the browser says the app is in Testing, the owner of the project used by your
+selected OAuth JSON must open Google Auth Platform > Audience > Test users, add
+the exact Google account you sign in with, and save. Cancel the pending sign-in
+in Accounts and retry. You can also configure your own project/Desktop OAuth JSON.
+Reinstalling the app does not change test users. Public distribution of one OAuth
+client must follow Google publishing/verification requirements.
+Guide (PT-BR): https://github.com/GuiCraftBR-eu/YT-Chatterino/blob/main/docs/GOOGLE-LOGIN.md

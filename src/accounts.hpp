@@ -43,6 +43,7 @@ class Accounts : public QObject {
     bool googleAllowsWriting() const;
     bool googleClientConfigured() const;
     static QSet<QString> fullTwitchScopes();
+    static QString googleSignInHelp();
     void twitchToken(TokenCallback done);
     void requireTwitch(const QSet<QString> &scopes, TokenCallback done);
     void signInTwitch(const QSet<QString> &scopes = {});

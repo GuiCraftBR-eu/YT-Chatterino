@@ -62,3 +62,12 @@ são exibidos; o envio de GIFs é feito pelo navegador da Twitch. Mudanças no s
 Esta versão não possui assinatura digital: o Windows pode mostrar um aviso de editor desconhecido. Não desative
 suas ferramentas de segurança. Baixe somente em https://github.com/GuiCraftBR-eu/YT-Chatterino/releases
 Os avisos das bibliotecas ficam em Licenses. O código-fonte e as instruções de compilação estão no repositório do GitHub.
+
+GOOGLE: ACESSO BLOQUEADO (403 / access_denied)
+Se o navegador disser que o app está em teste, o responsável pelo projeto do JSON
+OAuth selecionado deve abrir Google Auth Platform > Público-alvo > Usuários de teste,
+adicionar a conta Google exata usada no login e salvar. Em Contas, cancele o login
+pendente e tente novamente. Você também pode configurar seu próprio projeto/JSON.
+Reinstalar o aplicativo não altera a lista de testadores. Para uso público do mesmo
+cliente OAuth, siga os requisitos de publicação/verificação do Google.
+Guia: https://github.com/GuiCraftBR-eu/YT-Chatterino/blob/main/docs/GOOGLE-LOGIN.md

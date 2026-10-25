@@ -513,6 +513,14 @@ QJsonObject Accounts::clientFile(QString *error) {
     return d;
 }
 
+QString Accounts::googleSignInHelp() {
+    return "Google 403 / access_denied: if the browser says the app is in Testing, the owner of the "
+           "project used by your selected OAuth JSON must add the exact Google account you sign in "
+           "with under Google Auth Platform → Audience → Test users, then save. Cancel the pending "
+           "sign-in here and retry. You can instead configure your own project and Desktop OAuth "
+           "JSON. Never share tokens or saved profiles.";
+}
+
 void Accounts::signInGoogle(TokenCallback done) {
     if (done) {
         googleWaiters << done;
@@ -574,10 +582,14 @@ void Accounts::googleCallback() {
             auto first = buffer->split('\n').value(0).split(' ');
             QUrl u("http://127.0.0.1" + QString::fromUtf8(first.value(1)));
             QUrlQuery query(u);
-            bool good = socket->peerAddress().isLoopback() && googleBusy &&
-                        query.queryItemValue("state") == state && !query.queryItemValue("code").isEmpty();
-            QByteArray body = good ? "Sign-in received. You may close this page and return to YT-Chatterino."
-                                   : "Invalid sign-in callback.";
+            const auto oauthError = query.queryItemValue("error");
+            bool good = socket->peerAddress().isLoopback() && googleBusy && !state.isEmpty() &&
+                        query.queryItemValue("state") == state &&
+                        (!query.queryItemValue("code").isEmpty() || !oauthError.isEmpty());
+            QByteArray body = !good ? "Invalid sign-in callback."
+                              : !oauthError.isEmpty()
+                                  ? "Google sign-in was not completed. Return to YT-Chatterino for help."
+                                  : "Sign-in received. You may close this page and return to YT-Chatterino.";
             socket->write(QByteArray(good ? "HTTP/1.1 200 OK\r\n" : "HTTP/1.1 400 Bad Request\r\n") +
                           "Content-Type: text/plain; charset=utf-8\r\nConnection: close\r\nContent-Length: " +
                           QByteArray::number(body.size()) + "\r\n\r\n" + body);
@@ -587,6 +599,15 @@ void Accounts::googleCallback() {
             }
             callbackServer.close();
             googleTimeout.stop();
+            if (!oauthError.isEmpty()) {
+                finishGoogle({}, oauthError == "access_denied"
+                                     ? "Google denied sign-in (access_denied). Check the selected account, the OAuth project "
+                                       "test users and any organization restrictions. See the Google sign-in help in Settings → "
+                                       "Accounts."
+                                     : "Google could not complete sign-in. Check the error in your browser and the Google "
+                                       "sign-in help in Settings → Accounts.");
+                return;
+            }
             QMap<QString, QString> params{{"client_id", str(googleClient["client_id"])},
                                           {"code", query.queryItemValue("code")},
                                           {"redirect_uri", redirect},
@@ -640,6 +661,7 @@ void Accounts::finishGoogle(QJsonObject auth, QString error) {
                         });
         }
     } else {
+        googleIssue = error;
         emit status(error);
     }
     auto waiting = std::exchange(googleWaiters, {});

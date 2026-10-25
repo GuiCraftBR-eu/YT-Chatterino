@@ -371,3 +371,64 @@ void NativeTests::cachedImageRepaintAndFrameChanges() {
     emit app->images.frame(url);
     QCOMPARE(resource().pixelColor(0, 0), QColor(Qt::red));
 }
+
+void NativeTests::googleAuthorizationErrors_data() {
+    QTest::addColumn<QString>("error");
+    QTest::addColumn<bool>("validState");
+    QTest::newRow("denied") << "access_denied" << true;
+    QTest::newRow("other-error") << "temporarily_unavailable" << true;
+    QTest::newRow("wrong-state") << "access_denied" << false;
+}
+
+void NativeTests::googleAuthorizationErrors() {
+    QFETCH(QString, error);
+    QFETCH(bool, validState);
+    auto &accounts = app->accounts;
+    accounts.persistenceEnabled = false;
+    const auto previousAuth = accounts.google;
+    QVERIFY(accounts.callbackServer.listen(QHostAddress::LocalHost, 0));
+    accounts.googleBusy = true;
+    accounts.state = "expected-state";
+    accounts.verifier = "test-verifier";
+    accounts.googleTimeout.start(180000);
+    bool completed = false;
+    QString completionError;
+    accounts.googleWaiters << [&](QString token, QString problem) {
+        completed = true;
+        QVERIFY(token.isEmpty());
+        completionError = problem;
+    };
+    QTcpSocket browser;
+    browser.connectToHost(QHostAddress::LocalHost, accounts.callbackServer.serverPort());
+    QVERIFY(browser.waitForConnected());
+    browser.write("GET /?state=" + QByteArray(validState ? "expected-state" : "wrong-state") +
+                  "&error=" + error.toUtf8() + " HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    browser.flush();
+    QByteArray response;
+    QTRY_VERIFY((response += browser.readAll()).contains("Return to YT-Chatterino") ||
+                response.contains("Invalid sign-in callback"));
+    QCOMPARE(accounts.googleBusy, !validState);
+    QCOMPARE(accounts.callbackServer.isListening(), !validState);
+    QCOMPARE(accounts.googleTimeout.isActive(), !validState);
+    QCOMPARE(completed, validState);
+    QCOMPARE(accounts.google, previousAuth);
+    QVERIFY(unexpectedRequests.isEmpty());
+    if (validState) {
+        QVERIFY(!completionError.isEmpty());
+        QCOMPARE(accounts.googleIssue, completionError);
+        QVERIFY(accounts.state.isEmpty());
+        QVERIFY(accounts.verifier.isEmpty());
+        if (error == "access_denied") {
+            QVERIFY(completionError.contains("access_denied"));
+            QVERIFY(completionError.contains("test users"));
+        }
+    } else {
+        accounts.googleWaiters.clear();
+        accounts.cancelGoogle();
+    }
+    app->cfg.data["language"] = "pt-BR";
+    app->showSettings("Accounts");
+    auto *help = app->settings->findChild<QLabel *>("google-signin-help");
+    QVERIFY(help);
+    QVERIFY(help->text().contains("Usuários de teste"));
+}

@@ -286,6 +286,9 @@ QWidget *SettingsWindow::accountsPage() {
         action(main->cfg, "Cancel pending Google sign-in", w, [this] { main->accounts.cancelGoogle(); });
     ytLayout->addWidget(ytStatus);
     ytLayout->addWidget(ytPermissions);
+    auto *googleHelp = text(main->cfg, Accounts::googleSignInHelp(), true);
+    googleHelp->setObjectName("google-signin-help");
+    ytLayout->addWidget(googleHelp);
     ytLayout->addWidget(chooseJson);
     ytLayout->addWidget(ytButton);
     ytLayout->addWidget(ytReconnect);
@@ -919,6 +922,7 @@ QWidget *SettingsWindow::tutorialPage() {
               "In Accounts choose the JSON, then Sign in to YouTube and approve in your browser. Select your "
               "channel or Brand Account. Sending uses about 20 units; deletion about 20–26; bans/timeouts "
               "200. You must be the owner/moderator to moderate. Public reading stays free."},
+             {"Google sign-in blocked (403 / access_denied)", Accounts::googleSignInHelp()},
              {"Tabs, splits and saved channels",
               "Ctrl+T adds chats. Choose separate tabs, side by side, stacked or mixed. Drag tabs and "
               "dividers; scroll over tabs to switch. Middle-click empty tab space for a new chat. "

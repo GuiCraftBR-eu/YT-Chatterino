@@ -164,5 +164,9 @@
   "YouTube and Twitch stay connected in background tabs. Pause YouTube manually from Channel actions when needed.": "YouTube e Twitch continuam conectados nas abas em segundo plano. Pause o YouTube manualmente nas ações do canal quando precisar.",
   "YouTube permissions enabled": "Permissões do YouTube ativadas",
   "YouTube: connect, send and moderate": "YouTube: conectar, enviar e moderar",
-  "Zoom / restore pane": "Ampliar / restaurar painel"
+  "Zoom / restore pane": "Ampliar / restaurar painel",
+  "Google 403 / access_denied: if the browser says the app is in Testing, the owner of the project used by your selected OAuth JSON must add the exact Google account you sign in with under Google Auth Platform → Audience → Test users, then save. Cancel the pending sign-in here and retry. You can instead configure your own project and Desktop OAuth JSON. Never share tokens or saved profiles.": "Google 403 / access_denied: se o navegador disser que o app está em teste, o responsável pelo projeto do JSON OAuth selecionado precisa adicionar a conta Google exata usada no login em Google Auth Platform → Público-alvo → Usuários de teste e salvar. Cancele o login pendente aqui e tente novamente. Outra opção é configurar seu próprio projeto e JSON OAuth para computador. Nunca compartilhe tokens nem perfis salvos.",
+  "Google denied sign-in (access_denied). Check the selected account, the OAuth project test users and any organization restrictions. See the Google sign-in help in Settings → Accounts.": "O Google negou o login (access_denied). Confira a conta selecionada, os usuários de teste do projeto OAuth e eventuais restrições da organização. Veja a ajuda de login do Google em Configurações → Contas.",
+  "Google could not complete sign-in. Check the error in your browser and the Google sign-in help in Settings → Accounts.": "O Google não conseguiu concluir o login. Confira o erro no navegador e a ajuda de login do Google em Configurações → Contas.",
+  "Google sign-in blocked (403 / access_denied)": "Login do Google bloqueado (403 / access_denied)"
 }
