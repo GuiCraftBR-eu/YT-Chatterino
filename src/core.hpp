@@ -34,6 +34,7 @@ QString stripAt(QString value);
 QString emoteName(QString value);
 QIcon platformIcon(const QString &platform);
 void darkTitlebar(QWidget *window);
+void configureApplication(QApplication &app);
 
 class Config : public QObject {
     Q_OBJECT

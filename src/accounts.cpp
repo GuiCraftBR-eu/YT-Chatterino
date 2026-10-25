@@ -148,6 +148,12 @@ void Accounts::load() {
             loaded = true;
             emit changed();
             validateTwitch();
+            if (!str(google.value("access_token")).isEmpty()) {
+                googleToken([this](QString, QString error) {
+                    googleIssue = error;
+                    emit changed();
+                });
+            }
         });
     });
 }
@@ -160,6 +166,7 @@ void Accounts::validateTwitch() {
     net->json(QUrl("https://id.twitch.tv/oauth2/validate"),
               [this](QJsonObject d, QString error) {
                   if (error.isEmpty() && str(d["client_id"]) == TwitchClient) {
+                      twitchIssue.clear();
                       twitch["login"] = d["login"];
                       twitch["user_id"] = d["user_id"];
                       twitch["scope"] = d["scopes"];
@@ -198,9 +205,62 @@ QStringList Accounts::names() const {
     return list;
 }
 
+static QSet<QString> grantedScopes(const QJsonObject &auth) {
+    QSet<QString> scopes;
+    const auto value = auth.value("scope");
+    if (value.isArray()) {
+        for (const auto &scope : value.toArray()) {
+            scopes.insert(scope.toString());
+        }
+    } else {
+        const auto list = value.toString().split(' ', Qt::SkipEmptyParts);
+        scopes = QSet<QString>(list.begin(), list.end());
+    }
+    return scopes;
+}
+
+QSet<QString> Accounts::googleScopes() const {
+    return grantedScopes(google);
+}
+
+bool Accounts::connected(const QString &provider) const {
+    const auto &auth = provider == "twitch" ? twitch : google;
+    const auto &issue = provider == "twitch" ? twitchIssue : googleIssue;
+    return issue.isEmpty() && !str(auth.value("access_token")).isEmpty() &&
+           auth.value("expires_at").toDouble() > QDateTime::currentSecsSinceEpoch();
+}
+
+bool Accounts::twitchAllows(const QSet<QString> &scopes) const {
+    return connected("twitch") && (scopes - twitchScopes()).isEmpty();
+}
+
+bool Accounts::googleAllowsWriting() const {
+    const auto scopes = googleScopes();
+    return connected("google") && (scopes.contains("https://www.googleapis.com/auth/youtube.force-ssl") ||
+                                   scopes.contains("https://www.googleapis.com/auth/youtube"));
+}
+
+bool Accounts::googleClientConfigured() const {
+    auto path = cfg->features().value("google_client_file").toString();
+    if (path.isEmpty()) {
+        path = QCoreApplication::applicationDirPath() + "/google-oauth-client.json";
+    }
+    return !str(readObject(path).value("installed").toObject().value("client_id")).isEmpty();
+}
+
+QSet<QString> Accounts::fullTwitchScopes() {
+    return {"chat:read",
+            "user:write:chat",
+            "user:read:emotes",
+            "user:read:moderated_channels",
+            "moderator:manage:chat_messages",
+            "moderator:manage:banned_users",
+            "channel:manage:broadcast"};
+}
+
 QSet<QString> Accounts::twitchScopes() const {
     QSet<QString> s;
-    auto v = twitch["scope"];
+    auto v = twitch.value("scope");
     if (v.isArray()) {
         for (const auto &e : v.toArray()) {
             s.insert(e.toString());
@@ -241,8 +301,11 @@ void Accounts::twitchToken(TokenCallback done) {
         return;
     }
     twitchRefreshing = true;
+    emit changed();
     done = [this](QString token, QString error) {
         twitchRefreshing = false;
+        twitchIssue = error;
+        emit changed();
         auto waiting = std::exchange(twitchRefreshWaiters, {});
         for (const auto &cb : waiting) {
             cb(token, error);
@@ -314,6 +377,7 @@ void Accounts::signInTwitch(const QSet<QString> &requested) {
         return;
     }
     twitchBusy = true;
+    emit changed();
     QSet<QString> scopes = twitchScopes();
     scopes.unite(requested);
     scopes.insert("chat:read");
@@ -423,6 +487,7 @@ void Accounts::finishTwitch(QJsonObject auth, QString error) {
         twitchDialog.clear();
     }
     if (error.isEmpty()) {
+        twitchIssue.clear();
         twitch = auth;
         saveTwitch();
         emit ready();
@@ -466,6 +531,7 @@ void Accounts::signInGoogle(TokenCallback done) {
         return;
     }
     googleBusy = true;
+    emit changed();
     QByteArray random(64, 0);
     for (auto &b : random) {
         b = char(QRandomGenerator::system()->generate() & 255);
@@ -563,6 +629,7 @@ void Accounts::finishGoogle(QJsonObject auth, QString error) {
     verifier.clear();
     state.clear();
     if (error.isEmpty()) {
+        googleIssue.clear();
         google = auth;
         if (persistenceEnabled) {
             vault.write("google", QJsonDocument(auth).toJson(QJsonDocument::Compact),
@@ -602,8 +669,11 @@ void Accounts::googleToken(TokenCallback done) {
         return;
     }
     googleRefreshing = true;
+    emit changed();
     done = [this](QString token, QString error) {
         googleRefreshing = false;
+        googleIssue = error;
+        emit changed();
         auto waiting = std::exchange(googleRefreshWaiters, {});
         for (const auto &cb : waiting) {
             cb(token, error);
@@ -626,7 +696,7 @@ void Accounts::googleToken(TokenCallback done) {
         form["client_secret"] = str(client["client_secret"]);
     }
     net->form(QUrl("https://oauth2.googleapis.com/token"), form, [this, done](QJsonObject d, QString e) {
-        if (!e.isEmpty()) {
+        if (!e.isEmpty() || str(d.value("access_token")).isEmpty()) {
             done({}, "YouTube sign-in expired. Sign in again in Settings → Accounts.");
             return;
         }

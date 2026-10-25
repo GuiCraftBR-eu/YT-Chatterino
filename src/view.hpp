@@ -19,6 +19,7 @@ class ChatView : public QAbstractScrollArea {
         QHash<int, QString> imageCodes;
         QSet<QString> urls;
         QHash<QString, QSize> imageSizes;
+        QHash<QString, qint64> imageKeys;
     };
 
     QHash<qint64, Details> details;
@@ -27,6 +28,11 @@ class ChatView : public QAbstractScrollArea {
     QString query;
     QPushButton *latest;
     QTimer resizeTimer;
+    QTimer autoScrollTimer;
+    QElapsedTimer autoScrollClock;
+    QPoint autoScrollAnchor;
+    bool autoScrolling = false, suppressContextMenu = false;
+    qreal autoScrollRemainder = 0, wheelRemainder = 0;
     QPoint pressPoint;
     QPair<int, int> selectionStart{-1, 0}, selectionEnd{-1, 0};
     bool dragging = false;
@@ -48,11 +54,15 @@ class ChatView : public QAbstractScrollArea {
     QString selectedText();
     QString messageText(int row);
     void copySelection();
+    bool canReply(const Message &message) const;
+    void stopAutoScroll();
+    void advanceAutoScroll(QPoint pointer, qreal seconds);
     int search(const QString &text, int step = 0);
   signals:
     void userClicked(yc::Message message);
     void threadClicked(yc::Message message);
     void messageMenuRequested(yc::Message message, QPoint global);
+    void replyRequested(yc::Message message);
     void focused();
 
   protected:
@@ -64,6 +74,8 @@ class ChatView : public QAbstractScrollArea {
     void contextMenuEvent(QContextMenuEvent *) override;
     void keyPressEvent(QKeyEvent *) override;
     void wheelEvent(QWheelEvent *) override;
+    void focusOutEvent(QFocusEvent *) override;
+    void hideEvent(QHideEvent *) override;
 };
 
 class Composer : public QLineEdit {

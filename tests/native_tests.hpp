@@ -71,4 +71,15 @@ class NativeTests : public QObject {
     void failedEmotesRetryAndNativeCodesDecode();
     void currentUpdateStateStaysEmptyAndCannotInstall();
     void settingsNavigationTracksShortcutsAndKeyboard();
+    void legacyTwitchNames_data();
+    void legacyTwitchNames();
+    void accountControlsReflectPermissions();
+    void googleRefreshUpdatesPermissionState();
+    void twitchStartupWaitsForSavedAccounts();
+    void pickerCatalogsAndExistingAuthorization();
+    void pickerReadErrorCanRetry();
+    void mouseReplyAndControlContextMenu();
+    void autoscrollAndWheelSensitivity();
+    void organizedPaneMenuAndTabBorder();
+    void cachedImageRepaintAndFrameChanges();
 };

@@ -38,6 +38,7 @@ class MainWindow : public QMainWindow {
     void showSettings(QString page = "Accounts");
     void gearMenu();
     void paneMenu(Pane *pane, QPoint position);
+    void populatePaneMenu(QMenu &menu, Pane *pane);
     void tabMenu(int index, QPoint position);
     void messageMenu(Pane *pane, Message message, QPoint position);
     void showUser(Pane *pane, Source *source, Message message);

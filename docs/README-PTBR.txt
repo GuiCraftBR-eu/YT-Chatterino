@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.0.2 — WINDOWS 11 x64
+YT-CHATTERINO 2.1.0 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.0.2.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.1.0.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -8,10 +8,11 @@ YT-CHATTERINO 2.0.2 — WINDOWS 11 x64
 ADICIONAR UM CHAT
 Pressione Ctrl+T (ou clique em +). Cole o link de uma LIVE do YouTube ou um @canal/link da Twitch.
 A leitura pública do YouTube não precisa de chave de API, conta do Google nem unidades de cota.
-Twitch: Configurações > Contas > Entrar na Twitch / permissões. Autorize o código no navegador uma vez.
+Twitch: Configurações > Contas > Conectar Twitch. Autorize o código no navegador uma vez.
+A tela informa a conta conectada e as permissões ativadas; não é preciso autorizar novamente para atualizar emotes.
 
 ENVIAR / MODERAR
-Digite abaixo do chat e pressione Enter. Clique com o botão direito em uma mensagem para responder/moderar.
+Digite abaixo do chat e pressione Enter. Clique direito na mensagem da Twitch para preparar uma resposta. Ctrl + clique direito abre o menu de ações/moderação.
 A Twitch usa seu acesso salvo e solicita permissões adicionais quando necessário.
 O envio e a moderação no YouTube exigem seu próprio JSON de cliente OAuth do Google para computador.
 Ative a YouTube Data API v3 no projeto do Google Cloud; configure a tela de consentimento;
@@ -29,10 +30,13 @@ Dê dois cliques no cabeçalho para ampliar/restaurar o painel. Alt+Setas: focar
 Ctrl+F / Ctrl+Shift+F: buscar no painel / em todos os chats. Ctrl+K: troca rápida.
 Ctrl+F5: reconectar painel. Ctrl+P: configurações. Ctrl++ / Ctrl+- / Ctrl+0: tamanho do texto.
 Tab / Shift+Tab: completar emotes ou @nomes. Clique no botão de sorriso para abrir o seletor de emotes.
+Clique com a roda no chat e mova o ponteiro para rolar automaticamente. Clique novamente ou use Esc para parar.
+A roda física usa velocidade 2× por padrão; ajuste em Aparência. O touchpad mantém a rolagem em pixels.
+No seletor, Inscritos, Canal, Globais e Emojis têm listas separadas. A busca filtra a aba atual.
 Clique com o esquerdo em um nome para abrir o perfil; em uma resposta da Twitch para abrir a conversa retida.
 
 CONFIGURAÇÕES
-Aparência: idioma, fontes das mensagens/nomes, tamanho de distintivos/emotes, datas, horários e sempre no topo.
+Aparência: idioma, fontes das mensagens/nomes, tamanho de distintivos/emotes, velocidade da roda, datas, horários e sempre no topo.
 Mensagens: histórico e limite de mensagens (padrão: 2000 por painel; permitido: 100-20000).
 Destaques: usuários, cargos e frases. Notificações: sons de menções e alertas de lives da Twitch.
 Canais salvos: salvar/abrir canais. O YouTube só procura lives atuais ao abrir um canal salvo.

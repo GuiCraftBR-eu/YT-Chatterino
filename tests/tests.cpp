@@ -31,6 +31,7 @@ void NativeTests::authenticate() {
                              "user:read:moderated_channels", "moderator:manage:chat_messages",
                              "moderator:manage:banned_users", "channel:manage:broadcast"}}};
     app->accounts.google = {{"access_token", "fake-google-token"},
+                            {"scope", "https://www.googleapis.com/auth/youtube.force-ssl"},
                             {"channel_id", "UCtest"},
                             {"channel_title", "Tester"},
                             {"expires_at", double(QDateTime::currentSecsSinceEpoch() + 3600)}};

@@ -32,10 +32,17 @@ class Accounts : public QObject {
     QList<TokenCallback> twitchWaiters, googleWaiters;
     QList<TokenCallback> twitchRefreshWaiters, googleRefreshWaiters;
     bool twitchRefreshing = false, googleRefreshing = false;
+    QString twitchIssue, googleIssue;
     void load();
     void validateTwitch();
     QStringList names() const;
     QSet<QString> twitchScopes() const;
+    QSet<QString> googleScopes() const;
+    bool connected(const QString &provider) const;
+    bool twitchAllows(const QSet<QString> &scopes) const;
+    bool googleAllowsWriting() const;
+    bool googleClientConfigured() const;
+    static QSet<QString> fullTwitchScopes();
     void twitchToken(TokenCallback done);
     void requireTwitch(const QSet<QString> &scopes, TokenCallback done);
     void signInTwitch(const QSet<QString> &scopes = {});

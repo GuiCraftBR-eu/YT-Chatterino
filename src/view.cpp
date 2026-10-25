@@ -20,6 +20,12 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     resizeTimer.setSingleShot(true);
     resizeTimer.setInterval(24);
     connect(&resizeTimer, &QTimer::timeout, this, &ChatView::reflow);
+    autoScrollTimer.setInterval(16);
+    autoScrollTimer.setTimerType(Qt::PreciseTimer);
+    connect(&autoScrollTimer, &QTimer::timeout, this, [this] {
+        const auto elapsed = qBound<qint64>(qint64(1), autoScrollClock.restart(), qint64(100));
+        advanceAutoScroll(viewport()->mapFromGlobal(QCursor::pos()), elapsed / 1000.0);
+    });
     connect(hub->cfg, &Config::appearanceChanged, this, &ChatView::invalidate);
     connect(hub->cfg, &Config::languageChanged, this, &ChatView::invalidate);
     connect(hub->images, &Images::ready, this, [this](const QString &url) {
@@ -54,6 +60,7 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
                         doc->addResource(QTextDocument::ImageResource, QUrl(url),
                                          image.scaled(detail.imageSizes.value(url, image.size()),
                                                       Qt::KeepAspectRatio, Qt::FastTransformation));
+                        details[messages[row].seq].imageKeys[url] = image.cacheKey();
                     }
                 }
                 viewport()->update();
@@ -73,6 +80,9 @@ void ChatView::setMessages(QVector<Message> list) {
     qint64 anchor = oldTop >= 0 ? messages[oldTop].seq : 0;
     int delta = oldTop >= 0 ? verticalScrollBar()->value() - offsets.value(oldTop) : 0;
     messages = std::move(list);
+    if (messages.isEmpty()) {
+        stopAutoScroll();
+    }
     for (auto &m : messages) {
         if (!m.seq) {
             m.seq = synthetic--;
@@ -316,6 +326,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         f.setVerticalAlignment(QTextCharFormat::AlignMiddle);
         detail.imageCodes[cursor.position()] = code;
         detail.imageSizes[urls[0]] = fitted;
+        detail.imageKeys[urls[0]] = image.cacheKey();
         doc->addResource(QTextDocument::ImageResource, QUrl(urls[0]),
                          image.scaled(fitted, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         cursor.insertImage(f);
@@ -439,9 +450,10 @@ void ChatView::paintEvent(QPaintEvent *) {
         const auto detail = details.value(messages[i].seq);
         for (auto it = detail.imageSizes.begin(); it != detail.imageSizes.end(); ++it) {
             auto image = hub->images->get({it.key()});
-            if (!image.isNull()) {
+            if (!image.isNull() && detail.imageKeys.value(it.key()) != image.cacheKey()) {
                 doc->addResource(QTextDocument::ImageResource, QUrl(it.key()),
                                  image.scaled(it.value(), Qt::KeepAspectRatio, Qt::FastTransformation));
+                details[messages[i].seq].imageKeys[it.key()] = image.cacheKey();
             }
         }
         int height = qCeil(doc->size().height()) + (a["compact_spacing"].toBool() ? 4 : 8);
@@ -487,6 +499,16 @@ void ChatView::paintEvent(QPaintEvent *) {
             viewport()->update();
         });
     }
+    if (autoScrolling) {
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(QColor("#aaaaaa"), 1));
+        painter.setBrush(QColor("#181818"));
+        painter.drawEllipse(autoScrollAnchor, 12, 12);
+        painter.setBrush(QColor("#dddddd"));
+        const QPoint c = autoScrollAnchor;
+        painter.drawPolygon(QPolygon{c + QPoint(-4, -3), c + QPoint(4, -3), c + QPoint(0, -8)});
+        painter.drawPolygon(QPolygon{c + QPoint(-4, 3), c + QPoint(4, 3), c + QPoint(0, 8)});
+    }
 }
 
 void ChatView::resizeEvent(QResizeEvent *e) {
@@ -512,6 +534,39 @@ QPair<int, int> ChatView::positionAt(QPoint point) {
 void ChatView::mousePressEvent(QMouseEvent *e) {
     emit focused();
     setFocus(Qt::MouseFocusReason);
+    if (autoScrolling) {
+        stopAutoScroll();
+        suppressContextMenu = e->button() == Qt::RightButton;
+        selectionStart = selectionEnd = {-1, 0};
+        e->accept();
+        return;
+    }
+    suppressContextMenu = false;
+    if (e->button() == Qt::MiddleButton) {
+        if (verticalScrollBar()->maximum() > 0) {
+            autoScrollAnchor = e->position().toPoint();
+            autoScrollRemainder = 0;
+            autoScrolling = true;
+            autoScrollClock.start();
+            autoScrollTimer.start();
+            viewport()->setCursor(Qt::SizeVerCursor);
+            viewport()->setAccessibleDescription(
+                hub->cfg->T("Autoscroll: move the mouse; click or press Esc to stop."));
+            viewport()->update();
+        }
+        e->accept();
+        return;
+    }
+    if (e->button() == Qt::RightButton && !e->modifiers().testFlag(Qt::ControlModifier)) {
+        const int y = e->position().y() + verticalScrollBar()->value();
+        const int row = !offsets.isEmpty() && y >= 0 && y < offsets.last() ? rowAt(y) : -1;
+        if (row >= 0 && canReply(messages[row])) {
+            suppressContextMenu = true;
+            emit replyRequested(messages[row]);
+            e->accept();
+            return;
+        }
+    }
     if (e->button() != Qt::LeftButton) {
         return;
     }
@@ -522,6 +577,9 @@ void ChatView::mousePressEvent(QMouseEvent *e) {
 }
 
 void ChatView::mouseMoveEvent(QMouseEvent *e) {
+    if (autoScrolling) {
+        return;
+    }
     if (e->buttons().testFlag(Qt::LeftButton) && selectionStart.first >= 0) {
         dragging |= (e->position().toPoint() - pressPoint).manhattanLength() > 4;
         selectionEnd = positionAt(e->position().toPoint());
@@ -565,10 +623,77 @@ void ChatView::mouseReleaseEvent(QMouseEvent *e) {
 }
 
 void ChatView::contextMenuEvent(QContextMenuEvent *e) {
-    int row = rowAt(e->pos().y() + verticalScrollBar()->value());
-    if (row >= 0) {
-        emit messageMenuRequested(messages[row], e->globalPos());
+    if (suppressContextMenu && e->reason() == QContextMenuEvent::Mouse) {
+        suppressContextMenu = false;
+        e->accept();
+        return;
     }
+    const int y = e->pos().y() + verticalScrollBar()->value();
+    int row =
+        e->reason() == QContextMenuEvent::Keyboard || (!offsets.isEmpty() && y >= 0 && y < offsets.last())
+            ? rowAt(y)
+            : -1;
+    if (row >= 0) {
+        if (e->reason() == QContextMenuEvent::Mouse && !e->modifiers().testFlag(Qt::ControlModifier) &&
+            canReply(messages[row])) {
+            emit replyRequested(messages[row]);
+        } else {
+            emit messageMenuRequested(messages[row], e->globalPos());
+        }
+    }
+    e->accept();
+}
+
+bool ChatView::canReply(const Message &message) const {
+    auto *source = hub->sources.value(message.source);
+    return source && source->platform == "twitch" && !message.id.isEmpty() && !message.system &&
+           !message.deleted;
+}
+
+void ChatView::stopAutoScroll() {
+    autoScrollTimer.stop();
+    if (!autoScrolling) {
+        return;
+    }
+    autoScrolling = false;
+    autoScrollRemainder = 0;
+    viewport()->setCursor(Qt::IBeamCursor);
+    viewport()->setAccessibleDescription({});
+    QToolTip::hideText();
+    viewport()->update();
+}
+
+void ChatView::advanceAutoScroll(QPoint pointer, qreal seconds) {
+    if (!autoScrolling) {
+        return;
+    }
+    const qreal distance = pointer.y() - autoScrollAnchor.y();
+    const qreal outside = qMax<qreal>(0, qAbs(distance) - 8);
+    qreal speed = qMin<qreal>(3600, outside * 9 + outside * outside * 0.04);
+    if (distance < 0) {
+        speed = -speed;
+    }
+    autoScrollRemainder += speed * qBound<qreal>(0, seconds, 0.1);
+    const int delta = int(autoScrollRemainder);
+    autoScrollRemainder -= delta;
+    if (delta) {
+        follow = false;
+        verticalScrollBar()->setValue(verticalScrollBar()->value() + delta);
+        if (delta > 0 && verticalScrollBar()->value() >= verticalScrollBar()->maximum()) {
+            follow = true;
+            latest->hide();
+        }
+    }
+}
+
+void ChatView::focusOutEvent(QFocusEvent *event) {
+    stopAutoScroll();
+    QAbstractScrollArea::focusOutEvent(event);
+}
+
+void ChatView::hideEvent(QHideEvent *event) {
+    stopAutoScroll();
+    QAbstractScrollArea::hideEvent(event);
 }
 
 QString ChatView::messageText(int row) {
@@ -621,6 +746,13 @@ void ChatView::copySelection() {
 }
 
 void ChatView::keyPressEvent(QKeyEvent *e) {
+    if (autoScrolling) {
+        stopAutoScroll();
+        if (e->key() == Qt::Key_Escape) {
+            e->accept();
+            return;
+        }
+    }
     if (e->matches(QKeySequence::Copy)) {
         copySelection();
         return;
@@ -645,8 +777,23 @@ void ChatView::keyPressEvent(QKeyEvent *e) {
 }
 
 void ChatView::wheelEvent(QWheelEvent *e) {
+    stopAutoScroll();
     follow = false;
-    QAbstractScrollArea::wheelEvent(e);
+    if (!e->pixelDelta().isNull()) {
+        verticalScrollBar()->setValue(verticalScrollBar()->value() - e->pixelDelta().y());
+    } else if (e->angleDelta().y()) {
+        const qreal multiplier =
+            qBound(0.5, hub->cfg->appearance().value("scroll_multiplier").toDouble(2.0), 5.0);
+        const qreal line = QFontMetricsF(hub->cfg->messageFont()).lineSpacing();
+        wheelRemainder -=
+            e->angleDelta().y() / 120.0 * qMax(1, QApplication::wheelScrollLines()) * line * multiplier;
+        const int delta = int(wheelRemainder);
+        wheelRemainder -= delta;
+        verticalScrollBar()->setValue(verticalScrollBar()->value() + delta);
+    } else {
+        QAbstractScrollArea::wheelEvent(e);
+    }
+    e->accept();
     if (verticalScrollBar()->value() >= verticalScrollBar()->maximum() - 2) {
         follow = true;
         latest->hide();
@@ -654,6 +801,7 @@ void ChatView::wheelEvent(QWheelEvent *e) {
 }
 
 void ChatView::jumpLatest() {
+    stopAutoScroll();
     follow = true;
     selectionStart = selectionEnd = {-1, 0};
     verticalScrollBar()->setValue(verticalScrollBar()->maximum());
@@ -882,6 +1030,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
             [this](Message m) { emit threadRequested(hub->sources.value(m.source), m); });
     connect(view, &ChatView::messageMenuRequested, this,
             [this](Message m, QPoint p) { emit messageMenu(this, m, p); });
+    connect(view, &ChatView::replyRequested, this, &Pane::startReply);
     connect(searchInput, &QLineEdit::textChanged, this,
             [this](const QString &s) { searchCount->setText(QString::number(view->search(s))); });
     connect(previous, &QToolButton::clicked, this, [this] { view->search(searchInput->text(), -1); });
@@ -1143,38 +1292,59 @@ QJsonObject Pane::serialize() const {
     return {{"sources", keys}, {"pane_id", uid}};
 }
 
+struct UnlockedEmotes {
+    QHash<QString, Span> items;
+    QString user, error;
+    bool loading = false;
+    quint64 generation = 0;
+};
+
 static void loadUnlockedEmotes(Accounts *accounts, QPointer<QDialog> dialog,
-                               QSharedPointer<QHash<QString, Span>> catalog, std::function<void()> done,
-                               QString cursor = {}, int page = 0) {
-    if (!dialog || page >= 50) {
-        if (dialog) {
-            done();
-        }
+                               QSharedPointer<UnlockedEmotes> catalog, QString broadcaster,
+                               std::function<void()> done, quint64 generation, QString cursor = {},
+                               int page = 0) {
+    if (!dialog || generation != catalog->generation) {
         return;
     }
-    QMap<QString, QString> params{{"user_id", str(accounts->twitch["user_id"])}, {"first", "100"}};
+    QMap<QString, QString> params{{"user_id", catalog->user}};
+    if (!broadcaster.isEmpty()) {
+        params["broadcaster_id"] = broadcaster;
+    }
     if (!cursor.isEmpty()) {
         params["after"] = cursor;
     }
     accounts->helix(
         "chat/emotes/user",
-        [accounts, dialog, catalog, done, page, cursor](QJsonObject d, QString error) {
-            if (!dialog) {
+        [=](QJsonObject data, QString error) {
+            if (!dialog || generation != catalog->generation) {
                 return;
             }
-            for (auto v : d["data"].toArray()) {
-                auto o = v.toObject();
-                Span e;
-                e.code = emoteName(str(o["name"]));
-                e.urls = {"https://static-cdn.jtvnw.net/emoticons/v2/" + str(o["id"]) + "/default/dark/3.0"};
-                if (!e.code.isEmpty()) {
-                    (*catalog)["__sub__" + e.code] = e;
+            if (!error.isEmpty()) {
+                catalog->error = error;
+                catalog->loading = false;
+                done();
+                return;
+            }
+            for (const auto &value : data.value("data").toArray()) {
+                const auto item = value.toObject();
+                const auto type = str(item.value("emote_type"));
+                if (type == "globals" || type == "smilies") {
+                    continue;
+                }
+                const auto id = str(item.value("id"));
+                Span emote;
+                emote.code = emoteName(str(item.value("name")));
+                emote.urls = {"https://static-cdn.jtvnw.net/emoticons/v2/" + id + "/default/dark/3.0"};
+                if (!id.isEmpty() && !emote.code.isEmpty()) {
+                    catalog->items[emote.code] = emote;
                 }
             }
+            const auto next = str(at(data, {"pagination", "cursor"}));
+            const bool more = !next.isEmpty() && next != cursor && page < 49;
+            catalog->loading = more;
             done();
-            auto next = str(at(d, {"pagination", "cursor"}));
-            if (error.isEmpty() && !next.isEmpty() && next != cursor) {
-                loadUnlockedEmotes(accounts, dialog, catalog, done, next, page + 1);
+            if (more) {
+                loadUnlockedEmotes(accounts, dialog, catalog, broadcaster, done, generation, next, page + 1);
             }
         },
         "GET", params);
@@ -1189,23 +1359,41 @@ void Pane::openEmotes() {
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setWindowTitle(hub->cfg->T("Emotes in {channel}", {{"channel", s->name()}}));
     auto *layout = new QVBoxLayout(dialog);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
     auto *search = new QLineEdit(dialog);
-    search->setPlaceholderText(hub->cfg->T("Search all emotes…"));
+    search->setObjectName("emote-search");
+    search->setPlaceholderText(hub->cfg->T("Filter emotes in this tab…"));
+    search->setClearButtonEnabled(true);
     layout->addWidget(search);
     auto *tabs = new QTabBar(dialog);
-    for (const auto &t : QStringList{"Subs", "Channel", "Global", "Emojis"}) {
-        tabs->addTab(hub->cfg->T(t));
+    tabs->setObjectName("emote-tabs");
+    tabs->setDrawBase(false);
+    for (const auto &tab : QStringList{"Subs", "Channel", "Global", "Emojis"}) {
+        tabs->addTab(hub->cfg->T(tab));
     }
+    tabs->setTabEnabled(0, s->platform == "twitch");
     layout->addWidget(tabs);
     auto *grid = new QListWidget(dialog);
+    grid->setObjectName("emote-grid");
     grid->setViewMode(QListView::IconMode);
     grid->setIconSize(QSize(38, 38));
-    grid->setGridSize(QSize(94, 70));
+    grid->setGridSize(QSize(96, 72));
     grid->setResizeMode(QListView::Adjust);
     grid->setMovement(QListView::Static);
+    grid->setUniformItemSizes(true);
+    grid->setWordWrap(false);
+    grid->setTextElideMode(Qt::ElideRight);
+    grid->setFrameShape(QFrame::NoFrame);
     layout->addWidget(grid, 1);
-    auto *authorize = new QPushButton(hub->cfg->T("Enable Twitch subscriber emotes…"), dialog);
-    authorize->setVisible(s->platform == "twitch");
+    auto *notice = new QLabel(dialog);
+    notice->setObjectName("emote-status");
+    notice->setTextFormat(Qt::PlainText);
+    notice->setWordWrap(true);
+    notice->setStyleSheet("color:#8b8b94;");
+    layout->addWidget(notice);
+    auto *authorize = new QPushButton(dialog);
+    authorize->setObjectName("subscriber-emotes-action");
     layout->addWidget(authorize);
     auto *info = new QLabel(dialog);
     auto *navigation = new QHBoxLayout;
@@ -1216,46 +1404,56 @@ void Pane::openEmotes() {
     navigation->addWidget(next);
     layout->addLayout(navigation);
     auto page = QSharedPointer<int>::create(0);
-    auto catalog = QSharedPointer<QHash<QString, Span>>::create(s->emotes);
+    auto unlocked = QSharedPointer<UnlockedEmotes>::create();
     QPointer<Source> source(s);
     QPointer<QDialog> safe(dialog);
-    auto populate = [this, grid, search, tabs, catalog, source, info, page, previous, next] {
-        if (!source) {
+    auto populate = [=, this] {
+        if (!source || !safe) {
             return;
         }
+        auto &accounts = *hub->accounts;
+        const bool allowed = accounts.twitchAllows({"user:read:emotes"});
+        const bool busy = accounts.twitchBusy || accounts.twitchRefreshing || unlocked->loading;
+        const bool subscribers = source->platform == "twitch" && tabs->currentIndex() == 0;
+        authorize->setVisible(subscribers);
+        authorize->setEnabled(!busy);
+        authorize->setText(hub->cfg->T(busy                           ? "Loading subscriber emotes…"
+                                       : allowed                      ? "Refresh subscriber emotes"
+                                       : accounts.connected("twitch") ? "Enable Twitch subscriber emotes…"
+                                                                      : "Sign in to Twitch…"));
+        if (subscribers) {
+            notice->setText(
+                !unlocked->error.isEmpty() ? hub->cfg->T(unlocked->error)
+                : busy                     ? hub->cfg->T("Loading subscriber emotes…")
+                : allowed ? hub->cfg->T("Subscriber emotes enabled for @{name}",
+                                        {{"name", str(accounts.twitch.value("login"))}})
+                          : hub->cfg->T(
+                                "Connect Twitch and enable subscriber emotes to see your unlocked emotes."));
+        }
+        notice->setVisible(subscribers);
+        QHash<QString, Span> catalog = tabs->currentIndex() == 0   ? unlocked->items
+                                       : tabs->currentIndex() == 1 ? source->channelEmotes
+                                                                   : hub->globals;
         grid->clear();
-        QString needle = search->text();
-        QStringList codes = catalog->keys();
+        QStringList codes = catalog.keys();
         codes.sort(Qt::CaseInsensitive);
+        const auto needle = search->text().trimmed();
         int total = 0;
         for (const auto &code : codes) {
-            if (!needle.isEmpty() && !code.contains(needle, Qt::CaseInsensitive)) {
+            const auto emote = catalog.value(code);
+            if (!emote.code.contains(needle, Qt::CaseInsensitive) || tabs->currentIndex() == 3) {
                 continue;
             }
-            auto e = catalog->value(code);
-            bool global = hub->globals.contains(code), sub = code.startsWith("__sub__");
-            if (tabs->currentIndex() == 0 && !sub && needle.isEmpty()) {
-                continue;
-            }
-            if (tabs->currentIndex() == 1 && global && needle.isEmpty()) {
-                continue;
-            }
-            if (tabs->currentIndex() == 2 && !global && needle.isEmpty()) {
-                continue;
-            }
-            if (tabs->currentIndex() == 3) {
-                continue;
-            }
-            int position = total++;
+            const int position = total++;
             if (position < *page * 200 || position >= (*page + 1) * 200) {
                 continue;
             }
-            QString label = code;
-            label.remove("__sub__");
-            auto *item = new QListWidgetItem(label, grid);
-            item->setData(Qt::UserRole, label);
-            item->setData(Qt::UserRole + 1, e.urls.value(0));
-            auto image = hub->images->get(e.urls);
+            auto *item = new QListWidgetItem(emote.code, grid);
+            item->setSizeHint(grid->gridSize());
+            item->setToolTip(emote.code);
+            item->setData(Qt::UserRole, emote.code);
+            item->setData(Qt::UserRole + 1, emote.urls.value(0));
+            const auto image = hub->images->get(emote.urls);
             if (!image.isNull()) {
                 item->setIcon(QPixmap::fromImage(image));
             }
@@ -1263,74 +1461,111 @@ void Pane::openEmotes() {
         if (tabs->currentIndex() == 3) {
             for (const auto &emoji :
                  QStringList{"😀", "😂", "❤️", "👍", "👀", "🔥", "🎉", "😭", "💀", "🙏", "😎", "🤔"}) {
+                if (!emoji.contains(needle)) {
+                    continue;
+                }
                 auto *item = new QListWidgetItem(emoji, grid);
+                item->setSizeHint(grid->gridSize());
                 item->setData(Qt::UserRole, emoji);
             }
-        }
-        if (tabs->currentIndex() == 3) {
             total = grid->count();
         }
         previous->setEnabled(*page > 0);
         next->setEnabled((*page + 1) * 200 < total);
+        previous->setVisible(total > 200 || *page > 0);
+        next->setVisible(total > 200 || *page > 0);
         info->setText(hub->cfg->T("{count} emotes · page {page}",
                                   {{"count", QString::number(total)}, {"page", QString::number(*page + 1)}}));
     };
-    connect(search, &QLineEdit::textChanged, dialog, [populate, page] {
+    auto load = [=, this] {
+        if (!safe || !source || unlocked->loading || !hub->accounts->twitchAllows({"user:read:emotes"})) {
+            return;
+        }
+        unlocked->loading = true;
+        unlocked->error.clear();
+        unlocked->user = str(hub->accounts->twitch.value("user_id"));
+        unlocked->items.clear();
+        ++unlocked->generation;
+        populate();
+        loadUnlockedEmotes(hub->accounts, safe, unlocked, source->room(), populate, unlocked->generation);
+    };
+    connect(search, &QLineEdit::textChanged, dialog, [=] {
         *page = 0;
         populate();
     });
-    connect(tabs, &QTabBar::currentChanged, dialog, [populate, page] {
+    connect(tabs, &QTabBar::currentChanged, dialog, [=] {
         *page = 0;
         populate();
     });
-    connect(previous, &QPushButton::clicked, dialog, [page, populate] {
+    connect(previous, &QPushButton::clicked, dialog, [=] {
         *page = qMax(0, *page - 1);
         populate();
     });
-    connect(next, &QPushButton::clicked, dialog, [page, populate] {
+    connect(next, &QPushButton::clicked, dialog, [=] {
         ++*page;
         populate();
     });
-    connect(grid, &QListWidget::itemClicked, dialog, [this, safe](QListWidgetItem *item) {
+    auto insert = [this, safe](QListWidgetItem *item) {
+        if (!safe || !safe->isVisible()) {
+            return;
+        }
         input->insert(item->data(Qt::UserRole).toString() + ' ');
         input->setFocus();
-        if (safe) {
-            safe->close();
-        }
-    });
+        safe->close();
+    };
+    connect(grid, &QListWidget::itemClicked, dialog, insert);
+    connect(grid, &QListWidget::itemActivated, dialog, insert);
     connect(hub->images, &Images::ready, dialog, [this, grid](QString url) {
         for (int i = 0; i < grid->count(); ++i) {
             auto *item = grid->item(i);
             if (item->data(Qt::UserRole + 1).toString() == url) {
-                auto image = hub->images->get({url});
+                const auto image = hub->images->get({url});
                 if (!image.isNull()) {
                     item->setIcon(QPixmap::fromImage(image));
                 }
             }
         }
     });
-    connect(authorize, &QPushButton::clicked, dialog, [this, catalog, populate, safe] {
-        hub->accounts->requireTwitch(
-            {"user:read:emotes"}, [this, catalog, populate, safe](QString, QString e) {
-                if (!safe) {
-                    return;
+    connect(s, &Source::changed, dialog, populate);
+    connect(authorize, &QPushButton::clicked, dialog, [=, this] {
+        if (hub->accounts->twitchAllows({"user:read:emotes"})) {
+            load();
+        } else {
+            hub->accounts->requireTwitch({"user:read:emotes"}, [=](QString, QString error) {
+                if (safe) {
+                    unlocked->error = error;
+                    if (error.isEmpty()) {
+                        load();
+                    }
+                    populate();
                 }
-                if (!e.isEmpty()) {
-                    QMessageBox::warning(safe, hub->cfg->T("Twitch sign-in"), hub->cfg->T(e));
-                    return;
-                }
-                loadUnlockedEmotes(hub->accounts, safe, catalog, populate);
             });
+        }
     });
-    if (!hub->accounts->twitchScopes().contains("user:read:emotes")) {
+    connect(hub->accounts, &Accounts::changed, dialog, [=, this] {
+        const auto user = str(hub->accounts->twitch.value("user_id"));
+        if (user != unlocked->user && !unlocked->user.isEmpty()) {
+            ++unlocked->generation;
+            unlocked->items.clear();
+            unlocked->loading = false;
+            unlocked->user.clear();
+        }
+        if (source && source->platform == "twitch" && unlocked->user.isEmpty() &&
+            hub->accounts->twitchAllows({"user:read:emotes"})) {
+            load();
+        }
+        populate();
+    });
+    if (s->platform != "twitch" || !hub->accounts->twitchAllows({"user:read:emotes"})) {
         tabs->setCurrentIndex(1);
-    } else {
-        authorize->click();
     }
     populate();
-    dialog->resize(610, 450);
+    dialog->resize(620, 460);
     dialog->show();
     darkTitlebar(dialog);
+    if (s->platform == "twitch") {
+        load();
+    }
 }
 
 Workspace::Workspace(Hub *h, QWidget *p)

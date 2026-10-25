@@ -1,0 +1,233 @@
+{
+  "platform": "Windows-11-10.0.26200-SP0",
+  "runs_per_version": 7,
+  "messages": 2000,
+  "resizes": 80,
+  "fonts_pt": 12,
+  "network": false,
+  "legacy_runtime": "3.14.7",
+  "results": {
+    "1.3.0": [
+      {
+        "version": "1.3.0",
+        "startup_internal_ms": 335.4738000052748,
+        "load_2000_ms": 872.638900000311,
+        "resize_80_ms": 4982.00199999701,
+        "messages": 2000,
+        "network_requests": 0,
+        "tk_scaling": 1.3333333333333333,
+        "chat_font_pixels": 21,
+        "python": "3.14.7",
+        "tk": "9.0.4",
+        "startup_ms": 508.5248999967007
+      },
+      {
+        "version": "1.3.0",
+        "startup_internal_ms": 340.1998999979696,
+        "load_2000_ms": 874.8859000043012,
+        "resize_80_ms": 5217.8478999994695,
+        "messages": 2000,
+        "network_requests": 0,
+        "tk_scaling": 1.3333333333333333,
+        "chat_font_pixels": 21,
+        "python": "3.14.7",
+        "tk": "9.0.4",
+        "startup_ms": 519.3370999986655
+      },
+      {
+        "version": "1.3.0",
+        "startup_internal_ms": 351.528999999573,
+        "load_2000_ms": 871.7064000011305,
+        "resize_80_ms": 4973.128800003906,
+        "messages": 2000,
+        "network_requests": 0,
+        "tk_scaling": 1.3333333333333333,
+        "chat_font_pixels": 21,
+        "python": "3.14.7",
+        "tk": "9.0.4",
+        "startup_ms": 528.8367999964976
+      },
+      {
+        "version": "1.3.0",
+        "startup_internal_ms": 346.2825999959023,
+        "load_2000_ms": 876.4728999958606,
+        "resize_80_ms": 4913.843599999382,
+        "messages": 2000,
+        "network_requests": 0,
+        "tk_scaling": 1.3333333333333333,
+        "chat_font_pixels": 21,
+        "python": "3.14.7",
+        "tk": "9.0.4",
+        "startup_ms": 521.733999994467
+      },
+      {
+        "version": "1.3.0",
+        "startup_internal_ms": 376.3955999966129,
+        "load_2000_ms": 850.31429999799,
+        "resize_80_ms": 4968.114999996033,
+        "messages": 2000,
+        "network_requests": 0,
+        "tk_scaling": 1.3333333333333333,
+        "chat_font_pixels": 21,
+        "python": "3.14.7",
+        "tk": "9.0.4",
+        "startup_ms": 554.3375999986893
+      },
+      {
+        "version": "1.3.0",
+        "startup_internal_ms": 380.8442000008654,
+        "load_2000_ms": 868.7107000005199,
+        "resize_80_ms": 4964.199099995312,
+        "messages": 2000,
+        "network_requests": 0,
+        "tk_scaling": 1.3333333333333333,
+        "chat_font_pixels": 21,
+        "python": "3.14.7",
+        "tk": "9.0.4",
+        "startup_ms": 593.159599993669
+      },
+      {
+        "version": "1.3.0",
+        "startup_internal_ms": 348.796800004493,
+        "load_2000_ms": 862.9023000030429,
+        "resize_80_ms": 4865.7316000026185,
+        "messages": 2000,
+        "network_requests": 0,
+        "tk_scaling": 1.3333333333333333,
+        "chat_font_pixels": 21,
+        "python": "3.14.7",
+        "tk": "9.0.4",
+        "startup_ms": 529.8423999993247
+      }
+    ],
+    "2.1.0": [
+      {
+        "cached_documents": 11,
+        "chat_font_pixels": 21,
+        "device_pixel_ratio": 1,
+        "load_2000_ms": 188.909,
+        "messages": 2000,
+        "network_requests": 0,
+        "qt": "6.8.3",
+        "resize_80_ms": 435.0553,
+        "startup_internal_ms": 267.0465,
+        "version": "2.1.0",
+        "startup_ms": 299.63490000227466
+      },
+      {
+        "cached_documents": 11,
+        "chat_font_pixels": 21,
+        "device_pixel_ratio": 1,
+        "load_2000_ms": 187.7524,
+        "messages": 2000,
+        "network_requests": 0,
+        "qt": "6.8.3",
+        "resize_80_ms": 452.185,
+        "startup_internal_ms": 262.9296,
+        "version": "2.1.0",
+        "startup_ms": 297.08380000374746
+      },
+      {
+        "cached_documents": 11,
+        "chat_font_pixels": 21,
+        "device_pixel_ratio": 1,
+        "load_2000_ms": 205.0435,
+        "messages": 2000,
+        "network_requests": 0,
+        "qt": "6.8.3",
+        "resize_80_ms": 442.1737,
+        "startup_internal_ms": 257.1668,
+        "version": "2.1.0",
+        "startup_ms": 289.8420000055921
+      },
+      {
+        "cached_documents": 11,
+        "chat_font_pixels": 21,
+        "device_pixel_ratio": 1,
+        "load_2000_ms": 191.6549,
+        "messages": 2000,
+        "network_requests": 0,
+        "qt": "6.8.3",
+        "resize_80_ms": 434.3791,
+        "startup_internal_ms": 261.5963,
+        "version": "2.1.0",
+        "startup_ms": 293.9163999981247
+      },
+      {
+        "cached_documents": 11,
+        "chat_font_pixels": 21,
+        "device_pixel_ratio": 1,
+        "load_2000_ms": 191.3913,
+        "messages": 2000,
+        "network_requests": 0,
+        "qt": "6.8.3",
+        "resize_80_ms": 469.7031,
+        "startup_internal_ms": 274.7719,
+        "version": "2.1.0",
+        "startup_ms": 317.6171999948565
+      },
+      {
+        "cached_documents": 11,
+        "chat_font_pixels": 21,
+        "device_pixel_ratio": 1,
+        "load_2000_ms": 203.3306,
+        "messages": 2000,
+        "network_requests": 0,
+        "qt": "6.8.3",
+        "resize_80_ms": 536.5106,
+        "startup_internal_ms": 287.306,
+        "version": "2.1.0",
+        "startup_ms": 320.370900000853
+      },
+      {
+        "cached_documents": 11,
+        "chat_font_pixels": 21,
+        "device_pixel_ratio": 1,
+        "load_2000_ms": 188.1638,
+        "messages": 2000,
+        "network_requests": 0,
+        "qt": "6.8.3",
+        "resize_80_ms": 448.8327,
+        "startup_internal_ms": 256.6623,
+        "version": "2.1.0",
+        "startup_ms": 289.0096999981324
+      }
+    ]
+  },
+  "summary": {
+    "1.3.0": {
+      "startup_ms": {
+        "median_ms": 528.8367999964976,
+        "min_ms": 508.5248999967007,
+        "max_ms": 593.159599993669
+      },
+      "load_2000_ms": {
+        "median_ms": 871.7064000011305,
+        "min_ms": 850.31429999799,
+        "max_ms": 876.4728999958606
+      },
+      "resize_80_ms": {
+        "median_ms": 4968.114999996033,
+        "min_ms": 4865.7316000026185,
+        "max_ms": 5217.8478999994695
+      }
+    },
+    "2.1.0": {
+      "startup_ms": {
+        "median_ms": 297.08380000374746,
+        "min_ms": 289.0096999981324,
+        "max_ms": 320.370900000853
+      },
+      "load_2000_ms": {
+        "median_ms": 191.3913,
+        "min_ms": 187.7524,
+        "max_ms": 205.0435
+      },
+      "resize_80_ms": {
+        "median_ms": 448.8327,
+        "min_ms": 434.3791,
+        "max_ms": 536.5106
+      }
+    }
+  }
+}

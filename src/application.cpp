@@ -60,6 +60,7 @@ MainWindow::MainWindow(QString profile, bool testing)
     tabs->setTabsClosable(true);
     tabs->setMovable(true);
     tabs->setDocumentMode(true);
+    tabs->tabBar()->setDrawBase(false);
     setCentralWidget(tabs);
     tabs->tabBar()->installEventFilter(this);
     tabs->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -521,9 +522,17 @@ void MainWindow::allPause(bool pause) {
 
 void MainWindow::paneMenu(Pane *p, QPoint point) {
     QMenu menu(this);
+    populatePaneMenu(menu, p);
+    menu.exec(point);
+}
+
+void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
+    if (!p) {
+        return;
+    }
     for (auto source : p->sources) {
         if (source) {
-            auto *channel = menu.addMenu(source->name());
+            auto *channel = menu.addMenu(platformIcon(source->platform), source->name());
             for (const auto &pair : QList<QPair<QString, QString>>{{"stream", "Open stream in browser"},
                                                                    {"player", "Open player in browser"},
                                                                    {"chat", "Open chat in browser"}}) {
@@ -570,6 +579,9 @@ void MainWindow::paneMenu(Pane *p, QPoint point) {
         }
     }
     menu.addSeparator();
+    menu.addAction(cfg.T("Search messages…") + "\tCtrl+F", p, &Pane::showSearch);
+    auto *historyMenu = menu.addMenu(cfg.T("Filters and history"));
+    auto *layoutMenu = menu.addMenu(cfg.T("Layout"));
     menu.addAction(cfg.T("Rename tab…"), this, [this] {
         if (auto *w = current()) {
             bool ok = false;
@@ -582,12 +594,12 @@ void MainWindow::paneMenu(Pane *p, QPoint point) {
             }
         }
     });
-    menu.addAction(cfg.T("Zoom / restore pane"), p, [this, p] {
+    auto *zoom = layoutMenu->addAction(cfg.T("Zoom / restore pane"), p, [this, p] {
         if (auto *w = current()) {
             w->toggleZoom(p);
         }
     });
-    menu.addAction(cfg.T("Balance splits"), this, [this] {
+    auto *balance = layoutMenu->addAction(cfg.T("Balance splits"), this, [this] {
         if (auto *w = current()) {
             for (auto *s : w->findChildren<QSplitter *>()) {
                 QList<int> sizes;
@@ -598,9 +610,14 @@ void MainWindow::paneMenu(Pane *p, QPoint point) {
             }
         }
     });
-    menu.addAction(cfg.T("Add chats in a split…"), this, [this, p] { addChats("horizontal", p); });
-    menu.addAction(cfg.T("Add channels to this mixed feed…"), this, [this, p] { addChats("mix", p); });
-    menu.addAction(cfg.T("Split horizontally"), this, [this, p] {
+    const bool hasSplits = current() && current()->panes().size() > 1;
+    zoom->setEnabled(hasSplits);
+    balance->setEnabled(hasSplits);
+    layoutMenu->addSeparator();
+    layoutMenu->addAction(cfg.T("Add chats in a split…"), this, [this, p] { addChats("horizontal", p); });
+    layoutMenu->addAction(cfg.T("Add channels to this mixed feed…"), this, [this, p] { addChats("mix", p); });
+    layoutMenu->addSeparator();
+    layoutMenu->addAction(cfg.T("Split horizontally"), this, [this, p] {
         if (auto *w = current()) {
             QList<Source *> s;
             for (auto source : p->sources) {
@@ -611,7 +628,7 @@ void MainWindow::paneMenu(Pane *p, QPoint point) {
             w->add(s, p, Qt::Horizontal);
         }
     });
-    menu.addAction(cfg.T("Split vertically"), this, [this, p] {
+    layoutMenu->addAction(cfg.T("Split vertically"), this, [this, p] {
         if (auto *w = current()) {
             QList<Source *> s;
             for (auto source : p->sources) {
@@ -622,12 +639,12 @@ void MainWindow::paneMenu(Pane *p, QPoint point) {
             w->add(s, p, Qt::Vertical);
         }
     });
-    menu.addAction(cfg.T("Chat filters…"), this, [this, p] { filters(p); });
-    menu.addAction(cfg.T("Search"), p, &Pane::showSearch);
-    menu.addAction(cfg.T("Message limit…"), this, [this, p] { setMessageCap(p); });
-    menu.addAction(cfg.T("Clear displayed messages"), p, [p] { p->view->setMessages({}); });
+    historyMenu->addAction(cfg.T("Chat filters…"), this, [this, p] { filters(p); });
+    historyMenu->addAction(cfg.T("Message limit…"), this, [this, p] { setMessageCap(p); });
+    historyMenu->addSeparator();
+    historyMenu->addAction(cfg.T("Clear displayed messages"), p, [p] { p->view->setMessages({}); });
     menu.addSeparator();
-    menu.addAction(cfg.T("Close pane"), this, [this, p] {
+    menu.addAction(cfg.T(hasSplits ? "Close pane" : "Close tab") + "\tCtrl+W", this, [this, p] {
         for (int i = 0; i < tabs->count(); ++i) {
             auto *w = qobject_cast<Workspace *>(tabs->widget(i));
             if (w && w->panes().contains(p)) {
@@ -641,7 +658,6 @@ void MainWindow::paneMenu(Pane *p, QPoint point) {
         }
         QTimer::singleShot(0, this, &MainWindow::pruneSources);
     });
-    menu.exec(point);
 }
 
 void MainWindow::tabMenu(int index, QPoint position) {

@@ -175,6 +175,7 @@ void NativeTests::completionAndPickerPagination() {
         Span e;
         e.code = QString("Test%1").arg(i, 3, 10, QChar('0'));
         twitch->emotes[e.code] = e;
+        twitch->channelEmotes[e.code] = e;
     }
     pane->input->setText("Test00");
     pane->input->setCursorPosition(6);

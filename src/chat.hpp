@@ -16,6 +16,7 @@ class Source : public QObject {
     QSet<QString> seen;
     QQueue<QString> seenOrder;
     QHash<QString, Span> emotes;
+    QHash<QString, Span> channelEmotes;
     QHash<QString, Badge> badges;
     bool paused = false, closed = false, historyLoaded = false, historyLoading = false;
     QVector<Message> liveBuffer;

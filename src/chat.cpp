@@ -257,6 +257,9 @@ void Source::refreshHeader() {
     if (closed || hub->testMode) {
         return;
     }
+    if (platform == "twitch" && !hub->accounts->loaded) {
+        return;
+    }
     QPointer<Source> self(this);
     if (platform == "youtube") {
         hub->net->bytes(Network::query("https://www.youtube.com/watch", {{"v", id}}),
@@ -734,7 +737,8 @@ void TwitchConnection::part(Source *s) {
 }
 
 void TwitchConnection::connectServer() {
-    if (hub->testMode || closing || authRejected || channels.isEmpty() || connecting) {
+    if (hub->testMode || !hub->accounts->loaded || closing || authRejected || channels.isEmpty() ||
+        connecting) {
         return;
     }
     connecting = true;
@@ -944,6 +948,7 @@ void Hub::provider(Source *s, const QJsonValue &data, QString provider, QString 
     }
     if (s) {
         for (auto i = found.begin(); i != found.end(); ++i) {
+            s->channelEmotes[i.key()] = i.value();
             s->emotes[i.key()] = i.value();
         }
         emit s->changed();
@@ -953,7 +958,7 @@ void Hub::provider(Source *s, const QJsonValue &data, QString provider, QString 
         }
         for (auto source : sources) {
             for (auto i = found.begin(); i != found.end(); ++i) {
-                if (!source->emotes.contains(i.key())) {
+                if (!source->channelEmotes.contains(i.key())) {
                     source->emotes[i.key()] = i.value();
                 }
             }

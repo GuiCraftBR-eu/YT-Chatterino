@@ -31,3 +31,9 @@ Build the pacman package as a regular user with `cd packaging/arch && makepkg -s
 `--profile /absolute/directory` uses an isolated `.ytchatterino.json` and an independent encrypted credential namespace. Test fixtures never require real tokens. Do not check private profiles or OAuth JSON into Git.
 
 Modules: `core` (data/parsing/settings), `network` (HTTP/images), `accounts` (OAuth/vault), `chat` (sources/actions), `view` (virtual chat/panes), `application`/`settings` (windows), `updater` (verified transactions). CMake's `APP_VERSION` is the single application version.
+
+## Reproduzir o benchmark da 2.1.0
+
+O alvo opcional `chatterino_benchmark` usa a interface e o renderizador de produção com um perfil isolado e rede bloqueada. Ative-o com `-DBUILD_BENCHMARKS=ON` ao configurar o CMake. Ele não acompanha o aplicativo distribuído.
+
+Os scripts de `benchmarks/` são ferramentas de comparação da versão antiga: exigem Python com Tk somente na máquina que executa a comparação com a 1.3.0. O aplicativo 2.1.0 continua inteiramente em C++/Qt e não depende de Python. O protocolo, as limitações e os comandos estão em [BENCHMARK-1.3.0-2.1.0.md](BENCHMARK-1.3.0-2.1.0.md).

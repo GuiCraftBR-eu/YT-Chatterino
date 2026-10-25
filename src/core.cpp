@@ -184,11 +184,22 @@ QString stripAt(QString value) {
 }
 
 QString emoteName(QString value) {
-    return value.replace("&lt;", "<")
+    // Twitch's user-emote endpoint still returns regexes for the original smileys.
+    // Decode only those known expressions; a plain backslash is a valid global emote.
+    value.replace("\\;", ";");
+    value.replace("\\&", "&");
+    value.replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
         .replace("&amp;", "&");
+    static const QHash<QString, QString> smileys{
+        {R"(\:-?\))", ":)"}, {R"(\:-?\()", ":("},       {R"(\:-?D)", ":D"},
+        {R"(>\()", ">("},    {R"(\:-?[z|Z|\|])", ":Z"}, {R"([oO](_|\.)[oO])", "O_o"},
+        {R"(B-?\))", "B)"},  {R"(\:-?(o|O))", ":O"},    {R"(\:-?[\\/])", ":/"},
+        {R"(;-?\))", ";)"},  {R"(\:-?(p|P))", ":P"},    {R"(;-?(p|P))", ";P"},
+        {R"(R-?\))", "R)"}};
+    return smileys.value(value, value);
 }
 
 bool wordMatch(const QString &text, const QString &word) {
@@ -244,12 +255,51 @@ QIcon platformIcon(const QString &platform) {
     return QIcon(p);
 }
 
+void configureApplication(QApplication &app) {
+    app.setApplicationName("YT-Chatterino");
+    app.setApplicationVersion(APP_VERSION);
+    app.setOrganizationName("YT-Chatterino");
+    app.setWindowIcon(QIcon(":/ytchatterino.ico"));
+    app.setStyle("Fusion");
+    QPalette palette;
+    palette.setColor(QPalette::Window, QColor("#000000"));
+    palette.setColor(QPalette::Base, QColor("#000000"));
+    palette.setColor(QPalette::AlternateBase, QColor("#0e0e0e"));
+    palette.setColor(QPalette::WindowText, QColor("#efeff1"));
+    palette.setColor(QPalette::Text, QColor("#efeff1"));
+    palette.setColor(QPalette::Button, QColor("#181818"));
+    palette.setColor(QPalette::ButtonText, QColor("#efeff1"));
+    palette.setColor(QPalette::Highlight, QColor("#365f85"));
+    palette.setColor(QPalette::HighlightedText, Qt::white);
+    palette.setColor(QPalette::ToolTipBase, QColor("#181818"));
+    palette.setColor(QPalette::ToolTipText, QColor("#efeff1"));
+    app.setPalette(palette);
+    app.setStyleSheet("QMainWindow,QDialog{background:#000;color:#efeff1;} "
+                      "QLineEdit,QTextEdit,QPlainTextEdit,QSpinBox,QDoubleSpinBox,QComboBox{background:#111;"
+                      "color:#efeff1;border:1px solid #333;padding:3px;selection-background-color:#365f85;} "
+                      "QPushButton,QToolButton{background:#181818;color:#efeff1;border:0;padding:5px;} "
+                      "QPushButton:hover,QToolButton:hover{background:#303030;} QTabWidget::pane{border:0;} "
+                      "QTabBar::tab{background:#000;color:#ccc;padding:5px 10px;border-top:2px solid "
+                      "transparent;} QTabBar::tab:selected{background:#181818;color:#fff;border-top:2px "
+                      "solid #4a9cdb;} QScrollBar:vertical{background:#000;width:9px;} "
+                      "QScrollBar::handle:vertical{background:#242424;min-height:24px;} "
+                      "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;} "
+                      "QSplitter::handle{background:#292929;width:3px;height:3px;} "
+                      "QMenu{background:#111;color:#efeff1;border:1px solid #333;} "
+                      "QMenu::item:selected{background:#303030;} QCheckBox{color:#efeff1;} "
+                      "QTabBar::close-button{image:url(:/close.svg);width:12px;height:12px;} "
+                      "QTabBar::close-button:hover{background:#333;} "
+                      "QGroupBox{border:1px solid #222;margin-top:8px;padding-top:8px;} "
+                      "QGroupBox::title{color:#aaa;} QLabel{background:transparent;}");
+}
+
 void darkTitlebar(QWidget *window) {
 #ifdef Q_OS_WIN
     const HWND hwnd = reinterpret_cast<HWND>(window->winId());
     BOOL yes = TRUE;
     DwmSetWindowAttribute(hwnd, 20, &yes, sizeof(yes));
     COLORREF black = RGB(0, 0, 0);
+    DwmSetWindowAttribute(hwnd, 34, &black, sizeof(black));
     DwmSetWindowAttribute(hwnd, 35, &black, sizeof(black));
 #else
     Q_UNUSED(window)

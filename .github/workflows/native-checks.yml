@@ -1,7 +1,7 @@
 name: Native C++ checks
 on:
   push:
-    branches: [main, 'codex/v2.0.2']
+    branches: [main, 'codex/v2.1.0']
   workflow_dispatch:
   release:
     types: [published]
@@ -54,7 +54,7 @@ jobs:
           QT_QPA_PLATFORM=offscreen yt-chatterino --version
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-ArchLinux-2.0.2-pacman
+          name: YT-Chatterino-ArchLinux-2.1.0-pacman
           path: /tmp/yt-chatterino-build/packaging/arch/*.pkg.tar.zst
       - uses: actions/upload-artifact@v4
         if: always()
@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-ArchLinux-2.0.2-pacman
+          name: YT-Chatterino-ArchLinux-2.1.0-pacman
           path: native-package
       - name: Attach tested native Arch package
         env:

@@ -206,6 +206,7 @@ void SettingsWindow::searchSettings() {
     }
     results->clear();
     auto tokens = q.split(' ', Qt::SkipEmptyParts);
+    QSet<QString> displayed;
     for (auto i = searchItems.begin(); i != searchItems.end(); ++i) {
         for (const auto &entry : i.value()) {
             QString label = entry.section('\t', 0, 0);
@@ -216,6 +217,11 @@ void SettingsWindow::searchSettings() {
                 match &= hay.contains(token);
             }
             if (match) {
+                const auto identity = i.key() + '\t' + label;
+                if (displayed.contains(identity)) {
+                    continue;
+                }
+                displayed.insert(identity);
                 auto *item = new QListWidgetItem(main->cfg.T(i.key()) + " — " + main->cfg.T(label), results);
                 item->setData(Qt::UserRole, i.key());
             }
@@ -231,26 +237,29 @@ void SettingsWindow::searchSettings() {
 QWidget *SettingsWindow::accountsPage() {
     QVBoxLayout *l;
     auto *w = pageWidget(main->cfg, "Accounts", &l);
-    auto *status = text(main->cfg, "");
-    auto refresh = [this, status] {
-        QString tw = str(main->accounts.twitch["login"]), yt = str(main->accounts.google["channel_title"]);
-        status->setText("Twitch: " + (tw.isEmpty() ? main->cfg.T("Not connected") : tw) +
-                        "\nYouTube: " + (yt.isEmpty() ? main->cfg.T("Not connected") : yt));
-    };
-    refresh();
-    l->addWidget(status);
-    connect(&main->accounts, &Accounts::changed, w, refresh);
-    l->addWidget(action(main->cfg, "Twitch sign-in / permissions", w, [this] {
-        main->accounts.signInTwitch({"chat:read", "user:write:chat", "user:read:emotes",
-                                     "user:read:moderated_channels", "moderator:manage:chat_messages",
-                                     "moderator:manage:banned_users", "channel:manage:broadcast"});
-    }));
-    l->addWidget(text(
-        main->cfg,
-        "Approve Twitch permissions in your browser. Saved sign-ins are reused and refreshed when possible.",
-        true));
-    l->addSpacing(12);
-    l->addWidget(action(main->cfg, "Choose Google OAuth JSON…", w, [this] {
+    auto *twBox = new QGroupBox("Twitch", w);
+    auto *twLayout = new QVBoxLayout(twBox);
+    auto *twStatus = text(main->cfg, "");
+    twStatus->setObjectName("twitch-account-status");
+    auto *twPermissions = text(main->cfg, "", true);
+    twPermissions->setObjectName("twitch-permission-status");
+    auto *twButton = action(main->cfg, "Sign in to Twitch", w,
+                            [this] { main->accounts.signInTwitch(Accounts::fullTwitchScopes()); });
+    twButton->setObjectName("twitch-permissions");
+    auto *twReconnect = action(main->cfg, "Reconnect / change Twitch account…", w,
+                               [this] { main->accounts.signInTwitch(Accounts::fullTwitchScopes()); });
+    twLayout->addWidget(twStatus);
+    twLayout->addWidget(twPermissions);
+    twLayout->addWidget(twButton);
+    twLayout->addWidget(twReconnect);
+    l->addWidget(twBox);
+
+    auto *ytBox = new QGroupBox("YouTube", w);
+    auto *ytLayout = new QVBoxLayout(ytBox);
+    auto *ytStatus = text(main->cfg, "");
+    ytStatus->setObjectName("youtube-account-status");
+    auto *ytPermissions = text(main->cfg, "", true);
+    auto *chooseJson = action(main->cfg, "Choose Google OAuth JSON…", w, [this] {
         auto path = QFileDialog::getOpenFileName(this, main->cfg.T("Google Desktop OAuth client"), {},
                                                  "JSON (*.json)");
         if (path.isEmpty()) {
@@ -266,15 +275,85 @@ QWidget *SettingsWindow::accountsPage() {
         f["google_client_file"] = path;
         main->cfg.data["features"] = f;
         main->cfg.save();
-    }));
-    l->addWidget(action(main->cfg, "Sign in to YouTube", w, [this] { main->accounts.signInGoogle(); }));
+        emit main->accounts.changed();
+    });
+    chooseJson->setObjectName("google-client-file");
+    auto *ytButton = action(main->cfg, "Sign in to YouTube", w, [this] { main->accounts.signInGoogle(); });
+    ytButton->setObjectName("youtube-permissions");
+    auto *ytReconnect = action(main->cfg, "Reconnect / change YouTube account…", w,
+                               [this] { main->accounts.signInGoogle(); });
+    auto *cancel =
+        action(main->cfg, "Cancel pending Google sign-in", w, [this] { main->accounts.cancelGoogle(); });
+    ytLayout->addWidget(ytStatus);
+    ytLayout->addWidget(ytPermissions);
+    ytLayout->addWidget(chooseJson);
+    ytLayout->addWidget(ytButton);
+    ytLayout->addWidget(ytReconnect);
+    ytLayout->addWidget(cancel);
+    l->addWidget(ytBox);
+
+    auto refresh = [=, this] {
+        auto &cfg = main->cfg;
+        auto &accounts = main->accounts;
+        const bool twConnected = accounts.connected("twitch");
+        const bool twReady = accounts.twitchAllows(Accounts::fullTwitchScopes());
+        const bool twPending = accounts.twitchBusy || accounts.twitchRefreshing;
+        const bool twSaved = !str(accounts.twitch.value("access_token")).isEmpty();
+        twStatus->setText(accounts.twitchRefreshing ? cfg.T("Refreshing saved sign-in…")
+                          : twConnected
+                              ? cfg.T("Signed in as @{name}", {{"name", str(accounts.twitch.value("login"))}})
+                          : !accounts.twitchIssue.isEmpty() ? cfg.T(accounts.twitchIssue)
+                                                            : cfg.T("Not connected"));
+        QStringList permissions;
+        for (const auto &item : QList<QPair<QString, QSet<QString>>>{
+                 {"Reading chat", {"chat:read"}},
+                 {"Sending messages", {"user:write:chat"}},
+                 {"Subscriber emotes", {"user:read:emotes"}},
+                 {"Moderation",
+                  {"user:read:moderated_channels", "moderator:manage:chat_messages",
+                   "moderator:manage:banned_users"}},
+                 {"Title / category editing", {"channel:manage:broadcast"}}}) {
+            permissions << (accounts.twitchAllows(item.second) ? "✓ " : "○ ") + cfg.T(item.first);
+        }
+        twPermissions->setText(permissions.join("\n"));
+        twButton->setText(cfg.T(twPending     ? "Waiting for Twitch…"
+                                : twReady     ? "All Twitch permissions enabled"
+                                : twConnected ? "Enable missing Twitch permissions…"
+                                : twSaved     ? "Reconnect Twitch…"
+                                              : "Sign in to Twitch"));
+        twButton->setEnabled(!twPending && !twReady);
+        twReconnect->setVisible(twReady);
+        twReconnect->setEnabled(!twPending);
+
+        const bool ytReady = accounts.googleAllowsWriting();
+        const bool ytPending = accounts.googleBusy || accounts.googleRefreshing;
+        const bool ytSaved = !str(accounts.google.value("access_token")).isEmpty();
+        const auto ytName = str(accounts.google.value("channel_title"));
+        ytStatus->setText(accounts.googleRefreshing         ? cfg.T("Refreshing saved sign-in…")
+                          : accounts.connected("google")    ? cfg.T("Signed in as {name}", {{"name", ytName}})
+                          : !accounts.googleIssue.isEmpty() ? cfg.T(accounts.googleIssue)
+                                                            : cfg.T("Not connected"));
+        ytPermissions->setText(
+            cfg.T(ytReady ? "✓ Sending, moderation and title editing enabled. Channel roles still apply."
+                          : "Sign in to send messages, moderate or edit a stream title. Reading chat needs "
+                            "no sign-in."));
+        chooseJson->setText(cfg.T(accounts.googleClientConfigured() ? "Change Google OAuth JSON…"
+                                                                    : "Choose Google OAuth JSON…"));
+        chooseJson->setEnabled(!ytPending);
+        ytButton->setText(cfg.T(ytPending                      ? "Waiting for YouTube…"
+                                : ytReady                      ? "YouTube permissions enabled"
+                                : accounts.connected("google") ? "Enable YouTube sending / moderation…"
+                                : ytSaved                      ? "Reconnect YouTube…"
+                                                               : "Sign in to YouTube"));
+        ytButton->setEnabled(!ytPending && !ytReady);
+        ytReconnect->setVisible(ytReady);
+        ytReconnect->setEnabled(!ytPending);
+        cancel->setVisible(accounts.googleBusy);
+    };
+    refresh();
+    connect(&main->accounts, &Accounts::changed, w, refresh);
     l->addWidget(
-        action(main->cfg, "Cancel pending Google sign-in", w, [this] { main->accounts.cancelGoogle(); }));
-    l->addWidget(
-        text(main->cfg,
-             "Use a Google Desktop OAuth client. Sign-in opens your browser; tokens are encrypted for your "
-             "OS account. Google apps in Testing may require signing in again after seven days.",
-             true));
+        text(main->cfg, "Moderation and stream editing also require the appropriate channel role.", true));
     l->addSpacing(10);
     l->addWidget(
         text(main->cfg, "YouTube reading: no key, no sign-in, 0 units. Paste a live link with +.", true));
@@ -327,6 +406,13 @@ QWidget *SettingsWindow::appearancePage() {
     time->addItems({"HH:mm", "HH:mm:ss", "hh:mm am/pm", "hh:mm:ss am/pm"});
     time->setCurrentText(a["time_format"].toString("HH:mm"));
     form->addRow(cfg.T("Timestamp format"), time);
+    auto *scrollSpeed = new QDoubleSpinBox(w);
+    scrollSpeed->setObjectName("scroll-multiplier");
+    scrollSpeed->setRange(0.5, 5.0);
+    scrollSpeed->setSingleStep(0.25);
+    scrollSpeed->setSuffix("×");
+    scrollSpeed->setValue(a.value("scroll_multiplier").toDouble(2.0));
+    form->addRow(cfg.T("Mouse wheel speed"), scrollSpeed);
     l->addLayout(form);
     l->addWidget(
         text(cfg, "Text size: Ctrl++ / Ctrl+- · Ctrl+0 resets. Images keep their aspect ratio.", true));
@@ -344,7 +430,7 @@ QWidget *SettingsWindow::appearancePage() {
             (*baseline)[i.key()] = a[i.key()].toInt();
         }
     });
-    l->addWidget(action(cfg, "Apply", w, [this, checks, sizes, top, date, time] {
+    l->addWidget(action(cfg, "Apply", w, [this, checks, sizes, top, date, time, scrollSpeed] {
         auto a = main->cfg.appearance();
         for (auto i = checks.begin(); i != checks.end(); ++i) {
             a[i.key()] = i.value()->isChecked();
@@ -355,6 +441,7 @@ QWidget *SettingsWindow::appearancePage() {
         a["font_size"] = sizes["message_font_size"]->value();
         a["date_format"] = date->currentText();
         a["time_format"] = time->currentText();
+        a["scroll_multiplier"] = scrollSpeed->value();
         main->cfg.data["topmost"] = top->isChecked();
         main->cfg.setAppearance(a);
         main->applyTopmost();
@@ -798,10 +885,13 @@ QWidget *SettingsWindow::shortcutsPage() {
                                         {"Middle-click empty tab bar", "Add chats"},
                                         {"Left-click username", "User information"},
                                         {"Left-click reply body", "Open reply thread"},
-                                        {"Right-click message", "Reply / moderation"}};
+                                        {"Right-click message", "Reply to message"},
+                                        {"Ctrl+right-click message", "Message actions / moderation"},
+                                        {"Middle-click chat", "Toggle autoscroll"},
+                                        {"Esc / click", "Stop autoscroll"}};
     table->setRowCount(rows.size());
     for (int i = 0; i < rows.size(); ++i) {
-        table->setItem(i, 0, new QTableWidgetItem(rows[i].first));
+        table->setItem(i, 0, new QTableWidgetItem(main->cfg.T(rows[i].first)));
         table->setItem(i, 1, new QTableWidgetItem(main->cfg.T(rows[i].second)));
     }
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -819,10 +909,10 @@ QWidget *SettingsWindow::tutorialPage() {
              {"Read chats", "Click +. Paste a YouTube live link or Twitch @channel. Reading YouTube needs no "
                             "API key or account. YouTube stays connected in background tabs."},
              {"Twitch: connect, send and moderate",
-              "Settings → Accounts → Twitch sign-in / permissions. Approve the code in your browser once. "
-              "Return here and type at the bottom of the chat. Right-click a message for replies or "
-              "moderation. Moderation needs owner/moderator permission; channel edits need the broadcaster "
-              "account."},
+              "Settings → Accounts shows your sign-in and enabled permissions. Connect Twitch there if "
+              "needed and approve the code in your browser. Right-click a message to prepare a reply; "
+              "Ctrl+right-click opens moderation actions. Moderation requires the channel's owner/moderator "
+              "role; title/category edits require the broadcaster account."},
              {"YouTube: connect, send and moderate",
               "Create a Google Cloud project, enable YouTube Data API v3, configure the consent screen and "
               "create a Desktop OAuth client. Add your account as a test user if needed. Download its JSON. "
@@ -836,9 +926,11 @@ QWidget *SettingsWindow::tutorialPage() {
               "Saved channels. YouTube checks broadcasts only when you open a save."},
              {"Messages, emotes and reply threads",
               "Ctrl+F searches a pane; Ctrl+Shift+F searches all. Tab completes emotes and @names; ☺ opens "
-              "the picker. Left-click names for user cards; right-click messages to reply/moderate. "
+              "the picker. Left-click names for user cards; right-click to reply and Ctrl+right-click for "
+              "actions. "
               "Left-click a Twitch reply to open its retained thread. Ctrl+F5 reconnects. Pause YouTube "
-              "manually from the header menu or pause all from the gear menu."},
+              "manually from the header menu or pause all from the gear menu. Middle-click the chat for "
+              "autoscroll; move the mouse to choose speed, then click or press Esc to stop."},
              {"Appearance, highlights and sounds",
               "Appearance has separate text/name fonts, badge/emote sizes, timestamps and date formats. "
               "Messages sets the retention cap (default 2000). Highlights matches users, badges, names and "

@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.0.2 — WINDOWS 11 x64
+YT-CHATTERINO 2.1.0 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.0.2.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.1.0.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -8,10 +8,11 @@ YT-CHATTERINO 2.0.2 — WINDOWS 11 x64
 ADD A CHAT
 Press Ctrl+T (or click +). Paste a YouTube LIVE VIDEO link or Twitch @channel/link.
 YouTube public reading needs no API key, Google account or quota.
-Twitch: Settings > Accounts > Twitch sign-in / permissions. Approve the browser code once.
+Twitch: Settings > Accounts > Connect Twitch. Approve the browser code once.
+Accounts shows your connected identity and enabled permissions. Refreshing subscriber emotes reuses your saved sign-in.
 
 SEND / MODERATE
-Type below a chat and press Enter. Right-click a message for replies/moderation.
+Type below a chat and press Enter. Right-click a Twitch message to prepare a reply. Ctrl+right-click opens actions/moderation.
 Twitch uses your saved sign-in and asks for any extra permissions it needs.
 YouTube sending/moderation needs your own Google Desktop OAuth client JSON and sign-in.
 Enable YouTube Data API v3 in that Google Cloud project; configure the consent screen;
@@ -29,10 +30,13 @@ Double-click a header to zoom/restore a pane. Alt+Arrows: focus another pane.
 Ctrl+F / Ctrl+Shift+F: search pane / all chats. Ctrl+K: quick switch.
 Ctrl+F5: reconnect pane. Ctrl+P: settings. Ctrl++ / Ctrl+- / Ctrl+0: text size.
 Tab / Shift+Tab: complete emotes or @names. Click the smile button for the emote picker.
+Middle-click the chat and move the pointer for autoscroll. Click again or press Esc to stop.
+Physical wheel speed defaults to 2×; change it in Appearance. Touchpads keep their pixel scrolling.
+The picker separates Subs, Channel, Global and Emojis. Search filters the current tab.
 Left-click a name for a user card; left-click a Twitch reply to open its retained thread.
 
 SETTINGS
-Appearance: language, message/name fonts, badge/emote sizes, dates, timestamps, always on top.
+Appearance: language, message/name fonts, badge/emote sizes, wheel speed, dates, timestamps, always on top.
 Messages: history and message limit (default 2000 per pane; 100-20000 allowed).
 Highlights: users, roles and phrases. Notifications: mention sounds and Twitch live alerts.
 Saved channels: save/open channels. YouTube looks for current streams only when opened.

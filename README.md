@@ -1,46 +1,67 @@
-# YT-Chatterino 2.0.2
+# YT-Chatterino
 
-A native **C++20 / Qt 6** desktop chat client for YouTube and Twitch, with a compact black interface inspired by Chatterino. The application no longer runs Python, Tk or a web view.
+Cliente de chat para **YouTube e Twitch**, feito em **C++20 e Qt 6**, com visual inspirado no Chatterino. Disponível para Windows 11 e Arch Linux nativo.
 
-[Download the latest release](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/latest) · [Português do Brasil](docs/README-PTBR.txt) · [Build instructions](docs/BUILDING.md)
+## Baixar e abrir
 
-## Run
+- **[Windows 11 — versão 2.1.0](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.0/YT-Chatterino-Windows11-2.1.0.zip):** extraia o ZIP inteiro e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas ao lado do executável. O runtime está incluído; não precisa instalar Python.
+- **[Arch Linux — pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.0/yt-chatterino-2.1.0-1-x86_64.pkg.tar.zst):** instale com `sudo pacman -U yt-chatterino-2.1.0-1-x86_64.pkg.tar.zst`. Veja as [instruções para Arch](docs/ARCH-LINUX.md).
+- **[Todos os arquivos, notas e verificações SHA-256](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.0)**.
 
-**Windows 11 x64:** download `YT-Chatterino-Windows11-2.0.2.zip`, extract the entire folder, then double-click `YT-Chatterino.exe`. Keep the DLLs and plugin folders beside it. No Python, compiler or terminal is required.
+Os arquivos `README-PTBR.txt` e `README.txt`, incluídos no ZIP, explicam o uso em português e inglês.
 
-**Arch Linux x86_64:** download `yt-chatterino-2.0.2-1-x86_64.pkg.tar.zst`, then run `sudo pacman -U ./yt-chatterino-2.0.2-1-x86_64.pkg.tar.zst`. Launch YT-Chatterino from your application menu. It runs natively with Qt; Wine is not used. See [Arch instructions](docs/ARCH-LINUX.md).
+## Conectar os chats e as contas
 
-## Connect
+1. Clique em **+** e cole um link de transmissão do YouTube ou um `@canal` da Twitch.
+2. Em **Configurações → Contas**, conecte a Twitch e autorize as permissões no navegador. A tela informa o que já está ativado; não é preciso autorizar de novo para atualizar a lista de emotes.
+3. Para **enviar mensagens, moderar ou editar títulos no YouTube**, crie um cliente **OAuth para computador** no Google Cloud, ative a YouTube Data API v3 e escolha o JSON em Contas. Depois conecte a conta ou o canal de marca desejado.
 
-Press **Ctrl+T** and paste a YouTube live-video URL or a Twitch `@channel`/URL. YouTube public reading needs no API key or Google account. For Twitch, open Settings → Accounts and approve the sign-in in your browser.
+**Ler chats do YouTube não exige chave de API nem login e não consome unidades da API oficial.** Envio e moderação usam a API oficial; a estimativa de unidades aparece ao focar um chat do YouTube. Para moderar ou editar uma transmissão, sua conta também precisa ter o cargo necessário no canal.
 
-To send or moderate on YouTube, choose your own Google **Desktop OAuth client JSON** in Accounts and sign in. Enable YouTube Data API v3 in that client’s Google Cloud project. Accounts → Connection tutorial explains the steps. Never send your private JSON or saved tokens to friends.
+As contas ficam no armazenamento protegido do sistema. Sessões salvas são reutilizadas e renovadas quando possível. O **Tutorial** nas configurações reúne as etapas de conexão e as principais funções.
 
-## Features
+## Mensagens e mouse
 
-- Tabs you can drag and switch with the mouse wheel; horizontal/vertical splits and mixed channel feeds.
-- Shared asynchronous Twitch IRC connection and independent public YouTube readers. Background tabs keep reading; YouTube can be paused manually.
-- Native Twitch/YouTube emotes and badges, BTTV/7TV, animated emotes and received Twitch subscriber GIFs. Size controls, Tab completion and a searchable paginated emote picker.
-- Sending, Twitch replies, retained reply-thread windows, user cards, permission-aware moderation, title edits and Twitch category edits.
-- Recent chat history when available; default 2,000 messages per pane, with configurable limits from 100 to 20,000.
-- Copy/select messages, pane/all-chat search, filters, username/role/phrase highlights and configurable sounds.
-- Twitch live alerts, saved channels, English/PT-BR, settings search, separate message/name fonts and customizable dates/timestamps.
-- Restored layout/window position, always on top, encrypted account storage, YouTube action-quota estimate and confirmed automatic updates.
+| Ação | Como usar |
+| --- | --- |
+| Preparar uma resposta na Twitch | Clique direito na mensagem. O envio continua sendo feito por Enter ou pelo botão Enviar. |
+| Abrir ações, cópia e moderação | **Ctrl + clique direito** na mensagem. |
+| Rolar automaticamente | Clique com a **roda do mouse** no chat e mova o ponteiro para cima ou para baixo. Clique novamente ou pressione **Esc** para parar. |
+| Ajustar a velocidade da roda | **Aparência → Velocidade da roda do mouse**. O padrão é 2×. |
+| Abrir perfil de um usuário | Clique esquerdo no nome. |
+| Abrir uma conversa de respostas | Clique no corpo de uma resposta da Twitch. |
+| Completar emotes ou nomes | **Tab / Shift+Tab**. O botão **☺** abre o seletor. |
 
-Dates default to DD/MM/YYYY; 12-hour timestamps use lowercase am/pm. Default highlight color is `#227400`; the default sound is `ChatternoPing.wav`.
+O seletor separa **Inscritos, Canal, Globais e Emojis**, filtra a aba atual e mostra nomes que podem ser usados nas mensagens. Emotes nativos, BTTV e 7TV são aceitos; os animados e GIFs recebidos são reproduzidos quando disponíveis. O envio de GIFs especiais da Twitch continua dependendo do chat oficial.
 
-## Upgrade from 1.x
+## Abas, painéis e aparência
 
-Your settings, saved layouts, channels and encrypted sign-ins are reused under the same OS user. Keep a backup of your old app folder and profile before a major upgrade.
+- Use chats em abas separadas, divisões lado a lado/empilhadas ou um painel misto. Arraste as abas para reorganizar e as divisórias para redimensionar.
+- O menu do canal agrupa ações do canal, pesquisa, filtros/histórico e layout. Ali também é possível abrir a transmissão, o player ou o chat no navegador e salvar canais.
+- O limite padrão é **2.000 mensagens por painel**, ajustável nas configurações. Mensagens excedentes são descartadas.
+- Ajuste fontes de mensagem e usuário, tamanho de emotes e emblemas, timestamps, datas, fundos alternados, destaques e sons.
+- Os chats do YouTube continuam conectados nas abas em segundo plano. A pausa é manual. Alertas de início de transmissão são destinados à Twitch.
+- A posição e o tamanho da janela são salvos. **Sempre no topo** está em Aparência. A interface pode ser usada em inglês ou português brasileiro.
 
-- **Windows portable:** the 1.x updater can install this native release. The ZIP contains unused `Source/*.py*` version markers solely for the old updater’s validation. They are not executed; no Python runtime is included. Future updates use the C++ updater.
-- **Old Windows source installs:** extract the native Windows ZIP and launch its EXE once. The old Python source updater cannot install a native runtime.
-- **Arch 1.x:** install the new x86_64 package once with pacman. The old updater only recognizes architecture-independent Python packages. Future native updates use pacman after system authorization.
+Atalhos principais: **Ctrl+T** adiciona chats; **Ctrl+W** fecha o painel; **Ctrl+Shift+T** adiciona uma divisão; **Ctrl+F** pesquisa; **Ctrl+Shift+F** pesquisa em todos; **Ctrl+P** abre Aparência; **Ctrl+F5** reconecta. A lista completa fica em **Atalhos de teclado**.
 
-## Limits
+## Desempenho: 1.3.0 → 2.1.0
 
-YouTube public-page reading can break when YouTube changes its site. Moderation/sending still use the official authenticated APIs. Quota is an estimate for this app and any manually entered external usage, not your project’s authoritative balance.
+A 1.3.0 usava Python/Tk; a 2.1.0 usa C++/Qt, desenha apenas as mensagens visíveis e mantém caches limitados.  
+A 2.1.0 também melhora os nomes e o seletor de emotes, indica as permissões das contas e adiciona resposta direta e rolagem automática.
 
-Recent Twitch history depends on `recent-messages.robotty.de`; no account tokens are sent there. Threads show messages retained by this app, not an unlimited server archive. YouTube does not expose Twitch-style reply-thread metadata. Subscriber GIFs can be received; sending them remains an official Twitch browser action. API permissions and channel roles determine what moderation and editing actions are allowed.
+O [benchmark reproduzível](docs/BENCHMARK-1.3.0-2.1.0.md) compara inicialização, carregamento de 2.000 mensagens e 80 redimensionamentos, na mesma máquina e sem rede. Medianas: **inicialização 529 → 297 ms**, **histórico 872 → 191 ms** e **80 redimensionamentos 4.968 → 449 ms**. A 1.3.0 foi executada pelo código-fonte Python/Tk; rede e empacotamento foram excluídos. O relatório contém o protocolo, a variação e os dados brutos.
 
-This project is independent of Chatterino, Twitch, YouTube, BTTV and 7TV. Third-party library notices and source information are in [Licenses](Licenses/NOTICE.txt). The project owner has not selected a general redistribution license for the application source.
+## Atualizar
+
+Quando houver uma versão nova, aparece uma seta de download na barra superior. Clique nela, confira a versão e confirme **Instalar atualização e reiniciar**. As configurações e contas salvas são preservadas; o atualizador mantém uma cópia de recuperação.
+
+Instalações antigas pelo código-fonte e o antigo pacote Arch baseado em Python precisam de uma atualização manual para a versão nativa. Nas versões nativas 2.0.0/2.0.1, um atalho `.lnk` dentro da pasta pode impedir a atualização: mova o atalho temporariamente para fora, atualize e coloque-o de volta. A preservação de atalhos foi corrigida na 2.0.2.
+
+## Código e verificações
+
+O código da aplicação está em `src/`; [instruções de compilação](docs/BUILDING.md), [verificação da versão](docs/VERIFICACAO-2.1.0.md) e [histórico de alterações](CHANGELOG.md) estão no repositório. Os testes usam perfis isolados e transportes simulados para envio, moderação e edição de canais.
+
+Os avisos e licenças das dependências estão em `Licenses/`. Os fontes correspondentes às bibliotecas Qt distribuídas acompanham os arquivos da versão. As versões anteriores permanecem disponíveis nas tags do GitHub.
+
+**As notas de versão e este README são mantidos em português brasileiro.**

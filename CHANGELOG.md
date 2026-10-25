@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.0
+
+- Remove a linha de base das abas e o contorno claro da janela no Windows.
+- Organiza o menu dos painéis em ações do canal, pesquisa, filtros/histórico e layout.
+- Corrige os nomes antigos de emotes da Twitch e separa os catálogos de inscritos, canal e globais; melhora a leitura dos nomes no seletor.
+- Mostra o estado das contas e das permissões já concedidas. Atualizar emotes de inscritos reutiliza o acesso salvo.
+- Clique direito prepara uma resposta na Twitch; Ctrl + clique direito mantém o menu de ações. Nada é enviado sem Enter ou Enviar.
+- Adiciona rolagem automática com o botão do meio e velocidade da roda configurável, com padrão de 2×.
+- Evita recriar recursos de imagens estáticas em cada repintura e aguarda as contas salvas antes de conectar a Twitch.
+- Amplia a regressão de recursos e publica um benchmark reproduzível da 1.3.0 contra a 2.1.0.
+- Mantém o README principal e as notas de versão em português brasileiro.
+
 ## 2.0.2
 
 - Preserve Windows .lnk shortcut files during native updates while continuing to reject filesystem symbolic links and junctions.
