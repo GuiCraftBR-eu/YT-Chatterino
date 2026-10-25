@@ -75,6 +75,8 @@ class NativeTests : public QObject {
     void legacyTwitchNames();
     void accountControlsReflectPermissions();
     void googleRefreshUpdatesPermissionState();
+    void googleAuthorizationErrors_data();
+    void googleAuthorizationErrors();
     void twitchStartupWaitsForSavedAccounts();
     void pickerCatalogsAndExistingAuthorization();
     void pickerReadErrorCanRetry();
