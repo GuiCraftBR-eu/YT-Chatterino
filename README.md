@@ -1,67 +1,88 @@
+<div align="center">
+
 # YT-Chatterino
 
-Cliente de chat para **YouTube e Twitch**, feito em **C++20 e Qt 6**, com visual inspirado no Chatterino. Disponível para Windows 11 e Arch Linux nativo.
+**Seus chats ao vivo, em uma só janela.**
+
+Cliente independente para chats do YouTube e da Twitch, com abas, painéis e emotes.
+
+**Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
+
+[Baixar v2.1.0](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.0) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+
+</div>
+
+> [!IMPORTANT]
+> **Projeto independente e não oficial.** O YT-Chatterino não é afiliado, associado, patrocinado, aprovado nem mantido pelo YouTube/Google, pela Twitch/Amazon ou pelo projeto Chatterino e seus responsáveis. Não é uma versão oficial do Chatterino. Os nomes são mencionados apenas para identificar compatibilidade e a inspiração da interface.
 
 ## Baixar e abrir
 
-- **[Windows 11 — versão 2.1.0](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.0/YT-Chatterino-Windows11-2.1.0.zip):** extraia o ZIP inteiro e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas ao lado do executável. O runtime está incluído; não precisa instalar Python.
-- **[Arch Linux — pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.0/yt-chatterino-2.1.0-1-x86_64.pkg.tar.zst):** instale com `sudo pacman -U yt-chatterino-2.1.0-1-x86_64.pkg.tar.zst`. Veja as [instruções para Arch](docs/ARCH-LINUX.md).
-- **[Todos os arquivos, notas e verificações SHA-256](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.0)**.
+| Sistema | Download da versão 2.1.0 | Instalação |
+| --- | --- | --- |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.0/YT-Chatterino-Windows11-2.1.0.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.0/yt-chatterino-2.1.0-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
-Os arquivos `README-PTBR.txt` e `README.txt`, incluídos no ZIP, explicam o uso em português e inglês.
+```sh
+sudo pacman -U ./yt-chatterino-2.1.0-1-x86_64.pkg.tar.zst
+```
 
-## Conectar os chats e as contas
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.0).
 
-1. Clique em **+** e cole um link de transmissão do YouTube ou um `@canal` da Twitch.
-2. Em **Configurações → Contas**, conecte a Twitch e autorize as permissões no navegador. A tela informa o que já está ativado; não é preciso autorizar de novo para atualizar a lista de emotes.
-3. Para **enviar mensagens, moderar ou editar títulos no YouTube**, crie um cliente **OAuth para computador** no Google Cloud, ative a YouTube Data API v3 e escolha o JSON em Contas. Depois conecte a conta ou o canal de marca desejado.
+## Primeiros passos
 
-**Ler chats do YouTube não exige chave de API nem login e não consome unidades da API oficial.** Envio e moderação usam a API oficial; a estimativa de unidades aparece ao focar um chat do YouTube. Para moderar ou editar uma transmissão, sua conta também precisa ter o cargo necessário no canal.
+1. Clique em **+** ou pressione **Ctrl+T**. Cole o link de uma transmissão do YouTube ou um `@canal` da Twitch.
+2. Para conectar a Twitch, abra **Configurações → Contas** e autorize o acesso no navegador.
+3. Para enviar mensagens, moderar ou editar títulos no YouTube, ative a **YouTube Data API v3** no Google Cloud, crie um cliente **OAuth para computador** e selecione o JSON em **Contas**. Depois, conecte sua conta.
 
-As contas ficam no armazenamento protegido do sistema. Sessões salvas são reutilizadas e renovadas quando possível. O **Tutorial** nas configurações reúne as etapas de conexão e as principais funções.
+A leitura pública do YouTube não exige login nem chave de API e não usa unidades da API oficial. Envio e moderação usam a API oficial e suas cotas; moderar ou editar uma transmissão exige as permissões correspondentes no canal.
 
-## Mensagens e mouse
+O **Tutorial**, nas configurações, explica as conexões e os recursos. As credenciais usam o armazenamento protegido do sistema; não compartilhe tokens, perfis ou seu JSON OAuth. No Arch, salvar acessos exige um [chaveiro compatível](docs/ARCH-LINUX.md).
 
-| Ação | Como usar |
+## O que você pode fazer
+
+- **Organizar os chats:** abas, painéis lado a lado ou empilhados e painel misto.
+- **Conversar:** respostas na Twitch, preenchimento de nomes e seletor de emotes nativos, BTTV e 7TV.
+- **Acompanhar mensagens:** pesquisa, filtros, destaques e sons; histórico padrão de 2.000 mensagens por painel.
+- **Personalizar:** fontes, emotes, emblemas, cores, horários e janela sempre no topo.
+- **Moderar:** ações conforme as permissões da sua conta e os recursos de cada plataforma.
+
+### Controles essenciais
+
+| Ação | Controle |
 | --- | --- |
-| Preparar uma resposta na Twitch | Clique direito na mensagem. O envio continua sendo feito por Enter ou pelo botão Enviar. |
-| Abrir ações, cópia e moderação | **Ctrl + clique direito** na mensagem. |
-| Rolar automaticamente | Clique com a **roda do mouse** no chat e mova o ponteiro para cima ou para baixo. Clique novamente ou pressione **Esc** para parar. |
-| Ajustar a velocidade da roda | **Aparência → Velocidade da roda do mouse**. O padrão é 2×. |
-| Abrir perfil de um usuário | Clique esquerdo no nome. |
-| Abrir uma conversa de respostas | Clique no corpo de uma resposta da Twitch. |
-| Completar emotes ou nomes | **Tab / Shift+Tab**. O botão **☺** abre o seletor. |
+| Adicionar chat / painel | **Ctrl+T** / **Ctrl+Shift+T** |
+| Fechar painel | **Ctrl+W** |
+| Pesquisar no painel / em todos | **Ctrl+F** / **Ctrl+Shift+F** |
+| Preparar resposta na Twitch | Clique direito na mensagem; **Enter** para enviar |
+| Abrir ações e moderação | **Ctrl + clique direito** na mensagem |
+| Completar emotes ou nomes | **Tab / Shift+Tab** |
+| Rolar automaticamente | Clique com a roda e mova o mouse; **Esc** para parar |
 
-O seletor separa **Inscritos, Canal, Globais e Emojis**, filtra a aba atual e mostra nomes que podem ser usados nas mensagens. Emotes nativos, BTTV e 7TV são aceitos; os animados e GIFs recebidos são reproduzidos quando disponíveis. O envio de GIFs especiais da Twitch continua dependendo do chat oficial.
+Mais opções em **Atalhos de teclado** e nos guias de uso em [português](docs/README-PTBR.txt) e [inglês](docs/README.txt).
 
-## Abas, painéis e aparência
+## Atualizações e ajuda
 
-- Use chats em abas separadas, divisões lado a lado/empilhadas ou um painel misto. Arraste as abas para reorganizar e as divisórias para redimensionar.
-- O menu do canal agrupa ações do canal, pesquisa, filtros/histórico e layout. Ali também é possível abrir a transmissão, o player ou o chat no navegador e salvar canais.
-- O limite padrão é **2.000 mensagens por painel**, ajustável nas configurações. Mensagens excedentes são descartadas.
-- Ajuste fontes de mensagem e usuário, tamanho de emotes e emblemas, timestamps, datas, fundos alternados, destaques e sons.
-- Os chats do YouTube continuam conectados nas abas em segundo plano. A pausa é manual. Alertas de início de transmissão são destinados à Twitch.
-- A posição e o tamanho da janela são salvos. **Sempre no topo** está em Aparência. A interface pode ser usada em inglês ou português brasileiro.
+Quando houver uma nova versão, clique na seta de download da barra superior e confirme **Instalar atualização e reiniciar**. As configurações e contas salvas são preservadas, com uma cópia de recuperação.
 
-Atalhos principais: **Ctrl+T** adiciona chats; **Ctrl+W** fecha o painel; **Ctrl+Shift+T** adiciona uma divisão; **Ctrl+F** pesquisa; **Ctrl+Shift+F** pesquisa em todos; **Ctrl+P** abre Aparência; **Ctrl+F5** reconecta. A lista completa fica em **Atalhos de teclado**.
+<details>
+<summary>Atualizando uma instalação antiga?</summary>
 
-## Desempenho: 1.3.0 → 2.1.0
+Instalações antigas pelo código-fonte e o pacote Arch baseado em Python precisam de atualização manual para a versão nativa. Nas versões nativas 2.0.0/2.0.1, mova atalhos `.lnk` temporariamente para fora da pasta se impedirem a atualização; coloque-os de volta depois. Esse problema foi corrigido na 2.0.2.
 
-A 1.3.0 usava Python/Tk; a 2.1.0 usa C++/Qt, desenha apenas as mensagens visíveis e mantém caches limitados.  
-A 2.1.0 também melhora os nomes e o seletor de emotes, indica as permissões das contas e adiciona resposta direta e rolagem automática.
+</details>
 
-O [benchmark reproduzível](docs/BENCHMARK-1.3.0-2.1.0.md) compara inicialização, carregamento de 2.000 mensagens e 80 redimensionamentos, na mesma máquina e sem rede. Medianas: **inicialização 529 → 297 ms**, **histórico 872 → 191 ms** e **80 redimensionamentos 4.968 → 449 ms**. A 1.3.0 foi executada pelo código-fonte Python/Tk; rede e empacotamento foram excluídos. O relatório contém o protocolo, a variação e os dados brutos.
+Mudanças nas plataformas podem interromper integrações. Consulte os [limites conhecidos e instruções de uso](docs/README-PTBR.txt) ou [relate um problema](https://github.com/GuiCraftBR-eu/YT-Chatterino/issues).
 
-## Atualizar
+## Código e documentação
 
-Quando houver uma versão nova, aparece uma seta de download na barra superior. Clique nela, confira a versão e confirme **Instalar atualização e reiniciar**. As configurações e contas salvas são preservadas; o atualizador mantém uma cópia de recuperação.
+[Compilação](docs/BUILDING.md) · [Histórico de alterações](CHANGELOG.md) · [Verificação da v2.1.0](docs/VERIFICACAO-2.1.0.md) · [Benchmark 1.3.0 → 2.1.0](docs/BENCHMARK-1.3.0-2.1.0.md)
 
-Instalações antigas pelo código-fonte e o antigo pacote Arch baseado em Python precisam de uma atualização manual para a versão nativa. Nas versões nativas 2.0.0/2.0.1, um atalho `.lnk` dentro da pasta pode impedir a atualização: mova o atalho temporariamente para fora, atualize e coloque-o de volta. A preservação de atalhos foi corrigida na 2.0.2.
+O código da aplicação está em [`src/`](src/). O README e as notas de versão são mantidos em português brasileiro.
 
-## Código e verificações
+## Independência e marcas
 
-O código da aplicação está em `src/`; [instruções de compilação](docs/BUILDING.md), [verificação da versão](docs/VERIFICACAO-2.1.0.md) e [histórico de alterações](CHANGELOG.md) estão no repositório. Os testes usam perfis isolados e transportes simulados para envio, moderação e edição de canais.
+**YT-Chatterino é um projeto independente, sem vínculo institucional ou comercial com YouTube, Google, Twitch, Amazon ou Chatterino e seus responsáveis.** A compatibilidade com serviços de terceiros e a inspiração visual no Chatterino não indicam parceria, autorização, certificação ou endosso.
 
-Os avisos e licenças das dependências estão em `Licenses/`. Os fontes correspondentes às bibliotecas Qt distribuídas acompanham os arquivos da versão. As versões anteriores permanecem disponíveis nas tags do GitHub.
+Os nomes, marcas, logotipos, emotes e demais conteúdos de terceiros pertencem aos respectivos titulares. Sua referência neste projeto não transfere direitos sobre esses elementos nem concede licença para usá-los. O uso das plataformas continua sujeito aos respectivos termos, políticas e à legislação aplicável, inclusive a brasileira.
 
-**As notas de versão e este README são mantidos em português brasileiro.**
+As licenças e os avisos das dependências estão em [`Licenses/`](Licenses/); os fontes correspondentes às bibliotecas Qt distribuídas acompanham os arquivos da versão. Essas licenças se aplicam às respectivas dependências e não concedem automaticamente uma licença geral ao código ou à arte deste projeto; veja o [aviso de licenças](Licenses/NOTICE.txt).
