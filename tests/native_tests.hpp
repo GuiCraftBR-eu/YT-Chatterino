@@ -84,4 +84,7 @@ class NativeTests : public QObject {
     void autoscrollAndWheelSensitivity();
     void organizedPaneMenuAndTabBorder();
     void cachedImageRepaintAndFrameChanges();
+    void globalSearchKeepsTargetsAfterTabChanges();
+    void tutorialClearlyExplainsTestingUsers();
+    void youtubeRateLimitWaitsAndHidesRedirect();
 };
