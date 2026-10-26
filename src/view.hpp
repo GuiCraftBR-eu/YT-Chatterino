@@ -17,6 +17,7 @@ class ChatView : public QAbstractScrollArea {
     struct Details {
         int nameStart = 0, nameEnd = 0, replyEnd = 0;
         QHash<int, QString> imageCodes;
+        QHash<int, QPair<QString, QStringList>> emoteImages;
         QSet<QString> urls;
         QHash<QString, QSize> imageSizes;
         QHash<QString, qint64> imageKeys;
@@ -34,6 +35,9 @@ class ChatView : public QAbstractScrollArea {
     bool autoScrolling = false, suppressContextMenu = false;
     qreal autoScrollRemainder = 0, wheelRemainder = 0;
     QPoint pressPoint;
+    QFrame *emoteTooltip = nullptr;
+    QLabel *emotePreview = nullptr, *emoteTooltipName = nullptr, *emoteTooltipProvider = nullptr;
+    QStringList tooltipUrls;
     QPair<int, int> selectionStart{-1, 0}, selectionEnd{-1, 0};
     bool dragging = false;
     qint64 synthetic = -1;
@@ -48,6 +52,8 @@ class ChatView : public QAbstractScrollArea {
     int estimate(const Message &message) const;
     int rowAt(int y) const;
     QPair<int, int> positionAt(QPoint point);
+    bool showEmoteTooltip(QPoint point, QPoint global);
+    void hideEmoteTooltip();
     QSharedPointer<QTextDocument> document(int row);
     void jumpLatest();
     void jumpRow(int row);
@@ -66,6 +72,7 @@ class ChatView : public QAbstractScrollArea {
     void focused();
 
   protected:
+    bool viewportEvent(QEvent *) override;
     void paintEvent(QPaintEvent *) override;
     void resizeEvent(QResizeEvent *) override;
     void mousePressEvent(QMouseEvent *) override;

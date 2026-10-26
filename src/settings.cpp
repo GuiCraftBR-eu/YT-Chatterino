@@ -924,6 +924,12 @@ QWidget *SettingsWindow::tutorialPage() {
               "channel or Brand Account. Sending uses about 20 units; deletion about 20–26; bans/timeouts "
               "200. You must be the owner/moderator to moderate. Public reading stays free."},
              {"Google sign-in blocked (403 / access_denied)", Accounts::googleSignInHelp()},
+             {"YouTube chat limited (HTTP 429)",
+              "Web reading may be temporarily limited by Google. Sign in to YouTube in Accounts, then "
+              "right-click the chat tab → channel → Official API fallback and confirm its quota cost. "
+              "When web reading is limited, the fallback uses 5 units per request, about 986 units per "
+              "hour per chat at the default 18.25 seconds. Multiple chats use more. Change the interval "
+              "in the same channel menu. API reading stops when the estimated quota is exhausted."},
              {"Tabs, splits and saved channels",
               "Ctrl+T adds chats. Choose separate tabs, side by side, stacked or mixed. Drag tabs and "
               "dividers; scroll over tabs to switch. Middle-click empty tab space for a new chat. "

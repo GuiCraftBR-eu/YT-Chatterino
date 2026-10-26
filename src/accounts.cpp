@@ -240,6 +240,14 @@ bool Accounts::googleAllowsWriting() const {
                                    scopes.contains("https://www.googleapis.com/auth/youtube"));
 }
 
+bool Accounts::googleCanReadChat() const {
+    const auto scopes = googleScopes();
+    return (!str(google["access_token"]).isEmpty() || !str(google["refresh_token"]).isEmpty()) &&
+           (scopes.contains("https://www.googleapis.com/auth/youtube.force-ssl") ||
+            scopes.contains("https://www.googleapis.com/auth/youtube") ||
+            scopes.contains("https://www.googleapis.com/auth/youtube.readonly"));
+}
+
 bool Accounts::googleClientConfigured() const {
     auto path = cfg->features().value("google_client_file").toString();
     if (path.isEmpty()) {

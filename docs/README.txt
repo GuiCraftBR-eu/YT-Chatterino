@@ -1,13 +1,16 @@
-YT-CHATTERINO 2.1.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.1.2 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.1.1.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.1.2.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
 
 ADD A CHAT
 Press Ctrl+T (or click +). Paste a YouTube LIVE VIDEO link or Twitch @channel/link.
-YouTube public reading needs no API key, Google account or quota.
+Normal YouTube web reading needs no API key, Google account or quota.
+If Google returns HTTP 429, sign in and optionally enable the official API fallback per chat
+in the channel menu. It costs 5 units per request, about 986 units per hour per chat
+at the default 18.25-second interval; multiple chats use more.
 Twitch: Settings > Accounts > Connect Twitch. Approve the browser code once.
 Accounts shows your connected identity and enabled permissions. Refreshing subscriber emotes reuses your saved sign-in.
 
@@ -55,7 +58,8 @@ The Source/*.py* files are unused compatibility markers for the old updater, not
 used by this app. All application code and its runtime are native C++/Qt.
 
 LIMITS / HELP
-YouTube action units are approximate; reading uses zero API units. Google apps in Testing
+YouTube units are approximate; web reading uses zero API units. The optional API fallback
+uses quota. Google apps in Testing
 may require signing in again after seven days. Recent Twitch history uses a public external
 service and may be unavailable. Threads include only retained messages. Received Twitch
 GIFs are supported; sending GIFs uses Twitch's browser. YouTube site changes can interrupt reading.

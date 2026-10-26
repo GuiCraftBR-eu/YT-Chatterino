@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube e da Twitch, com abas, painéis e emo
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.1.1](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.1) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.1.2](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.2) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube e da Twitch, com abas, painéis e emo
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.1.1 | Instalação |
+| Sistema | Download da versão 2.1.2 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.1/YT-Chatterino-Windows11-2.1.1.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.1/yt-chatterino-2.1.1-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.2/YT-Chatterino-Windows11-2.1.2.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.2/yt-chatterino-2.1.2-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.1.1-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.1.2-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.1).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.2).
 
 ## Primeiros passos
 
@@ -34,7 +34,7 @@ Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os ar
 2. Para conectar a Twitch, abra **Configurações → Contas** e autorize o acesso no navegador.
 3. Para enviar mensagens, moderar ou editar títulos no YouTube, ative a **YouTube Data API v3** no Google Cloud, crie um cliente **OAuth para computador** e selecione o JSON em **Contas**. Depois, conecte sua conta.
 
-A leitura pública do YouTube não exige login nem chave de API e não usa unidades da API oficial. Envio e moderação usam a API oficial e suas cotas; moderar ou editar uma transmissão exige as permissões correspondentes no canal.
+A leitura pública do YouTube não exige login nem chave de API e não usa unidades da API oficial. Envio e moderação usam a API oficial e suas cotas; moderar ou editar uma transmissão exige as permissões correspondentes no canal. Se o YouTube retornar HTTP 429, você pode ativar por chat a alternativa pela API oficial no menu do canal. Ela exige a conta conectada, consome 5 unidades por solicitação e usa aproximadamente 986 unidades por hora por chat no intervalo padrão de 18,25 segundos; vários chats consomem mais. A cota exibida é uma estimativa, e a API também pode impor limites ou negar acesso.
 
 O **Tutorial**, nas configurações, explica as conexões e os recursos. As credenciais usam o armazenamento protegido do sistema; não compartilhe tokens, perfis ou seu JSON OAuth. No Arch, salvar acessos exige um [chaveiro compatível](docs/ARCH-LINUX.md).
 
