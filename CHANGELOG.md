@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.2
+
+- Mostra nome, prévia e provedor do emote ao passar o mouse.
+- Oferece, por chat e com autorização explícita, a leitura alternativa pela API oficial quando o YouTube limita o acesso via site.
+- Coordena tentativas dos chats em caso de HTTP 429, evitando solicitações repetidas durante o bloqueio.
+
 ## 2.1.1
 
 - Explica a inclusão obrigatória de usuários de teste para apps OAuth em teste e trata recusas de login.

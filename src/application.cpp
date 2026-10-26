@@ -545,6 +545,40 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             if (source->platform == "youtube") {
                 channel->addAction(cfg.T(source->paused ? "Resume chat" : "Pause chat"), source,
                                    [source] { source->setPaused(!source->paused); });
+                auto *apiFallback = channel->addAction(cfg.T("Official API fallback (uses quota)"));
+                apiFallback->setObjectName("youtube-api-fallback");
+                apiFallback->setCheckable(true);
+                apiFallback->setChecked(source->apiFallbackEnabled);
+                connect(apiFallback, &QAction::triggered, this, [this, source, apiFallback](bool enabled) {
+                    if (enabled) {
+                        const auto answer = QMessageBox::question(
+                            this, cfg.T("Official YouTube API fallback"),
+                            cfg.T("If web chat is rate limited, use your signed-in YouTube account's "
+                                  "official API. Each request costs 5 units; at 18.25 seconds, "
+                                  "about 986 units per hour per chat, plus setup and other actions. "
+                                  "Multiple chats use more. Enable this fallback?"));
+                        if (answer != QMessageBox::Yes) {
+                            apiFallback->setChecked(false);
+                            return;
+                        }
+                    }
+                    source->setApiFallback(enabled);
+                });
+                channel->addAction(cfg.T("Official API interval…"), this, [this, source] {
+                    bool ok;
+                    double seconds = QInputDialog::getDouble(
+                        this, cfg.T("Official YouTube API interval"),
+                        cfg.T("Seconds between API requests (5 units each; minimum 18.25 seconds)"),
+                        source->apiInterval, 18.25, 600, 2, &ok);
+                    if (!ok) return;
+                    source->apiInterval = seconds;
+                    auto all = cfg.data["chat_settings"].toObject();
+                    auto settings = all[source->key].toObject();
+                    settings["youtube_api_interval_seconds"] = seconds;
+                    all[source->key] = settings;
+                    cfg.data["chat_settings"] = all;
+                    cfg.save();
+                });
                 channel->addAction(cfg.T("Request interval…"), this, [this, source] {
                     bool ok;
                     double interval = QInputDialog::getDouble(

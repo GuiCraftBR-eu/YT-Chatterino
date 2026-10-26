@@ -87,4 +87,9 @@ class NativeTests : public QObject {
     void globalSearchKeepsTargetsAfterTabChanges();
     void tutorialClearlyExplainsTestingUsers();
     void youtubeRateLimitWaitsAndHidesRedirect();
+    void emoteHoverShowsCorrectPreview();
+    void youtubeRateLimitCoordinatesChats();
+    void youtubeApiFallbackReadsAndAccountsQuota();
+    void youtubeApiFallbackRespectsQuotaAndSignIn();
+    void youtubeFallbackMenuRequiresConfirmation();
 };

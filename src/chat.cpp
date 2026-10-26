@@ -75,10 +75,14 @@ Source::Source(Hub *h, QString p, QString value)
     key = platform == "twitch" ? "twitch:" + id : id;
     auto settings = hub->cfg->data["chat_settings"].toObject()[key].toObject();
     interval = qMax(4.0, settings["web_poll_interval_seconds"].toDouble(4));
+    apiFallbackEnabled = settings["youtube_api_fallback"].toBool(false);
+    apiInterval = qBound(18.25, settings["youtube_api_interval_seconds"].toDouble(18.25), 600.0);
     poll.setSingleShot(true);
     metadataTimer.setInterval(300000);
     connect(&poll, &QTimer::timeout, this, [this] {
-        if (continuation.isEmpty()) {
+        if (apiActive) {
+            youtubeApiPoll();
+        } else if (continuation.isEmpty()) {
             youtubeConnect();
         } else {
             youtubePoll();
@@ -141,7 +145,12 @@ void Source::reconnect() {
         refreshHeader();
     } else {
         poll.stop();
-        youtubeConnect();
+        apiPageToken.clear();
+        if (apiActive && apiFallbackEnabled) {
+            youtubeApiConnect();
+        } else {
+            youtubeConnect();
+        }
     }
 }
 
@@ -262,6 +271,9 @@ void Source::refreshHeader() {
     }
     QPointer<Source> self(this);
     if (platform == "youtube") {
+        if (apiActive || requesting || hub->youtubeCooldownRemaining() > 0) {
+            return;
+        }
         hub->net->bytes(Network::query("https://www.youtube.com/watch", {{"v", id}}),
                         [self](QByteArray b, QString e) {
                             if (!self || self->closed || !e.isEmpty()) {
@@ -456,6 +468,9 @@ void Source::youtubeConnect() {
     if (closed || paused || requesting || hub->testMode) {
         return;
     }
+    if (deferYouTubeForCooldown()) {
+        return;
+    }
     requesting = true;
     const auto epoch = generation;
     QPointer<Source> self(this);
@@ -548,6 +563,10 @@ void Source::youtubeContinue(QJsonObject chat, QJsonObject config) {
         return;
     }
     requesting = false;
+    if (hub->youtubeCooldownRemaining() == 0) {
+        hub->youtubeRateDelay = 120000;
+        hub->youtubeCooldownUntil = 0;
+    }
     initial = true;
     retryMs = 5000;
     youtubeActions(chat["actions"].toArray(), true);
@@ -601,6 +620,9 @@ void Source::youtubePoll() {
     if (closed || paused || requesting) {
         return;
     }
+    if (deferYouTubeForCooldown()) {
+        return;
+    }
     if (continuation.isEmpty()) {
         youtubeConnect();
         return;
@@ -638,6 +660,10 @@ void Source::youtubePoll() {
             self->youtubeActions(chat["actions"].toArray(), self->initial);
             self->initial = false;
             self->requesting = false;
+            if (self->hub->youtubeCooldownRemaining() == 0) {
+                self->hub->youtubeRateDelay = 120000;
+                self->hub->youtubeCooldownUntil = 0;
+            }
             self->retryMs = 5000;
             if (self->continuation.isEmpty()) {
                 self->status("The live chat has ended.");
@@ -653,7 +679,23 @@ void Source::youtubePoll() {
 void Source::youtubeError(const QString &error, int delay) {
     requesting = false;
     const bool rateLimited = error.startsWith("HTTP 429:");
-    const int wait = delay ? delay : (rateLimited ? 120000 : retryMs);
+    int wait = delay ? delay : retryMs;
+    if (rateLimited) {
+        wait = qMax(qMax(delay, hub->youtubeRateDelay), hub->youtubeCooldownRemaining());
+        hub->youtubeCooldownUntil = hub->youtubeClock.elapsed() + wait;
+        hub->youtubeRateDelay = qMin(1800000, hub->youtubeRateDelay * 2);
+    }
+    if (rateLimited && apiFallbackEnabled && !closed && !paused) {
+        if (hub->accounts->googleCanReadChat()) {
+            apiActive = true;
+            apiPageToken.clear();
+            status(hub->cfg->T("YouTube web chat was rate limited. Switching to the official API; "
+                               "API reading uses quota."));
+            youtubeApiConnect();
+            return;
+        }
+        status(hub->cfg->T("Sign in to YouTube in Settings → Accounts to use the official API fallback."));
+    }
     const auto message = rateLimited
                              ? hub->cfg->T("YouTube temporarily limited requests (HTTP 429). Try again later "
                                            "or open the chat in your browser.")
@@ -663,6 +705,166 @@ void Source::youtubeError(const QString &error, int delay) {
     if (!closed && !paused) {
         poll.start(wait);
     }
+}
+
+bool Source::deferYouTubeForCooldown() {
+    const int wait = hub->youtubeCooldownRemaining();
+    if (wait <= 0) {
+        return false;
+    }
+    if (!closed && !paused) {
+        poll.start(wait);
+    }
+    return true;
+}
+
+void Source::setApiFallback(bool enabled) {
+    apiFallbackEnabled = enabled;
+    auto all = hub->cfg->data["chat_settings"].toObject();
+    auto settings = all[key].toObject();
+    settings["youtube_api_fallback"] = enabled;
+    all[key] = settings;
+    hub->cfg->data["chat_settings"] = all;
+    hub->cfg->save();
+    if (!enabled && apiActive) {
+        apiActive = false;
+        reconnect();
+    } else if (enabled && hub->youtubeCooldownRemaining() > 0 && !paused) {
+        if (!hub->accounts->googleCanReadChat()) {
+            status(hub->cfg->T("Sign in to YouTube in Settings → Accounts to use the official API fallback."));
+            return;
+        }
+        ++generation;
+        requesting = false;
+        poll.stop();
+        apiActive = true;
+        apiPageToken.clear();
+        youtubeApiConnect();
+    }
+}
+
+void Source::youtubeApiError(const QString &error) {
+    requesting = false;
+    if (closed || paused || !apiActive) {
+        return;
+    }
+    if (error.startsWith("HTTP 400:") || error.startsWith("HTTP 401:") || error.startsWith("HTTP 403:") ||
+        error.startsWith("HTTP 404:") || error.contains("sign-in", Qt::CaseInsensitive) ||
+        error.contains("OAuth", Qt::CaseInsensitive) || error.contains("no active live chat", Qt::CaseInsensitive)) {
+        status(hub->cfg->T("Official YouTube API stopped: {error}", {{"error", error}}));
+        return;
+    }
+    const int wait = apiRetryMs;
+    apiRetryMs = qMin(1800000, apiRetryMs * 2);
+    status(hub->cfg->T("Official YouTube API connection interrupted. Retrying in {seconds}s.",
+                       {{"seconds", QString::number(wait / 1000)}}));
+    poll.start(wait);
+}
+
+void Source::youtubeApiConnect() {
+    if (closed || paused || requesting || !apiActive) {
+        return;
+    }
+    if (!hub->accounts->googleCanReadChat()) {
+        status(hub->cfg->T("Sign in to YouTube in Settings → Accounts to use the official API fallback."));
+        return;
+    }
+    if (hub->quota->remaining() < 6 && str(header["live_chat_id"]).isEmpty()) {
+        status(hub->cfg->T("The estimated YouTube quota is too low to start API chat reading."));
+        return;
+    }
+    requesting = true;
+    const auto epoch = generation;
+    QPointer<Source> self(this);
+    hub->youtubeChatId(this, [self, epoch](QString chat, QString error) {
+        if (!self || self->closed || self->generation != epoch || !self->apiActive) {
+            return;
+        }
+        self->requesting = false;
+        if (!error.isEmpty() || chat.isEmpty()) {
+            self->youtubeApiError(error.isEmpty() ? "No active live chat." : error);
+            return;
+        }
+        self->initial = true;
+        self->status(self->hub->cfg->T("Connected with the official YouTube API · 5 units per request."));
+        self->youtubeApiPoll();
+    });
+}
+
+void Source::youtubeApiPoll() {
+    if (closed || paused || requesting || !apiActive) {
+        return;
+    }
+    if (str(header["live_chat_id"]).isEmpty()) {
+        youtubeApiConnect();
+        return;
+    }
+    if (hub->quota->remaining() < 5) {
+        status(hub->cfg->T("The estimated YouTube quota is exhausted. API chat reading stopped."));
+        return;
+    }
+    requesting = true;
+    ++polls;
+    const auto epoch = generation;
+    QPointer<Source> self(this);
+    QMap<QString, QString> params{{"part", "id,snippet,authorDetails"},
+                                  {"liveChatId", str(header["live_chat_id"])}, {"maxResults", "200"}};
+    if (!apiPageToken.isEmpty()) {
+        params["pageToken"] = apiPageToken;
+    }
+    hub->accounts->youtube("liveChat/messages", [self, epoch](QJsonObject data, QString error) {
+        if (!self || self->closed || self->generation != epoch || !self->apiActive) {
+            return;
+        }
+        self->requesting = false;
+        if (!error.isEmpty()) {
+            self->youtubeApiError(error);
+            return;
+        }
+        self->apiRetryMs = 120000;
+        for (const auto &value : data["items"].toArray()) {
+            auto item = value.toObject();
+            auto snippet = item["snippet"].toObject();
+            auto author = item["authorDetails"].toObject();
+            const QString type = str(snippet["type"]);
+            if (type == "messageDeletedEvent") {
+                auto target = str(at(snippet, {"messageDeletedDetails", "deletedMessageId"}));
+                if (!target.isEmpty()) self->redact({{"message_id", target}});
+                continue;
+            }
+            if (type == "chatEndedEvent") {
+                self->status("The live chat has ended.");
+                return;
+            }
+            Message m;
+            m.id = m.apiId = str(item["id"]);
+            m.uid = str(author["channelId"]);
+            m.name = str(author["displayName"]);
+            m.text = str(snippet["displayMessage"]);
+            m.avatar = str(author["profileImageUrl"]);
+            m.stamp = QDateTime::fromString(str(snippet["publishedAt"]), Qt::ISODateWithMs);
+            if (!m.stamp.isValid()) m.stamp = QDateTime::fromString(str(snippet["publishedAt"]), Qt::ISODate);
+            m.history = self->initial;
+            for (const auto &role : QList<QPair<QString, QString>>{{"isChatOwner", "owner"},
+                       {"isChatModerator", "moderator"}, {"isChatSponsor", "subscriber"}}) {
+                if (author[role.first].toBool()) {
+                    Badge badge;
+                    badge.id = badge.role = role.second;
+                    m.badges << badge;
+                }
+            }
+            if (!m.id.isEmpty() && !m.name.isEmpty() && !m.text.isEmpty()) self->publish(m);
+        }
+        self->initial = false;
+        self->apiPageToken = str(data["nextPageToken"]);
+        if (self->apiPageToken.isEmpty()) {
+            self->status("The live chat has ended.");
+            return;
+        }
+        if (!self->paused) {
+            self->poll.start(qMax(qRound(self->apiInterval * 1000), data["pollingIntervalMillis"].toInt(5000)));
+        }
+    }, "GET", params, {}, 5);
 }
 
 TwitchConnection::TwitchConnection(Hub *h) : QObject(h), hub(h) {
@@ -844,6 +1046,7 @@ void TwitchConnection::close() {
 
 Hub::Hub(Config *c, Network *n, Accounts *a, Images *i, Quota *q, QObject *p)
     : QObject(p), cfg(c), net(n), accounts(a), images(i), quota(q), twitch(this) {
+    youtubeClock.start();
     liveTimer.setInterval(60000);
     connect(&liveTimer, &QTimer::timeout, this, &Hub::pollLive);
     connect(accounts, &Accounts::ready, this, [this] {
@@ -855,6 +1058,10 @@ Hub::Hub(Config *c, Network *n, Accounts *a, Images *i, Quota *q, QObject *p)
             pollLive();
         }
     });
+}
+
+int Hub::youtubeCooldownRemaining() const {
+    return int(qBound(qint64(0), youtubeCooldownUntil - youtubeClock.elapsed(), qint64(1800000)));
 }
 
 Source *Hub::source(QString platform, QString id) {
@@ -991,10 +1198,20 @@ void Hub::youtubeChatId(Source *s, std::function<void(QString, QString)> done) {
                           }
                           if (e.isEmpty()) {
                               self->header["live_chat_id"] = id;
+                              auto snippet = item["snippet"].toObject();
+                              const auto channelId = str(snippet["channelId"]);
+                              if (!channelId.isEmpty()) {
+                                  self->header["channel_id"] = channelId;
+                                  self->header["channel"] = snippet["channelTitle"];
+                                  self->header["title"] = snippet["title"];
+                                  self->header["live"] = true;
+                                  self->loadEmotes(channelId);
+                                  emit self->changed();
+                              }
                           }
                           done(id, e);
                       },
-                      "GET", {{"part", "liveStreamingDetails"}, {"id", s->id}});
+                      "GET", {{"part", "snippet,liveStreamingDetails"}, {"id", s->id}});
 }
 
 void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {

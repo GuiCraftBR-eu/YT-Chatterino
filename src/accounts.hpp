@@ -41,6 +41,7 @@ class Accounts : public QObject {
     bool connected(const QString &provider) const;
     bool twitchAllows(const QSet<QString> &scopes) const;
     bool googleAllowsWriting() const;
+    bool googleCanReadChat() const;
     bool googleClientConfigured() const;
     static QSet<QString> fullTwitchScopes();
     static QString googleSignInHelp();

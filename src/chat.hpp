@@ -24,7 +24,11 @@ class Source : public QObject {
     QJsonObject context;
     QTimer poll, metadataTimer;
     bool requesting = false, initial = true;
+    bool apiFallbackEnabled = false, apiActive = false;
+    QString apiPageToken;
+    double apiInterval = 18.25;
     int recommendedMs = 5000, retryMs = 5000;
+    int apiRetryMs = 120000;
     double interval = 4;
     qint64 polls = 0;
     quint64 generation = 0;
@@ -51,6 +55,11 @@ class Source : public QObject {
     void youtubeActions(const QJsonArray &actions, bool historical = false);
     void youtubeContinue(QJsonObject chat, QJsonObject config);
     void youtubeError(const QString &error, int delay = 0);
+    bool deferYouTubeForCooldown();
+    void youtubeApiConnect();
+    void youtubeApiPoll();
+    void youtubeApiError(const QString &error);
+    void setApiFallback(bool enabled);
     QJsonObject spec() const;
   signals:
     void message(yc::Message message);
@@ -96,6 +105,10 @@ class Hub : public QObject {
     bool liveRequest = false;
     QTemporaryDir soundFiles;
     bool testMode = false;
+    QElapsedTimer youtubeClock;
+    qint64 youtubeCooldownUntil = 0;
+    int youtubeRateDelay = 120000;
+    int youtubeCooldownRemaining() const;
     Source *source(QString platform, QString id);
     void remove(Source *source);
     void globalEmotes();

@@ -1,13 +1,16 @@
-YT-CHATTERINO 2.1.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.1.2 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.1.1.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.1.2.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
 
 ADICIONAR UM CHAT
 Pressione Ctrl+T (ou clique em +). Cole o link de uma LIVE do YouTube ou um @canal/link da Twitch.
-A leitura pública do YouTube não precisa de chave de API, conta do Google nem unidades de cota.
+A leitura comum pelo site do YouTube não precisa de chave, conta do Google nem unidades de cota.
+Se o Google limitar o acesso (HTTP 429), conecte sua conta e ative por chat a alternativa
+da API oficial no menu do canal. Ela usa 5 unidades por solicitação, cerca de 986 unidades
+por hora por chat no intervalo padrão de 18,25 segundos; vários chats consomem mais.
 Twitch: Configurações > Contas > Conectar Twitch. Autorize o código no navegador uma vez.
 A tela informa a conta conectada e as permissões ativadas; não é preciso autorizar novamente para atualizar emotes.
 
@@ -55,7 +58,8 @@ Os arquivos Source/*.py* são marcadores de compatibilidade não utilizados, exi
 não são código Python executado pelo aplicativo. Todo o aplicativo e seu ambiente são nativos em C++/Qt.
 
 LIMITES / AJUDA
-As unidades de ações do YouTube são uma estimativa; a leitura usa zero unidades da API. Aplicativos do Google
+As unidades do YouTube são uma estimativa; a leitura via site usa zero unidades da API.
+A alternativa opcional pela API oficial consome cota. Aplicativos do Google
 em teste podem exigir novo acesso após sete dias. O histórico recente da Twitch usa um serviço público externo
 e pode ficar indisponível. As conversas incluem somente mensagens retidas. GIFs recebidos da Twitch
 são exibidos; o envio de GIFs é feito pelo navegador da Twitch. Mudanças no site do YouTube podem interromper a leitura.
