@@ -918,7 +918,8 @@ QWidget *SettingsWindow::tutorialPage() {
               "role; title/category edits require the broadcaster account."},
              {"YouTube: connect, send and moderate",
               "Create a Google Cloud project, enable YouTube Data API v3, configure the consent screen and "
-              "create a Desktop OAuth client. Add your account as a test user if needed. Download its JSON. "
+              "create a Desktop OAuth client. If the OAuth app is in Testing, adding the exact Google account "
+              "used to sign in under Google Auth Platform → Audience → Test users is required. Download its JSON. "
               "In Accounts choose the JSON, then Sign in to YouTube and approve in your browser. Select your "
               "channel or Brand Account. Sending uses about 20 units; deletion about 20–26; bans/timeouts "
               "200. You must be the owner/moderator to moderate. Public reading stays free."},

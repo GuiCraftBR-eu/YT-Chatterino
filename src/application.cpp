@@ -360,9 +360,9 @@ void MainWindow::refreshQuota() {
 }
 
 void MainWindow::refreshLanguage() {
-    addButton->setToolTip(cfg.T("Add chats"));
-    layoutButton->setToolTip(cfg.T("Split or mix chats"));
-    gear->setToolTip(cfg.T("Settings"));
+    addButton->setToolTip(cfg.T("Add chats (Ctrl+T)"));
+    layoutButton->setToolTip(cfg.T("Split or mix chats (Ctrl+Shift+T)"));
+    gear->setToolTip(cfg.T("Settings (Ctrl+P)"));
     refreshTabs();
     refreshQuota();
     for (auto *p : findChildren<Pane *>()) {
