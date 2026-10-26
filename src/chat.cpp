@@ -652,8 +652,13 @@ void Source::youtubePoll() {
 
 void Source::youtubeError(const QString &error, int delay) {
     requesting = false;
-    int wait = delay ? delay : retryMs;
-    status(error + " " + hub->cfg->T("Retrying in {seconds}s.", {{"seconds", QString::number(wait / 1000)}}));
+    const bool rateLimited = error.startsWith("HTTP 429:");
+    const int wait = delay ? delay : (rateLimited ? 120000 : retryMs);
+    const auto message = rateLimited
+                             ? hub->cfg->T("YouTube temporarily limited requests (HTTP 429). Try again later "
+                                           "or open the chat in your browser.")
+                             : error;
+    status(message + " " + hub->cfg->T("Retrying in {seconds}s.", {{"seconds", QString::number(wait / 1000)}}));
     retryMs = qMin(120000, retryMs * 2);
     if (!closed && !paused) {
         poll.start(wait);

@@ -360,9 +360,9 @@ void MainWindow::refreshQuota() {
 }
 
 void MainWindow::refreshLanguage() {
-    addButton->setToolTip(cfg.T("Add chats"));
-    layoutButton->setToolTip(cfg.T("Split or mix chats"));
-    gear->setToolTip(cfg.T("Settings"));
+    addButton->setToolTip(cfg.T("Add chats (Ctrl+T)"));
+    layoutButton->setToolTip(cfg.T("Split or mix chats (Ctrl+Shift+T)"));
+    gear->setToolTip(cfg.T("Settings (Ctrl+P)"));
     refreshTabs();
     refreshQuota();
     for (auto *p : findChildren<Pane *>()) {
@@ -960,56 +960,85 @@ void MainWindow::quickSwitch() {
 void MainWindow::globalSearch() {
     auto *d = new QDialog(this);
     d->setAttribute(Qt::WA_DeleteOnClose);
+    d->setObjectName("global-search");
     d->setWindowTitle(cfg.T("Search all chats"));
     auto *l = new QVBoxLayout(d);
     auto *input = new QLineEdit(d);
+    input->setObjectName("global-search-input");
+    input->setClearButtonEnabled(true);
     input->setPlaceholderText(cfg.T("Search messages…"));
     auto *results = new QListWidget(d);
+    results->setObjectName("global-search-results");
+    results->setUniformItemSizes(true);
+    auto *status = new QLabel(d);
+    status->setObjectName("global-search-status");
+    status->setStyleSheet("color:#8b8b94;");
     l->addWidget(input);
+    l->addWidget(status);
     l->addWidget(results);
-    connect(input, &QLineEdit::textChanged, d, [this, results](QString query) {
+    auto *searchTimer = new QTimer(d);
+    searchTimer->setSingleShot(true);
+    searchTimer->setInterval(120);
+    connect(input, &QLineEdit::textChanged, d, [results, status, searchTimer](const QString &query) {
         results->clear();
+        status->clear();
         if (query.isEmpty()) {
-            return;
+            searchTimer->stop();
+        } else {
+            searchTimer->start();
         }
+    });
+    connect(searchTimer, &QTimer::timeout, d, [this, input, results, status] {
+        const QString query = input->text();
         int count = 0;
-        for (int i = 0; i < tabs->count(); ++i) {
+        for (int i = 0; i < tabs->count() && count < 2000; ++i) {
             auto *w = qobject_cast<Workspace *>(tabs->widget(i));
             if (!w) {
                 continue;
             }
             for (auto *p : w->panes()) {
                 for (const auto &m : p->view->messages) {
+                    if (count >= 2000) {
+                        break;
+                    }
                     if ((m.name + ' ' + m.text).contains(query, Qt::CaseInsensitive)) {
                         auto *item = new QListWidgetItem(
                             tabs->tabText(i) + " · " + m.name + ": " + m.text.left(180), results);
-                        item->setData(Qt::UserRole, i);
+                        item->setData(Qt::UserRole, w->uid);
                         item->setData(Qt::UserRole + 1, p->uid);
                         item->setData(Qt::UserRole + 2, m.seq);
-                        if (++count >= 2000) {
+                        ++count;
+                    }
+                }
+            }
+        }
+        status->setText(count ? cfg.T(count == 2000 ? "Showing up to {count} results" : "Results: {count}",
+                                      {{"count", QString::number(count)}})
+                              : cfg.T("No matching messages."));
+    });
+    connect(results, &QListWidget::itemActivated, d, [this, d, status](QListWidgetItem *item) {
+        for (int i = 0; i < tabs->count(); ++i) {
+            auto *w = qobject_cast<Workspace *>(tabs->widget(i));
+            if (!w || w->uid != item->data(Qt::UserRole).toString()) {
+                continue;
+            }
+            for (auto *p : w->panes()) {
+                if (p->uid == item->data(Qt::UserRole + 1).toString()) {
+                    for (int row = 0; row < p->view->messages.size(); ++row) {
+                        if (p->view->messages[row].seq == item->data(Qt::UserRole + 2).toLongLong()) {
+                            tabs->setCurrentIndex(i);
+                            w->focusedPane = p;
+                            p->view->jumpRow(row);
+                            refreshQuota();
+                            d->accept();
                             return;
                         }
                     }
                 }
             }
+            break;
         }
-    });
-    connect(results, &QListWidget::itemActivated, d, [this, d](QListWidgetItem *item) {
-        int i = item->data(Qt::UserRole).toInt();
-        tabs->setCurrentIndex(i);
-        if (auto *w = current()) {
-            for (auto *p : w->panes()) {
-                if (p->uid == item->data(Qt::UserRole + 1).toString()) {
-                    w->focusedPane = p;
-                    for (int row = 0; row < p->view->messages.size(); ++row) {
-                        if (p->view->messages[row].seq == item->data(Qt::UserRole + 2).toLongLong()) {
-                            p->view->jumpRow(row);
-                        }
-                    }
-                }
-            }
-        }
-        d->accept();
+        status->setText(cfg.T("This message is no longer available."));
     });
     d->resize(700, 480);
     d->show();

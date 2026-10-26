@@ -53,6 +53,7 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
     outer->setContentsMargins(6, 6, 6, 6);
     search = new QLineEdit(this);
     search->setPlaceholderText(main->cfg.T("Search settings"));
+    search->setClearButtonEnabled(true);
     outer->addWidget(search);
     auto *body = new QHBoxLayout;
     navigation = new QTreeWidget(this);
@@ -918,7 +919,7 @@ QWidget *SettingsWindow::tutorialPage() {
               "role; title/category edits require the broadcaster account."},
              {"YouTube: connect, send and moderate",
               "Create a Google Cloud project, enable YouTube Data API v3, configure the consent screen and "
-              "create a Desktop OAuth client. Add your account as a test user if needed. Download its JSON. "
+              "create a Desktop OAuth client. Download its JSON. "
               "In Accounts choose the JSON, then Sign in to YouTube and approve in your browser. Select your "
               "channel or Brand Account. Sending uses about 20 units; deletion about 20–26; bans/timeouts "
               "200. You must be the owner/moderator to moderate. Public reading stays free."},
@@ -945,6 +946,15 @@ QWidget *SettingsWindow::tutorialPage() {
         title->setFont(QFont("Segoe UI", 11, QFont::Bold));
         l->addWidget(title);
         l->addWidget(text(main->cfg, section.second, true));
+        if (section.first == "YouTube: connect, send and moderate") {
+            auto *requirement = text(main->cfg,
+                                     "If the OAuth app is in Testing, adding the exact Google account used "
+                                     "to sign in under Google Auth Platform → Audience → Test users is required.");
+            requirement->setObjectName("google-testing-requirement");
+            requirement->setStyleSheet("background:#102016;color:#c9ebce;border:1px solid #285b34;padding:8px;");
+            l->addSpacing(5);
+            l->addWidget(requirement);
+        }
         l->addSpacing(10);
     }
     l->addStretch();

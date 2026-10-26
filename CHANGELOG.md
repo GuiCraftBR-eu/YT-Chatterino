@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.1
+
+- Explica a inclusão obrigatória de usuários de teste para apps OAuth em teste e trata recusas de login.
+- Destaca campos em foco, abas sob o ponteiro e estados de botões; os botões principais mostram seus atalhos.
+- A busca global aguarda a digitação, encontra a aba correta após reordenação e avisa quando a mensagem já saiu do histórico.
+- Adiciona botões para limpar as buscas de mensagens e configurações.
+- Ao receber HTTP 429 do YouTube, informa o bloqueio com clareza e aguarda dois minutos para tentar novamente.
+
 ## 2.1.0
 
 - Remove a linha de base das abas e o contorno claro da janela no Windows.

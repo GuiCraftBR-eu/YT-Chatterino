@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.1.0 — WINDOWS 11 x64
+YT-CHATTERINO 2.1.1 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.1.0.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.1.1.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -17,7 +17,7 @@ A Twitch usa seu acesso salvo e solicita permissões adicionais quando necessár
 O envio e a moderação no YouTube exigem seu próprio JSON de cliente OAuth do Google para computador.
 Ative a YouTube Data API v3 no projeto do Google Cloud; configure a tela de consentimento;
 crie um cliente OAuth do tipo Aplicativo para computador; baixe o JSON. Em Contas, escolha
-o JSON e clique em Entrar no YouTube. Se necessário, adicione sua conta como usuário de teste.
+o JSON e clique em Entrar no YouTube. Se o app OAuth estiver em teste, adicione obrigatoriamente a conta Google exata usada no login em Público-alvo > Usuários de teste.
 Você precisa ter permissão real de moderador/dono no canal. Há mais instruções no Tutorial.
 Não compartilhe seu JSON, tokens nem perfil com amigos. Compartilhe somente este ZIP limpo.
 

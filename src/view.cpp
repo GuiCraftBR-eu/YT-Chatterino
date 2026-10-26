@@ -940,6 +940,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     searchLayout->setContentsMargins(4, 2, 4, 2);
     searchInput = new QLineEdit(searchBar);
     searchInput->setPlaceholderText(hub->cfg->T("Search messages…"));
+    searchInput->setClearButtonEnabled(true);
     searchCount = new QLabel(searchBar);
     auto *previous = new QToolButton(searchBar);
     previous->setText("↑");
