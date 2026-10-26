@@ -79,10 +79,13 @@ with zipfile.ZipFile(package) as archive:
 print(f'Validated {package} with {len(files)} managed files.')
 
 if not args.skip_source_archive:
-    status = subprocess.run(['git', '-C', str(root), 'status', '--porcelain', '--untracked-files=all'],
+    # Generated build/test files can be untracked; git archive never includes them.
+    # Tracked changes would make the compiled sources differ from the archive.
+    status = subprocess.run(['git', '-C', str(root), 'status', '--porcelain', '--untracked-files=no'],
                             check=True, capture_output=True, text=True)
     if status.stdout.strip():
-        raise SystemExit('Source archive requires a clean checkout so it matches the build.')
+        raise SystemExit('Tracked files changed during the build; source archive would not match:\n'
+                         + status.stdout)
     source_package = output / f'YT-Chatterino-Cpp-Source-{args.version}.zip'
     subprocess.run(['git', '-C', str(root), 'archive', '--format=zip',
                     f'--prefix=YT-Chatterino-{args.version}/', '-o', str(source_package), 'HEAD'], check=True)
