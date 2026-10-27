@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.3
+
+- Corrige a prévia de emotes ao passar o mouse.
+- Mostra um selo azul com marca de verificação para usuários verificados do YouTube.
+- Organiza as configurações em grupos, com navegação e visual atualizados.
+
 ## 2.1.2
 
 - Mostra nome, prévia e provedor do emote ao passar o mouse.

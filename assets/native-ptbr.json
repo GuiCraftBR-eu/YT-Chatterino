@@ -194,5 +194,12 @@
   "The estimated YouTube quota is exhausted. API chat reading stopped.": "A cota estimada do YouTube acabou. A leitura do chat pela API foi interrompida.",
   "YouTube chat limited (HTTP 429)": "Chat do YouTube limitado (HTTP 429)",
   "Web reading may be temporarily limited by Google. Sign in to YouTube in Accounts, then right-click the chat tab → channel → Official API fallback and confirm its quota cost. When web reading is limited, the fallback uses 5 units per request, about 986 units per hour per chat at the default 18.25 seconds. Multiple chats use more. Change the interval in the same channel menu. API reading stops when the estimated quota is exhausted.": "O Google pode limitar temporariamente a leitura pelo site. Entre no YouTube em Contas, clique com o botão direito na aba do chat → canal → Usar API oficial se necessário e confirme o consumo de cota. Se a leitura pelo site for limitada, a alternativa usa 5 unidades por solicitação, cerca de 986 unidades por hora por chat no intervalo padrão de 18,25 segundos. Vários chats consomem mais. Altere o intervalo no mesmo menu do canal. A leitura pela API para quando a cota estimada acaba.",
-  "Official YouTube API connection interrupted. Retrying in {seconds}s.": "Conexão com a API oficial do YouTube interrompida. Tentando novamente em {seconds}s."
+  "Official YouTube API connection interrupted. Retrying in {seconds}s.": "Conexão com a API oficial do YouTube interrompida. Tentando novamente em {seconds}s.",
+  "Connections": "Conexões",
+  "Application": "Aplicativo",
+  "Language and window": "Idioma e janela",
+  "Message layout": "Layout das mensagens",
+  "Text and images": "Texto e imagens",
+  "Date and time": "Data e hora",
+  "Mouse": "Mouse"
 }

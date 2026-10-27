@@ -1,5 +1,5 @@
 pkgname=yt-chatterino
-pkgver=2.1.2
+pkgver=2.1.3
 pkgrel=1
 pkgdesc='Native C++ YouTube and Twitch chat client inspired by Chatterino'
 arch=('x86_64')
