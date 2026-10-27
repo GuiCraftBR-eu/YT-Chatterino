@@ -1,9 +1,9 @@
 # Arch Linux — native C++ / Qt
 
-Download `yt-chatterino-2.1.3-1-x86_64.pkg.tar.zst` from the release and install it with:
+Download `yt-chatterino-2.1.4-1-x86_64.pkg.tar.zst` from the release and install it with:
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.1.3-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.1.4-1-x86_64.pkg.tar.zst
 ```
 
 Launch YT-Chatterino from the desktop application menu, or run `yt-chatterino`. Qt runs directly on Linux; Wine and Python are not used. Dependencies are installed through pacman. Both X11 and Wayland can use the Qt platform plugins supplied by Arch.

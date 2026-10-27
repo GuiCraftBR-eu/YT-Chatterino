@@ -29,8 +29,6 @@ class ChatView : public QAbstractScrollArea {
     QString query;
     QPushButton *latest;
     QTimer resizeTimer;
-    QTimer emoteHoverTimer;
-    QPoint emoteHoverPosition, emoteHoverGlobal;
     QTimer autoScrollTimer;
     QElapsedTimer autoScrollClock;
     QPoint autoScrollAnchor;
@@ -40,6 +38,8 @@ class ChatView : public QAbstractScrollArea {
     QFrame *emoteTooltip = nullptr;
     QLabel *emotePreview = nullptr, *emoteTooltipName = nullptr, *emoteTooltipProvider = nullptr;
     QStringList tooltipUrls;
+    qint64 tooltipMessage = 0;
+    int tooltipPosition = -1;
     QPair<int, int> selectionStart{-1, 0}, selectionEnd{-1, 0};
     bool dragging = false;
     qint64 synthetic = -1;

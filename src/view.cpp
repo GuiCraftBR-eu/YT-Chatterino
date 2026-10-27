@@ -13,13 +13,6 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     latest->hide();
     latest->setFocusPolicy(Qt::NoFocus);
     connect(latest, &QPushButton::clicked, this, &ChatView::jumpLatest);
-    emoteHoverTimer.setSingleShot(true);
-    emoteHoverTimer.setInterval(350);
-    connect(&emoteHoverTimer, &QTimer::timeout, this, [this] {
-        if (isVisible() && !autoScrolling) {
-            showEmoteTooltip(emoteHoverPosition, emoteHoverGlobal);
-        }
-    });
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this] {
         hideEmoteTooltip();
         latest->setVisible(!follow && verticalScrollBar()->maximum() > 0);
@@ -569,11 +562,12 @@ QPair<int, int> ChatView::positionAt(QPoint point) {
 }
 
 void ChatView::hideEmoteTooltip() {
-    emoteHoverTimer.stop();
     if (emoteTooltip) {
         emoteTooltip->hide();
     }
     tooltipUrls.clear();
+    tooltipMessage = 0;
+    tooltipPosition = -1;
 }
 
 bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
@@ -584,10 +578,14 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
     }
     const int row = rowAt(y);
     auto doc = document(row);
+    const auto info = details.value(messages[row].seq).emoteImages;
+    if (info.isEmpty()) {
+        hideEmoteTooltip();
+        return false;
+    }
     (void)doc->size();
     const QPointF local(point.x() - 6, y - offsets.value(row) - 3);
     const int hit = doc->documentLayout()->hitTest(local, Qt::ExactHit);
-    const auto info = details.value(messages[row].seq).emoteImages;
     int position = hit;
     if (!info.contains(position) && info.contains(position - 1)) {
         --position;
@@ -614,6 +612,10 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
         hideEmoteTooltip();
         return false;
     }
+    if (emoteTooltip && emoteTooltip->isVisible() && tooltipMessage == messages[row].seq &&
+        tooltipPosition == position && tooltipUrls == info.value(position).second) {
+        return true;
+    }
     if (!emoteTooltip) {
         emoteTooltip = new QFrame(this, Qt::ToolTip);
         emoteTooltip->setAttribute(Qt::WA_ShowWithoutActivating);
@@ -636,6 +638,8 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
     }
     auto item = info.value(position);
     tooltipUrls = item.second;
+    tooltipMessage = messages[row].seq;
+    tooltipPosition = position;
     const auto image = hub->images->get(tooltipUrls, true);
     emotePreview->setPixmap(QPixmap::fromImage(image).scaled(112, 112, Qt::KeepAspectRatio,
                                                               Qt::SmoothTransformation));
@@ -659,7 +663,6 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
 bool ChatView::viewportEvent(QEvent *event) {
     if (event->type() == QEvent::ToolTip) {
         auto *help = static_cast<QHelpEvent *>(event);
-        emoteHoverTimer.stop();
         if (!autoScrolling && showEmoteTooltip(help->pos(), help->globalPos())) {
             return true;
         }
@@ -733,12 +736,8 @@ void ChatView::mouseMoveEvent(QMouseEvent *e) {
     } else {
         if (e->buttons() != Qt::NoButton) {
             hideEmoteTooltip();
-        } else if (emoteTooltip && emoteTooltip->isVisible()) {
-            showEmoteTooltip(e->position().toPoint(), e->globalPosition().toPoint());
         } else {
-            emoteHoverPosition = e->position().toPoint();
-            emoteHoverGlobal = e->globalPosition().toPoint();
-            emoteHoverTimer.start();
+            showEmoteTooltip(e->position().toPoint(), e->globalPosition().toPoint());
         }
         auto pos = positionAt(e->position().toPoint());
         bool clickable = false;

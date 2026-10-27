@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.4
+
+- Mostra a prévia do emote imediatamente ao passar o mouse.
+- Organiza o tutorial em assuntos navegáveis, mantendo as instruções de conexão.
+- Ajusta o visual e a compactação da barra de abas e seus controles.
+
 ## 2.1.3
 
 - Corrige a prévia de emotes ao passar o mouse.

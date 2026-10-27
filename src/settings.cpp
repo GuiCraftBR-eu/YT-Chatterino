@@ -98,6 +98,12 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
                   "border:1px solid #777;border-radius:2px;}"
                   "QCheckBox::indicator:checked{background:#285b7a;border-color:#4a9cdb;"
                   "image:url(:/settings-check.svg);}"
+                  "QTabWidget#tutorial-topics::pane{border:1px solid #303037;background:#0d0d0f;}"
+                  "QTabWidget#tutorial-topics QTabBar::tab{background:#141416;color:#bdbdc4;"
+                  "padding:6px 9px;border-top:2px solid transparent;}"
+                  "QTabWidget#tutorial-topics QTabBar::tab:selected{background:#202024;color:#fff;"
+                  "border-top:2px solid #4a9cdb;}"
+                  "QFrame#tutorial-card{background:#141416;border:1px solid #303037;border-radius:5px;}"
                   "QLabel#settings-section{font-weight:600;color:#aeb8c2;padding-top:8px;}");
     auto *shortcut = new QShortcut(QKeySequence::Find, this);
     connect(shortcut, &QShortcut::activated, this, [this] {
@@ -959,6 +965,25 @@ QWidget *SettingsWindow::shortcutsPage() {
 QWidget *SettingsWindow::tutorialPage() {
     QVBoxLayout *l;
     auto *w = pageWidget(main->cfg, "Tutorial", &l);
+    l->addWidget(text(main->cfg, "Choose a topic for setup steps and shortcuts.", true));
+    auto *topics = new QTabWidget(w);
+    topics->setObjectName("tutorial-topics");
+    topics->setDocumentMode(true);
+    topics->setMinimumHeight(400);
+    QList<QVBoxLayout *> topicLayouts;
+    for (const auto &name : QStringList{"Getting started", "Accounts", "Chat", "Customization"}) {
+        auto *scroll = new QScrollArea(topics);
+        scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setWidgetResizable(true);
+        auto *content = new QWidget;
+        auto *layout = new QVBoxLayout(content);
+        layout->setContentsMargins(10, 10, 10, 10);
+        layout->setSpacing(8);
+        scroll->setWidget(content);
+        topics->addTab(scroll, main->cfg.T(name));
+        topicLayouts << layout;
+    }
+    l->addWidget(topics, 1);
     for (const auto &section : QList<QPair<QString, QString>>{
              {"Read chats", "Click +. Paste a YouTube live link or Twitch @channel. Reading YouTube needs no "
                             "API key or account. YouTube stays connected in background tabs."},
@@ -998,22 +1023,34 @@ QWidget *SettingsWindow::tutorialPage() {
               "phrases. Notifications plays configurable WAV sounds for mentions and Twitch live "
               "transitions. YouTube has no live alerts. Updates are checked in the background and installed "
               "only after confirmation."}}) {
+        const int group = section.first == "Read chats" ? 0
+                          : section.first == "Tabs, splits and saved channels" ||
+                                    section.first == "Messages, emotes and reply threads" ? 2
+                          : section.first == "Appearance, highlights and sounds" ? 3 : 1;
+        auto *card = new QFrame(w);
+        card->setObjectName("tutorial-card");
+        auto *cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(11, 9, 11, 9);
+        cardLayout->setSpacing(7);
         auto *title = text(main->cfg, section.first);
-        title->setFont(QFont("Segoe UI", 11, QFont::Bold));
-        l->addWidget(title);
-        l->addWidget(text(main->cfg, section.second, true));
+        title->setFont(QFont("Segoe UI", 10, QFont::Bold));
+        cardLayout->addWidget(title);
+        auto *body = text(main->cfg, section.second);
+        body->setStyleSheet("color:#c1c1c9;");
+        body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        cardLayout->addWidget(body);
         if (section.first == "YouTube: connect, send and moderate") {
             auto *requirement = text(main->cfg,
                                      "If the OAuth app is in Testing, adding the exact Google account used "
                                      "to sign in under Google Auth Platform → Audience → Test users is required.");
             requirement->setObjectName("google-testing-requirement");
             requirement->setStyleSheet("background:#102016;color:#c9ebce;border:1px solid #285b34;padding:8px;");
-            l->addSpacing(5);
-            l->addWidget(requirement);
+            requirement->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            cardLayout->addWidget(requirement);
         }
-        l->addSpacing(10);
+        topicLayouts[group]->addWidget(card);
     }
-    l->addStretch();
+    for (auto *layout : topicLayouts) layout->addStretch();
     return w;
 }
 } // namespace yc
