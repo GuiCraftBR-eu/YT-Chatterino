@@ -1,4 +1,4 @@
-YT-Chatterino 2.1.3 — native library notices
+YT-Chatterino 2.1.4 — native library notices
 
 The application dynamically links unmodified Qt 6.8.3 Core/Gui/Widgets/Network/Svg
 and Qt image/platform/TLS plugins. Qt is used under LGPL 3.0; the complete

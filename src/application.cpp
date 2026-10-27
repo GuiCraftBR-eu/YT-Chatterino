@@ -57,29 +57,50 @@ MainWindow::MainWindow(QString profile, bool testing)
     resize(520, 760);
     setMinimumSize(340, 300);
     tabs = new QTabWidget(this);
+    tabs->setObjectName("chat-tabs");
     tabs->setTabsClosable(true);
     tabs->setMovable(true);
     tabs->setDocumentMode(true);
     tabs->tabBar()->setDrawBase(false);
+    tabs->tabBar()->setObjectName("chat-tabbar");
+    tabs->tabBar()->setElideMode(Qt::ElideRight);
+    tabs->tabBar()->setUsesScrollButtons(true);
+    tabs->setStyleSheet("QTabBar#chat-tabbar::tab{background:#101012;color:#bdbdc3;"
+                        "padding:4px 7px;border-top:2px solid transparent;}"
+                        "QTabBar#chat-tabbar::tab:hover:!selected{background:#1b1b1e;color:#fff;}"
+                        "QTabBar#chat-tabbar::tab:selected{background:#202024;color:#fff;"
+                        "border-top:2px solid #4a9cdb;}"
+                        "QTabBar#chat-tabbar::close-button{image:url(:/close.svg);width:11px;height:11px;}"
+                        "QTabBar#chat-tabbar::close-button:hover{background:#444;border-radius:2px;}"
+                        "QWidget#chat-controls{background:#101012;border-left:1px solid #28282d;}"
+                        "QToolButton#chat-control{background:transparent;color:#d2d2d8;"
+                        "border:0;border-radius:3px;padding:0;}"
+                        "QToolButton#chat-control:hover{background:#303037;color:#fff;}"
+                        "QToolButton#chat-control:pressed{background:#3b3b44;}");
     setCentralWidget(tabs);
     tabs->tabBar()->installEventFilter(this);
     tabs->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
     auto *strip = new QWidget(tabs);
+    strip->setObjectName("chat-controls");
     auto *sl = new QHBoxLayout(strip);
-    sl->setContentsMargins(0, 0, 0, 0);
-    sl->setSpacing(1);
+    sl->setContentsMargins(3, 2, 3, 2);
+    sl->setSpacing(2);
     addButton = new QToolButton(strip);
     addButton->setText("+");
     layoutButton = new QToolButton(strip);
     layoutButton->setText("▦");
     quotaLabel = new QLabel(strip);
-    quotaLabel->setStyleSheet("color:#8b8b94;font-size:10px;");
+    quotaLabel->setStyleSheet("color:#a4a4ad;font-size:10px;padding:0 3px;");
     updateArrow = new QToolButton(strip);
     updateArrow->setText("⬇");
     updateArrow->setStyleSheet("color:#78c34b;");
     updateArrow->hide();
     gear = new QToolButton(strip);
     gear->setText("⚙");
+    for (auto *control : {addButton, layoutButton, updateArrow, gear}) {
+        control->setObjectName("chat-control");
+        control->setFixedSize(23, 23);
+    }
     sl->addWidget(addButton);
     sl->addWidget(layoutButton);
     sl->addWidget(quotaLabel);

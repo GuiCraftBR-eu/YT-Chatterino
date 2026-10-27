@@ -95,4 +95,7 @@ class NativeTests : public QObject {
     void emoteHoverRespondsToMouseMovement();
     void youtubeVerifiedBadgeDrawsBlueCheck();
     void settingsGroupsAndLanguagePersist();
+    void emoteHoverOpensImmediately();
+    void tutorialTopicsAndGoogleRequirement();
+    void compactTabBarKeepsControlsUsable();
 };
