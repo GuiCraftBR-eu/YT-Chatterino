@@ -13,6 +13,13 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     latest->hide();
     latest->setFocusPolicy(Qt::NoFocus);
     connect(latest, &QPushButton::clicked, this, &ChatView::jumpLatest);
+    emoteHoverTimer.setSingleShot(true);
+    emoteHoverTimer.setInterval(350);
+    connect(&emoteHoverTimer, &QTimer::timeout, this, [this] {
+        if (isVisible() && !autoScrolling) {
+            showEmoteTooltip(emoteHoverPosition, emoteHoverGlobal);
+        }
+    });
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this] {
         hideEmoteTooltip();
         latest->setVisible(!follow && verticalScrollBar()->maximum() > 0);
@@ -242,6 +249,23 @@ static QImage roleBadge(const QString &role, int size) {
     p.setRenderHint(QPainter::Antialiasing);
     p.scale(image.width() / 18., image.height() / 18.);
     p.setPen(Qt::NoPen);
+    if (role == "verified") {
+        QPainterPath seal;
+        constexpr double pi = 3.141592653589793;
+        for (int i = 0; i <= 144; ++i) {
+            const double angle = i * 2 * pi / 144;
+            const double radius = 8.0 + 0.8 * std::cos(12 * angle);
+            QPointF point(9 + radius * std::cos(angle), 9 + radius * std::sin(angle));
+            if (i == 0) seal.moveTo(point); else seal.lineTo(point);
+        }
+        seal.closeSubpath();
+        p.setBrush(QColor("#009fe3"));
+        p.drawPath(seal);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(Qt::white, 2.1, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin));
+        p.drawPolyline(QPolygonF{{4.2, 9.2}, {7.4, 12.2}, {13.8, 5.8}});
+        return image;
+    }
     p.setBrush(QColor(role == "moderator" ? "#00ad03"
                       : role == "owner"   ? "#e91916"
                       : role == "vip"     ? "#e005b9"
@@ -350,8 +374,9 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
                 badge = full;
             }
         }
-        if (badge.urls.isEmpty() && (badge.role == "owner" || badge.role == "moderator" ||
-                                     badge.role == "subscriber" || badge.role == "vip")) {
+        const bool youtubeVerified = source && source->platform == "youtube" && badge.role == "verified";
+        if (youtubeVerified || (badge.urls.isEmpty() && (badge.role == "owner" || badge.role == "moderator" ||
+                                                        badge.role == "subscriber" || badge.role == "vip"))) {
             const int size = a["badge_size"].toInt(18);
             QString url = "badge:" + badge.role;
             doc->addResource(QTextDocument::ImageResource, QUrl(url), roleBadge(badge.role, size));
@@ -544,6 +569,7 @@ QPair<int, int> ChatView::positionAt(QPoint point) {
 }
 
 void ChatView::hideEmoteTooltip() {
+    emoteHoverTimer.stop();
     if (emoteTooltip) {
         emoteTooltip->hide();
     }
@@ -590,6 +616,8 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
     }
     if (!emoteTooltip) {
         emoteTooltip = new QFrame(this, Qt::ToolTip);
+        emoteTooltip->setAttribute(Qt::WA_ShowWithoutActivating);
+        emoteTooltip->setAttribute(Qt::WA_TransparentForMouseEvents);
         emoteTooltip->setObjectName("emote-tooltip");
         emoteTooltip->setStyleSheet("QFrame#emote-tooltip{background:#111;border:1px solid #444;}"
                                     "QLabel{color:#efeff1;border:0;background:transparent;}");
@@ -631,6 +659,7 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
 bool ChatView::viewportEvent(QEvent *event) {
     if (event->type() == QEvent::ToolTip) {
         auto *help = static_cast<QHelpEvent *>(event);
+        emoteHoverTimer.stop();
         if (!autoScrolling && showEmoteTooltip(help->pos(), help->globalPos())) {
             return true;
         }
@@ -691,18 +720,26 @@ void ChatView::mousePressEvent(QMouseEvent *e) {
 }
 
 void ChatView::mouseMoveEvent(QMouseEvent *e) {
-    if (emoteTooltip && emoteTooltip->isVisible()) {
-        showEmoteTooltip(e->position().toPoint(), e->globalPosition().toPoint());
-    }
     if (autoScrolling) {
+        hideEmoteTooltip();
         return;
     }
     if (e->buttons().testFlag(Qt::LeftButton) && selectionStart.first >= 0) {
+        hideEmoteTooltip();
         dragging |= (e->position().toPoint() - pressPoint).manhattanLength() > 4;
         selectionEnd = positionAt(e->position().toPoint());
         follow = false;
         viewport()->update();
     } else {
+        if (e->buttons() != Qt::NoButton) {
+            hideEmoteTooltip();
+        } else if (emoteTooltip && emoteTooltip->isVisible()) {
+            showEmoteTooltip(e->position().toPoint(), e->globalPosition().toPoint());
+        } else {
+            emoteHoverPosition = e->position().toPoint();
+            emoteHoverGlobal = e->globalPosition().toPoint();
+            emoteHoverTimer.start();
+        }
         auto pos = positionAt(e->position().toPoint());
         bool clickable = false;
         if (pos.first >= 0) {

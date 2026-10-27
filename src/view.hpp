@@ -29,6 +29,8 @@ class ChatView : public QAbstractScrollArea {
     QString query;
     QPushButton *latest;
     QTimer resizeTimer;
+    QTimer emoteHoverTimer;
+    QPoint emoteHoverPosition, emoteHoverGlobal;
     QTimer autoScrollTimer;
     QElapsedTimer autoScrollClock;
     QPoint autoScrollAnchor;

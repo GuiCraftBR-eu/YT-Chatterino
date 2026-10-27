@@ -92,4 +92,7 @@ class NativeTests : public QObject {
     void youtubeApiFallbackReadsAndAccountsQuota();
     void youtubeApiFallbackRespectsQuotaAndSignIn();
     void youtubeFallbackMenuRequiresConfirmation();
+    void emoteHoverRespondsToMouseMovement();
+    void youtubeVerifiedBadgeDrawsBlueCheck();
+    void settingsGroupsAndLanguagePersist();
 };

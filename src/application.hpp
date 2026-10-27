@@ -88,6 +88,7 @@ class SettingsWindow : public QDialog {
     explicit SettingsWindow(MainWindow *main);
     MainWindow *main;
     QLineEdit *search;
+    QLabel *heading;
     QTreeWidget *navigation;
     QListWidget *results;
     QStackedWidget *pages;

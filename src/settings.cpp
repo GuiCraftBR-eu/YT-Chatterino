@@ -46,28 +46,59 @@ static QWidget *pageWidget(Config &cfg, const QString &title, QVBoxLayout **layo
 }
 
 SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
+    setObjectName("settings-window");
     setWindowTitle(main->cfg.T("Settings · YT-Chatterino"));
     resize(850, 700);
     setMinimumSize(620, 400);
     auto *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(6, 6, 6, 6);
+    outer->setContentsMargins(12, 10, 12, 12);
+    outer->setSpacing(10);
+    heading = new QLabel(main->cfg.T("Settings"), this);
+    heading->setObjectName("settings-heading");
+    outer->addWidget(heading);
+    auto *body = new QHBoxLayout;
+    body->setSpacing(10);
+    auto *sidebar = new QFrame(this);
+    sidebar->setObjectName("settings-sidebar");
+    sidebar->setMinimumWidth(155);
+    sidebar->setMaximumWidth(205);
+    auto *sideLayout = new QVBoxLayout(sidebar);
+    sideLayout->setContentsMargins(7, 7, 7, 7);
+    sideLayout->setSpacing(7);
     search = new QLineEdit(this);
     search->setPlaceholderText(main->cfg.T("Search settings"));
     search->setClearButtonEnabled(true);
-    outer->addWidget(search);
-    auto *body = new QHBoxLayout;
+    search->setObjectName("settings-search");
+    sideLayout->addWidget(search);
     navigation = new QTreeWidget(this);
+    navigation->setObjectName("settings-navigation");
     navigation->setHeaderHidden(true);
-    navigation->setMaximumWidth(195);
-    navigation->setMinimumWidth(145);
     navigation->setRootIsDecorated(true);
-    navigation->setIndentation(12);
-    body->addWidget(navigation);
+    navigation->setIndentation(14);
+    sideLayout->addWidget(navigation, 1);
+    body->addWidget(sidebar);
     pages = new QStackedWidget(this);
+    pages->setObjectName("settings-pages");
     body->addWidget(pages, 1);
     outer->addLayout(body, 1);
     results = new QListWidget(this);
+    results->setObjectName("settings-results");
     pages->addWidget(results);
+    setStyleSheet("QDialog#settings-window{background:#090909;}"
+                  "QLabel#settings-heading{font-size:19px;font-weight:600;color:#efeff1;}"
+                  "QFrame#settings-sidebar{background:#111;border:1px solid #282828;border-radius:5px;}"
+                  "QTreeWidget#settings-navigation,QListWidget#settings-results{background:#111;"
+                  "border:0;outline:0;color:#efeff1;}"
+                  "QTreeWidget#settings-navigation::item{height:28px;padding:2px 5px;border-radius:3px;}"
+                  "QTreeWidget#settings-navigation::item:hover{background:#222;}"
+                  "QTreeWidget#settings-navigation::item:selected{background:#243d51;color:#fff;}"
+                  "QListWidget#settings-results::item{padding:8px;}"
+                  "QListWidget#settings-results::item:selected{background:#243d51;}"
+                  "QCheckBox::indicator{width:14px;height:14px;background:#171717;"
+                  "border:1px solid #777;border-radius:2px;}"
+                  "QCheckBox::indicator:checked{background:#285b7a;border-color:#4a9cdb;"
+                  "image:url(:/settings-check.svg);}"
+                  "QLabel#settings-section{font-weight:600;color:#aeb8c2;padding-top:8px;}");
     auto *shortcut = new QShortcut(QKeySequence::Find, this);
     connect(shortcut, &QShortcut::activated, this, [this] {
         search->setFocus();
@@ -75,12 +106,15 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
     });
     connect(search, &QLineEdit::textChanged, this, &SettingsWindow::searchSettings);
     connect(navigation, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item, int) {
-        search->clear();
-        showPage(item->data(0, Qt::UserRole).toString());
+        const auto page = item->data(0, Qt::UserRole).toString();
+        if (!page.isEmpty()) {
+            search->clear();
+            showPage(page);
+        }
     });
     connect(navigation, &QTreeWidget::currentItemChanged, this,
             [this](QTreeWidgetItem *item, QTreeWidgetItem *) {
-                if (item) {
+                if (item && !item->data(0, Qt::UserRole).toString().isEmpty()) {
                     search->clear();
                     showPage(item->data(0, Qt::UserRole).toString());
                 }
@@ -110,17 +144,21 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
 void SettingsWindow::rebuildLanguage() {
     QString keep = currentPage.isEmpty() ? "Accounts" : currentPage;
     navigation->clear();
-    for (const auto &name : QStringList{"Accounts", "Appearance", "Notifications", "Saved channels",
-                                        "YouTube quota", "Updates", "Keyboard shortcuts", "Tutorial"}) {
-        auto *item = new QTreeWidgetItem(navigation, {main->cfg.T(name)});
-        item->setData(0, Qt::UserRole, name == "Appearance" ? "Display" : name);
-        if (name == "Appearance") {
-            for (const auto &sub : QStringList{"Display", "Messages", "Highlights"}) {
-                auto *child = new QTreeWidgetItem(item, {main->cfg.T(sub)});
-                child->setData(0, Qt::UserRole, sub);
-            }
-            item->setExpanded(true);
+    for (const auto &group : QList<QPair<QString, QStringList>>{
+             {"Connections", {"Accounts", "Saved channels", "YouTube quota"}},
+             {"Appearance", {"Display", "Messages", "Highlights"}},
+             {"Application", {"Notifications", "Updates", "Keyboard shortcuts", "Tutorial"}}}) {
+        auto *section = new QTreeWidgetItem(navigation, {main->cfg.T(group.first)});
+        section->setFlags(section->flags() & ~Qt::ItemIsSelectable);
+        QFont sectionFont = section->font(0);
+        sectionFont.setBold(true);
+        section->setFont(0, sectionFont);
+        section->setForeground(0, QColor("#a5a5ad"));
+        for (const auto &name : group.second) {
+            auto *child = new QTreeWidgetItem(section, {main->cfg.T(name)});
+            child->setData(0, Qt::UserRole, name);
         }
+        section->setExpanded(true);
     }
     const auto old = built.values();
     built.clear();
@@ -129,6 +167,7 @@ void SettingsWindow::rebuildLanguage() {
         w->deleteLater();
     }
     setWindowTitle(main->cfg.T("Settings · YT-Chatterino"));
+    heading->setText(main->cfg.T("Settings"));
     search->setPlaceholderText(main->cfg.T("Search settings"));
     showPage(keep);
 }
@@ -372,6 +411,13 @@ QWidget *SettingsWindow::appearancePage() {
     auto *w = pageWidget(cfg, "Appearance", &l);
     auto a = cfg.appearance();
     auto *form = new QFormLayout;
+    form->setVerticalSpacing(8);
+    auto section = [w, form, &cfg](const QString &title) {
+        auto *label = new QLabel(cfg.T(title), w);
+        label->setObjectName("settings-section");
+        form->addRow(label);
+    };
+    section("Language and window");
     auto *lang = new QComboBox(w);
     lang->addItems({"English", "Português (Brasil)"});
     lang->setCurrentIndex(cfg.language() == "pt-BR" ? 1 : 0);
@@ -379,6 +425,7 @@ QWidget *SettingsWindow::appearancePage() {
     auto *top = new QCheckBox(cfg.T("Always on top"), w);
     top->setChecked(cfg.data["topmost"].toBool());
     form->addRow(top);
+    section("Message layout");
     QMap<QString, QCheckBox *> checks;
     for (const auto &pair :
          QList<QPair<QString, QString>>{{"show_timestamps", "Show timestamps"},
@@ -390,6 +437,7 @@ QWidget *SettingsWindow::appearancePage() {
         form->addRow(check);
     }
     QMap<QString, QSpinBox *> sizes;
+    section("Text and images");
     for (const auto &item :
          QList<QStringList>{{"message_font_size", "Message font size (pt)", "7", "48", "12"},
                             {"username_font_size", "Username font size (pt)", "7", "48", "12"},
@@ -402,6 +450,7 @@ QWidget *SettingsWindow::appearancePage() {
         sizes[item[0]] = spin;
         form->addRow(cfg.T(item[1]), spin);
     }
+    section("Date and time");
     auto *date = new QComboBox(w);
     date->addItems({"DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD.MM.YYYY"});
     date->setCurrentText(a["date_format"].toString("DD/MM/YYYY"));
@@ -410,6 +459,7 @@ QWidget *SettingsWindow::appearancePage() {
     time->addItems({"HH:mm", "HH:mm:ss", "hh:mm am/pm", "hh:mm:ss am/pm"});
     time->setCurrentText(a["time_format"].toString("HH:mm"));
     form->addRow(cfg.T("Timestamp format"), time);
+    section("Mouse");
     auto *scrollSpeed = new QDoubleSpinBox(w);
     scrollSpeed->setObjectName("scroll-multiplier");
     scrollSpeed->setRange(0.5, 5.0);
