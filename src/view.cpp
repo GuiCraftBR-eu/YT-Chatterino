@@ -1002,9 +1002,197 @@ int ChatView::search(const QString &text, int step) {
     return found.size();
 }
 
+Composer::Composer(Images *imageCache, QWidget *parent) : QLineEdit(parent), images(imageCache) {
+    suggestionTimer.setSingleShot(true);
+    connect(&suggestionTimer, &QTimer::timeout, this, &Composer::refreshSuggestions);
+    connect(this, &QLineEdit::textChanged, this, [this] {
+        if (!applyingCompletion) {
+            hideSuggestions();
+            completionValue.clear();
+            completions.clear();
+            scheduleSuggestions();
+        }
+    });
+    connect(this, &QLineEdit::cursorPositionChanged, this, [this] {
+        if (!applyingCompletion) {
+            hideSuggestions();
+            completionValue.clear();
+            completions.clear();
+            scheduleSuggestions();
+        }
+    });
+    connect(this, &QLineEdit::selectionChanged, this, &Composer::scheduleSuggestions);
+    connect(images, &Images::ready, this, [this](const QString &url) {
+        if (!suggestionPopup || !suggestionPopup->isVisible()) return;
+        for (int row = 0; row < suggestionPopup->count(); ++row) {
+            auto *item = suggestionPopup->item(row);
+            auto visual = candidateVisuals.value(item->text());
+            if (!visual.urls.isEmpty() && visual.urls.first() == url) {
+                item->setIcon(suggestionIcon(item->text(), visual));
+            }
+        }
+    });
+}
+
+QString Composer::completionPrefix() const {
+    static const QRegularExpression lastWord("\\S+$");
+    const auto match = lastWord.match(text().left(cursorPosition()));
+    return match.hasMatch() ? match.captured() : QString();
+}
+
+void Composer::scheduleSuggestions() {
+    if (!applyingCompletion) suggestionTimer.start(0);
+}
+
+void Composer::hideSuggestions() {
+    suggestionTimer.stop();
+    if (suggestionPopup) suggestionPopup->hide();
+}
+
+QIcon Composer::suggestionIcon(const QString &value, const CandidateVisual &visual) {
+    QImage image;
+    if (!visual.urls.isEmpty()) image = images->get(visual.urls, false);
+    if (image.isNull() && !visual.urls.isEmpty() && images->cache.contains(visual.urls.first())) {
+        image = images->get(visual.urls, false);
+    }
+    QPixmap icon(24, 24);
+    icon.fill(Qt::transparent);
+    QPainter painter(&icon);
+    painter.setRenderHint(QPainter::Antialiasing);
+    if (visual.user) {
+        QPainterPath circle;
+        circle.addEllipse(QRectF(1, 1, 22, 22));
+        painter.setClipPath(circle);
+        if (image.isNull()) {
+            painter.fillRect(icon.rect(), QColor("#505059"));
+            painter.setPen(Qt::white);
+            painter.drawText(icon.rect(), Qt::AlignCenter, value.mid(1, 1).toUpper());
+        } else {
+            painter.drawImage(icon.rect(), image.scaled(24, 24, Qt::KeepAspectRatioByExpanding,
+                                                        Qt::SmoothTransformation));
+        }
+    } else if (!image.isNull()) {
+        const auto scaled = image.scaled(24, 24, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        painter.drawImage(QPoint((24 - scaled.width()) / 2, (24 - scaled.height()) / 2), scaled);
+    }
+    return QIcon(icon);
+}
+
+void Composer::renderSuggestions(int selected) {
+    if (completions.isEmpty() || !hasFocus() || !isVisible()) {
+        hideSuggestions();
+        return;
+    }
+    if (!suggestionPopup) {
+        suggestionPopup = new QListWidget(this);
+        suggestionPopup->setObjectName("completion-suggestions");
+        suggestionPopup->setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint);
+        suggestionPopup->setAttribute(Qt::WA_ShowWithoutActivating);
+        suggestionPopup->setFocusPolicy(Qt::NoFocus);
+        suggestionPopup->setSelectionMode(QAbstractItemView::SingleSelection);
+        suggestionPopup->setUniformItemSizes(true);
+        suggestionPopup->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        suggestionPopup->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        suggestionPopup->setIconSize(QSize(24, 24));
+        suggestionPopup->setStyleSheet("QListWidget{background:#202024;color:#efeff1;"
+                                       "border:1px solid #414148;padding:3px;}"
+                                       "QListWidget::item{padding:3px 7px;}"
+                                       "QListWidget::item:selected{background:#3a3a40;color:#fff;}");
+        connect(suggestionPopup, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
+            applyCompletion(item->data(Qt::UserRole).toInt());
+            setFocus(Qt::OtherFocusReason);
+        });
+    }
+    const int first = selected < 8 ? 0 : selected - 7;
+    const int count = qMin(8, int(completions.size()) - first);
+    suggestionPopup->clear();
+    int textWidth = 130;
+    for (int index = first; index < first + count; ++index) {
+        const auto value = completions[index];
+        auto *item = new QListWidgetItem(suggestionIcon(value, candidateVisuals.value(value)), value,
+                                         suggestionPopup);
+        item->setData(Qt::UserRole, index);
+        item->setSizeHint(QSize(0, 30));
+        textWidth = qMax(textWidth, fontMetrics().horizontalAdvance(value));
+    }
+    suggestionPopup->setCurrentRow(selected < 0 ? 0 : selected - first);
+    const int width = qBound(170, textWidth + 60, 360);
+    const int height = count * 30 + 8;
+    suggestionPopup->resize(width, height);
+    const int startX = qMax(0, cursorRect().left() - fontMetrics().horizontalAdvance(completionPrefix()));
+    QPoint location = mapToGlobal(QPoint(startX, 0));
+    auto *screen = QGuiApplication::screenAt(location);
+    const QRect available = screen ? screen->availableGeometry() : QRect(location, QSize(500, 500));
+    location.ry() -= height + 3;
+    if (location.y() < available.top()) location.setY(mapToGlobal(QPoint(0, this->height() + 3)).y());
+    location.setX(qBound(available.left(), location.x(), qMax(available.left(), available.right() - width)));
+    suggestionPopup->move(location);
+    suggestionPopup->show();
+    emit suggestionsShown();
+}
+
+void Composer::refreshSuggestions() {
+    if (!hasFocus() || !isVisible() || hasSelectedText() || completionPrefix().isEmpty()) {
+        hideSuggestions();
+        return;
+    }
+    emit completeRequested();
+    const auto prefix = completionPrefix();
+    const auto current = text();
+    const auto left = current.left(cursorPosition());
+    completionHead = left.left(left.size() - prefix.size());
+    completionTail = current.mid(cursorPosition());
+    const int tailSpace = completionTail.indexOf(QRegularExpression("\\s"));
+    completionTail = tailSpace < 0 ? QString() : completionTail.mid(tailSpace);
+    completions.clear();
+    for (const auto &value : candidates) {
+        if (value.startsWith(prefix, Qt::CaseInsensitive)) completions << value;
+    }
+    completions.removeDuplicates();
+    completions.sort(Qt::CaseInsensitive);
+    completionIndex = -1;
+    navigatedSuggestions = false;
+    renderSuggestions();
+}
+
+void Composer::applyCompletion(int index) {
+    if (index < 0 || index >= completions.size()) return;
+    completionIndex = index;
+    const QString word = completions[index];
+    completionValue = completionHead + word +
+                      (completionTail.startsWith(' ') ? QString() : QString(" ")) + completionTail;
+    applyingCompletion = true;
+    setText(completionValue);
+    setCursorPosition(completionHead.size() + word.size() + 1);
+    applyingCompletion = false;
+    renderSuggestions(index);
+}
+
+void Composer::focusOutEvent(QFocusEvent *event) {
+    hideSuggestions();
+    QLineEdit::focusOutEvent(event);
+}
+
+void Composer::hideEvent(QHideEvent *event) {
+    hideSuggestions();
+    QLineEdit::hideEvent(event);
+}
+
 void Composer::keyPressEvent(QKeyEvent *e) {
     if (e->key() == Qt::Key_Escape) {
+        if (suggestionPopup && suggestionPopup->isVisible()) {
+            hideSuggestions();
+            return;
+        }
         emit escapePressed();
+        return;
+    }
+    if ((e->key() == Qt::Key_Up || e->key() == Qt::Key_Down) && suggestionPopup &&
+        suggestionPopup->isVisible() && suggestionPopup->count()) {
+        const int direction = e->key() == Qt::Key_Down ? 1 : -1;
+        navigatedSuggestions = true;
+        suggestionPopup->setCurrentRow((suggestionPopup->currentRow() + direction + suggestionPopup->count()) %
+                                       suggestionPopup->count());
         return;
     }
     if (e->key() == Qt::Key_Up && text().isEmpty()) {
@@ -1012,10 +1200,12 @@ void Composer::keyPressEvent(QKeyEvent *e) {
         return;
     }
     if (e->key() == Qt::Key_Tab || e->key() == Qt::Key_Backtab) {
-        emit completeRequested();
         int direction = e->key() == Qt::Key_Backtab || e->modifiers().testFlag(Qt::ShiftModifier) ? -1 : 1;
         QString current = text();
         if (completionValue != current || completions.isEmpty()) {
+            const QString selected = suggestionPopup && suggestionPopup->isVisible() && suggestionPopup->currentItem()
+                                         ? suggestionPopup->currentItem()->text() : QString();
+            emit completeRequested();
             QString left = current.left(cursorPosition());
             auto m = QRegularExpression("\\S+$").match(left);
             if (!m.hasMatch()) {
@@ -1034,20 +1224,19 @@ void Composer::keyPressEvent(QKeyEvent *e) {
             }
             completions.removeDuplicates();
             completions.sort(Qt::CaseInsensitive);
-            completionIndex = direction > 0 ? 0 : completions.size() - 1;
+            const int selectedIndex = completions.indexOf(selected);
+            completionIndex = selectedIndex >= 0 && (direction > 0 || navigatedSuggestions)
+                                  ? selectedIndex : direction > 0 ? 0 : completions.size() - 1;
         } else {
             completionIndex = (completionIndex + direction + completions.size()) % completions.size();
         }
         if (completions.isEmpty()) {
             return;
         }
-        QString word = completions[completionIndex];
-        completionValue = completionHead + word +
-                          (completionTail.startsWith(' ') ? QString() : QString(" ")) + completionTail;
-        setText(completionValue);
-        setCursorPosition(completionHead.size() + word.size() + 1);
+        applyCompletion(completionIndex);
         return;
     }
+    if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) hideSuggestions();
     completionValue.clear();
     QLineEdit::keyPressEvent(e);
 }
@@ -1131,7 +1320,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     cl->setSpacing(3);
     target = new QComboBox(composer);
     target->setMaximumWidth(140);
-    input = new Composer(composer);
+    input = new Composer(hub->images, composer);
     input->installEventFilter(this);
     header->installEventFilter(this);
     headerText->installEventFilter(this);
@@ -1159,19 +1348,81 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     });
     connect(input, &Composer::completeRequested, this, [this] {
         QStringList c;
+        input->candidateVisuals.clear();
         auto s = targetSource();
         if (s) {
-            c = s->emotes.keys();
-            for (const auto &m : s->history) {
-                QString name = m.login.isEmpty() ? m.name : m.login;
-                if (!name.isEmpty()) {
-                    c << '@' + name;
+            const auto prefix = input->completionPrefix();
+            if (prefix.startsWith('@')) {
+                QSet<QString> seen;
+                for (auto it = s->history.crbegin(); it != s->history.crend(); ++it) {
+                    if (it->system) continue;
+                    QString name = it->login.isEmpty() ? it->name : it->login;
+                    if (it->name.compare(name, Qt::CaseInsensitive) == 0) name = it->name;
+                    name = name.trimmed();
+                    while (name.startsWith('@')) name.remove(0, 1);
+                    const auto value = '@' + name;
+                    const auto key = value.toCaseFolded();
+                    if (!name.isEmpty() && value.startsWith(prefix, Qt::CaseInsensitive) && !seen.contains(key)) {
+                        seen.insert(key);
+                        c << value;
+                        QStringList urls;
+                        if (!it->avatar.isEmpty()) urls << it->avatar;
+                        if (urls.isEmpty() && s->platform == "twitch") {
+                            const auto avatar = hub->twitchAvatarUrls.value(name.toLower());
+                            if (!avatar.isEmpty()) urls << avatar;
+                        }
+                        input->candidateVisuals[value] = {urls, true};
+                    }
+                }
+            } else if (!prefix.isEmpty()) {
+                for (auto it = s->emotes.cbegin(); it != s->emotes.cend(); ++it) {
+                    if (it.key().startsWith(prefix, Qt::CaseInsensitive)) {
+                        c << it.key();
+                        input->candidateVisuals[it.key()] = {it->urls, false};
+                    }
                 }
             }
         }
         input->candidates = c;
     });
+    auto *avatarTimer = new QTimer(this);
+    avatarTimer->setSingleShot(true);
+    avatarTimer->setInterval(350);
+    connect(input, &Composer::suggestionsShown, this, [this, avatarTimer] {
+        auto *s = targetSource();
+        if (s && s->platform == "twitch" && input->completionPrefix().startsWith('@')) avatarTimer->start();
+    });
+    connect(avatarTimer, &QTimer::timeout, this, [this] {
+        auto *s = targetSource();
+        auto *popup = input->suggestionPopup;
+        if (!s || s->platform != "twitch" || !popup || !popup->isVisible() ||
+            !input->completionPrefix().startsWith('@')) return;
+        QStringList missing;
+        for (int row = 0; row < popup->count(); ++row) {
+            const auto name = popup->item(row)->text();
+            if (input->candidateVisuals.value(name).urls.isEmpty()) missing << name;
+        }
+        hub->requestTwitchAvatars(missing);
+    });
+    connect(hub, &Hub::twitchAvatarsReady, this, [this] {
+        auto *popup = input->suggestionPopup;
+        auto *s = targetSource();
+        if (!s || s->platform != "twitch" || !popup || !popup->isVisible()) return;
+        for (int row = 0; row < popup->count(); ++row) {
+            auto *item = popup->item(row);
+            const auto avatar = hub->twitchAvatarUrls.value(stripAt(item->text()).toLower());
+            if (!avatar.isEmpty()) {
+                auto visual = input->candidateVisuals.value(item->text());
+                visual.urls = {avatar};
+                visual.user = true;
+                input->candidateVisuals[item->text()] = visual;
+                item->setIcon(input->suggestionIcon(item->text(), visual));
+            }
+        }
+    });
     connect(target, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] {
+        input->hideSuggestions();
+        input->scheduleSuggestions();
         if (!detached) {
             cancelReply();
         }

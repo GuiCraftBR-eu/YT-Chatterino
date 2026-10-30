@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube e da Twitch, com abas, painéis e emo
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.1.4](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.4) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.2.0](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.2.0) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube e da Twitch, com abas, painéis e emo
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.1.4 | Instalação |
+| Sistema | Download da versão 2.2.0 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.4/YT-Chatterino-Windows11-2.1.4.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.4/yt-chatterino-2.1.4-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.2.0/YT-Chatterino-Windows11-2.2.0.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.2.0/yt-chatterino-2.2.0-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.1.4-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.2.0-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.1.4).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.2.0).
 
 ## Primeiros passos
 
@@ -36,7 +36,7 @@ Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os ar
 
 A leitura pública do YouTube não exige login nem chave de API e não usa unidades da API oficial. Envio e moderação usam a API oficial e suas cotas; moderar ou editar uma transmissão exige as permissões correspondentes no canal. Se o YouTube retornar HTTP 429, você pode ativar por chat a alternativa pela API oficial no menu do canal. Ela exige a conta conectada, consome 5 unidades por solicitação e usa aproximadamente 986 unidades por hora por chat no intervalo padrão de 18,25 segundos; vários chats consomem mais. A cota exibida é uma estimativa, e a API também pode impor limites ou negar acesso.
 
-O **Tutorial**, nas configurações, explica as conexões e os recursos. As credenciais usam o armazenamento protegido do sistema; não compartilhe tokens, perfis ou seu JSON OAuth. No Arch, salvar acessos exige um [chaveiro compatível](docs/ARCH-LINUX.md).
+O **Tutorial**, nas configurações, explica as conexões e os recursos. Para conectar o YouTube, abra o **guia com imagens** em Configurações → Contas ou no tutorial. As credenciais usam o armazenamento protegido do sistema; não compartilhe tokens, perfis ou seu JSON OAuth. No Arch, salvar acessos exige um [chaveiro compatível](docs/ARCH-LINUX.md).
 
 **Google bloqueou o login com 403 / `access_denied`?** Se o projeto estiver em teste, seu responsável precisa adicionar a conta Google exata em **Google Auth Platform → Público-alvo → Usuários de teste**. Depois, cancele o login pendente e tente novamente. Veja o [guia de solução](docs/GOOGLE-LOGIN.md), incluindo a opção de usar seu próprio projeto.
 

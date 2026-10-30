@@ -1093,6 +1093,57 @@ void Hub::remove(Source *s) {
     s->deleteLater();
 }
 
+void Hub::requestTwitchAvatars(const QStringList &logins) {
+    if (str(accounts->twitch["access_token"]).isEmpty()) return;
+    QStringList requested;
+    const auto now = QDateTime::currentSecsSinceEpoch();
+    for (const auto &value : logins) {
+        const auto login = twitchLogin('@' + stripAt(value)).toLower();
+        if (login.isEmpty() || twitchAvatarUrls.contains(login) || twitchAvatarPending.contains(login) ||
+            twitchAvatarRetry.value(login) > now) continue;
+        twitchAvatarPending.insert(login);
+        requested << login;
+        if (requested.size() == 8) break;
+    }
+    if (requested.isEmpty()) return;
+    QPointer<Hub> self(this);
+    accounts->twitchToken([self, requested](QString token, QString error) {
+        if (!self) return;
+        if (!error.isEmpty() || token.isEmpty()) {
+            for (const auto &login : requested) {
+                self->twitchAvatarPending.remove(login);
+                self->twitchAvatarRetry[login] = QDateTime::currentSecsSinceEpoch() + 300;
+            }
+            return;
+        }
+        QUrl url("https://api.twitch.tv/helix/users");
+        QUrlQuery query;
+        for (const auto &login : requested) query.addQueryItem("login", login);
+        url.setQuery(query);
+        self->net->json(url, [self, requested](QJsonObject data, QString problem) {
+            if (!self) return;
+            if (self->twitchAvatarUrls.size() > 2000) self->twitchAvatarUrls.clear();
+            if (self->twitchAvatarRetry.size() > 2000) self->twitchAvatarRetry.clear();
+            const auto retry = QDateTime::currentSecsSinceEpoch() + (problem.isEmpty() ? 3600 : 300);
+            for (const auto &login : requested) {
+                self->twitchAvatarPending.remove(login);
+                self->twitchAvatarRetry[login] = retry;
+            }
+            if (problem.isEmpty()) {
+                for (const auto &item : data["data"].toArray()) {
+                    const auto user = item.toObject();
+                    const auto login = str(user["login"]).toLower();
+                    const auto avatar = str(user["profile_image_url"]);
+                    if (requested.contains(login) && Images::allowed(QUrl(avatar))) {
+                        self->twitchAvatarUrls[login] = avatar;
+                    }
+                }
+                emit self->twitchAvatarsReady();
+            }
+        }, "GET", {}, {{"Client-Id", TwitchClient.toUtf8()}, {"Authorization", "Bearer " + token.toUtf8()}});
+    });
+}
+
 void Hub::globalEmotes() {
     if (globalsLoading || testMode || QDateTime::currentSecsSinceEpoch() - globalsLoaded < 21600) {
         return;
