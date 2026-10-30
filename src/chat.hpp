@@ -98,6 +98,9 @@ class Hub : public QObject {
     TwitchConnection twitch;
     qint64 sequence = 0;
     QHash<QString, Span> globals;
+    QHash<QString, QString> twitchAvatarUrls;
+    QHash<QString, qint64> twitchAvatarRetry;
+    QSet<QString> twitchAvatarPending;
     bool globalsLoading = false;
     qint64 globalsLoaded = 0;
     QTimer liveTimer;
@@ -112,6 +115,7 @@ class Hub : public QObject {
     Source *source(QString platform, QString id);
     void remove(Source *source);
     void globalEmotes();
+    void requestTwitchAvatars(const QStringList &logins);
     void provider(Source *source, const QJsonValue &data, QString provider, QString scope);
     void send(Source *source, QString text, Message reply, JsonCallback done);
     void moderate(Source *source, const Message &message, QString action, int duration, JsonCallback done);
@@ -131,5 +135,6 @@ class Hub : public QObject {
     void sourceChanged(Source *source);
     void notice(QString text);
     void alertPlayed(bool live);
+    void twitchAvatarsReady();
 };
 } // namespace yc

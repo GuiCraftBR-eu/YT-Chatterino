@@ -98,4 +98,8 @@ class NativeTests : public QObject {
     void emoteHoverOpensImmediately();
     void tutorialTopicsAndGoogleRequirement();
     void compactTabBarKeepsControlsUsable();
+    void completionPopupSuggestsEmotesAndUsers();
+    void completionPopupPreservesTextAndTarget();
+    void completionPopupBatchesTwitchAvatars();
+    void youtubeIllustratedGuideShowsSafeSteps();
 };

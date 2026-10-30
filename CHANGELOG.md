@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0
+
+- Mostra sugestões de usuários e emotes enquanto você digita, com preenchimento por Tab.
+- Adiciona um guia ilustrado, passo a passo, para conectar uma conta do YouTube.
+
 ## 2.1.4
 
 - Mostra a prévia do emote imediatamente ao passar o mouse.

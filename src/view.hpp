@@ -90,19 +90,40 @@ class ChatView : public QAbstractScrollArea {
 class Composer : public QLineEdit {
     Q_OBJECT
   public:
-    explicit Composer(QWidget *parent = nullptr) : QLineEdit(parent) {}
+    explicit Composer(Images *images, QWidget *parent = nullptr);
+
+    struct CandidateVisual {
+        QStringList urls;
+        bool user = false;
+    };
 
     QStringList candidates;
+    QHash<QString, CandidateVisual> candidateVisuals;
     QStringList completions;
     QString completionHead, completionTail, completionValue, lastSent;
     int completionIndex = -1;
+    QListWidget *suggestionPopup = nullptr;
+    Images *images;
+    QTimer suggestionTimer;
+    bool applyingCompletion = false;
+    bool navigatedSuggestions = false;
+    QString completionPrefix() const;
+    void scheduleSuggestions();
+    void refreshSuggestions();
+    void hideSuggestions();
+    void renderSuggestions(int selected = -1);
+    void applyCompletion(int index);
+    QIcon suggestionIcon(const QString &value, const CandidateVisual &visual);
   signals:
     void completeRequested();
+    void suggestionsShown();
     void escapePressed();
 
   protected:
     bool event(QEvent *) override;
     void keyPressEvent(QKeyEvent *) override;
+    void focusOutEvent(QFocusEvent *) override;
+    void hideEvent(QHideEvent *) override;
 };
 
 class Pane : public QWidget {

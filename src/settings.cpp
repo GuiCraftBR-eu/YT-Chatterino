@@ -1,6 +1,31 @@
 #include "application.hpp"
 
 namespace yc {
+class TutorialPreview final : public QLabel {
+  public:
+    explicit TutorialPreview(QWidget *parent = nullptr) : QLabel(parent) {
+        setAlignment(Qt::AlignCenter);
+        setMinimumSize(120, 140);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    }
+    void setImage(const QString &path) {
+        original = QPixmap(path);
+        rescale();
+    }
+  protected:
+    void resizeEvent(QResizeEvent *event) override {
+        QLabel::resizeEvent(event);
+        rescale();
+    }
+  private:
+    QPixmap original;
+    void rescale() {
+        if (!original.isNull() && width() > 0 && height() > 0) {
+            setPixmap(original.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        }
+    }
+};
+
 static QPushButton *action(Config &cfg, QString text, QObject *receiver, std::function<void()> fn) {
     auto *b = new QPushButton(cfg.T(text));
     QObject::connect(b, &QPushButton::clicked, receiver, std::move(fn));
@@ -339,6 +364,10 @@ QWidget *SettingsWindow::accountsPage() {
     ytLayout->addWidget(ytButton);
     ytLayout->addWidget(ytReconnect);
     ytLayout->addWidget(cancel);
+    auto *youtubeGuide = action(main->cfg, "YouTube setup guide with screenshots…", w,
+                                [this] { showYoutubeGuide(); });
+    youtubeGuide->setObjectName("youtube-guide-action");
+    ytLayout->addWidget(youtubeGuide);
     l->addWidget(ytBox);
 
     auto refresh = [=, this] {
@@ -962,6 +991,126 @@ QWidget *SettingsWindow::shortcutsPage() {
     return w;
 }
 
+void SettingsWindow::showYoutubeGuide() {
+    struct Step { QString title, description, image; };
+    const QList<Step> steps{
+        {"Create a Google Cloud project",
+         "In Google Cloud Console, choose Select a project → New project. Name it, create it and select it.",
+         ":/tutorial/01-project.png"},
+        {"Enable the YouTube Data API",
+         "In that project, find YouTube Data API v3 and click Enable. If it is already enabled, continue.",
+         ":/tutorial/02-enable-api.png"},
+        {"Configure Google Auth Platform",
+         "Open Google Auth Platform → Get started. Enter the app name and your support/contact email; "
+         "choose External for a personal Google account and finish the setup.", ":/tutorial/03-audience.png"},
+        {"Add your account as a test user",
+         "If publishing status is Testing, open Audience → Test users → Add users. Add the exact Google "
+         "account you will use to sign in and save it. Anyone else using this project must also be added.",
+         ":/tutorial/04-test-users.png"},
+        {"Create a Desktop OAuth client",
+         "Open Clients → Create client. Choose Desktop app, name it and create it. Download the JSON "
+         "file and keep it private.", ":/tutorial/05-desktop-client.png"},
+        {"Select the JSON and sign in",
+         "In YT-Chatterino, open Settings → Accounts → Choose Google OAuth JSON and select the downloaded "
+         "file. Then sign in to YouTube with the test account and choose the intended channel.",
+         ":/tutorial/06-choose-json.png"},
+        {"Review Google's permission screen",
+         "Google may show this warning for an unverified Testing app. Continue only if you trust the "
+         "project, then review and approve the requested permissions.", ":/tutorial/07-unverified.png"}};
+    auto *dialog = new QDialog(this);
+    dialog->setObjectName("youtube-illustrated-guide");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(main->cfg.T("YouTube setup guide"));
+    dialog->resize(880, 680);
+    dialog->setMinimumSize(560, 420);
+    auto *layout = new QVBoxLayout(dialog);
+    layout->setContentsMargins(16, 14, 16, 14);
+    layout->setSpacing(8);
+    auto *counter = new QLabel(dialog);
+    counter->setObjectName("youtube-guide-counter");
+    counter->setStyleSheet("color:#81badb;font-weight:600;");
+    auto *heading = new QLabel(dialog);
+    heading->setObjectName("youtube-guide-heading");
+    heading->setFont(QFont("Segoe UI", 14, QFont::Bold));
+    heading->setWordWrap(true);
+    auto *body = new QLabel(dialog);
+    body->setObjectName("youtube-guide-description");
+    body->setWordWrap(true);
+    body->setTextFormat(Qt::PlainText);
+    body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto *hint = new QLabel(dialog);
+    hint->setWordWrap(true);
+    hint->setStyleSheet("color:#9a9aa4;");
+    auto *preview = new TutorialPreview(dialog);
+    preview->setObjectName("youtube-guide-preview");
+    auto *buttons = new QHBoxLayout;
+    auto *console = new QPushButton(dialog);
+    auto *zoom = new QPushButton(dialog);
+    zoom->setObjectName("youtube-guide-zoom");
+    auto *previous = new QPushButton(dialog);
+    previous->setObjectName("youtube-guide-previous");
+    auto *next = new QPushButton(dialog);
+    next->setObjectName("youtube-guide-next");
+    auto *close = new QPushButton(dialog);
+    buttons->addWidget(console);
+    buttons->addWidget(zoom);
+    buttons->addStretch();
+    buttons->addWidget(previous);
+    buttons->addWidget(next);
+    buttons->addWidget(close);
+    layout->addWidget(counter);
+    layout->addWidget(heading);
+    layout->addWidget(body);
+    layout->addWidget(hint);
+    layout->addWidget(preview, 1);
+    layout->addLayout(buttons);
+    auto position = QSharedPointer<int>::create(0);
+    auto update = [=, this] {
+        const auto &step = steps[*position];
+        dialog->setWindowTitle(main->cfg.T("YouTube setup guide"));
+        counter->setText(main->cfg.T("Step {current} of {total}",
+                                     {{"current", QString::number(*position + 1)},
+                                      {"total", QString::number(steps.size())}}));
+        heading->setText(main->cfg.T(step.title));
+        body->setText(main->cfg.T(step.description));
+        hint->setText(main->cfg.T("Screenshots show Google Cloud in English; labels may vary by language. "
+                                  "Never share your JSON or saved tokens."));
+        preview->setImage(step.image);
+        console->setText(main->cfg.T("Open Google Cloud"));
+        zoom->setText(main->cfg.T("View full image"));
+        previous->setText(main->cfg.T("Previous"));
+        next->setText(main->cfg.T("Next"));
+        close->setText(main->cfg.T("Close"));
+        previous->setEnabled(*position > 0);
+        next->setEnabled(*position + 1 < steps.size());
+    };
+    connect(previous, &QPushButton::clicked, dialog, [=] { if (*position > 0) { --*position; update(); } });
+    connect(next, &QPushButton::clicked, dialog, [=] { if (*position + 1 < steps.size()) { ++*position; update(); } });
+    connect(close, &QPushButton::clicked, dialog, &QDialog::close);
+    connect(console, &QPushButton::clicked, dialog,
+            [] { QDesktopServices::openUrl(QUrl("https://console.cloud.google.com/")); });
+    connect(zoom, &QPushButton::clicked, dialog, [=, this] {
+        auto *viewer = new QDialog(dialog);
+        viewer->setObjectName("youtube-guide-full-image");
+        viewer->setAttribute(Qt::WA_DeleteOnClose);
+        viewer->setWindowTitle(main->cfg.T(steps[*position].title));
+        viewer->resize(1000, 700);
+        auto *box = new QVBoxLayout(viewer);
+        auto *scroll = new QScrollArea(viewer);
+        auto *image = new QLabel(scroll);
+        image->setPixmap(QPixmap(steps[*position].image));
+        scroll->setWidget(image);
+        scroll->setAlignment(Qt::AlignCenter);
+        box->addWidget(scroll);
+        viewer->show();
+        darkTitlebar(viewer);
+    });
+    connect(&main->cfg, &Config::languageChanged, dialog, update);
+    update();
+    dialog->show();
+    darkTitlebar(dialog);
+}
+
 QWidget *SettingsWindow::tutorialPage() {
     QVBoxLayout *l;
     auto *w = pageWidget(main->cfg, "Tutorial", &l);
@@ -1047,6 +1196,10 @@ QWidget *SettingsWindow::tutorialPage() {
             requirement->setStyleSheet("background:#102016;color:#c9ebce;border:1px solid #285b34;padding:8px;");
             requirement->setTextInteractionFlags(Qt::TextSelectableByMouse);
             cardLayout->addWidget(requirement);
+            auto *guide = action(main->cfg, "YouTube setup guide with screenshots…", card,
+                                 [this] { showYoutubeGuide(); });
+            guide->setObjectName("youtube-tutorial-guide-action");
+            cardLayout->addWidget(guide);
         }
         topicLayouts[group]->addWidget(card);
     }
