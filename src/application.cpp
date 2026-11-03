@@ -144,7 +144,7 @@ MainWindow::MainWindow(QString profile, bool testing)
         for (auto s : hub.sources) {
             if (s->platform == "twitch") {
                 s->emoteLoaded.clear();
-                s->badgesLoaded = 0;
+                s->globalBadgesLoaded = s->channelBadgesLoaded = 0;
                 s->refreshHeader();
                 s->loadEmotes(s->room());
                 s->loadBadges();
@@ -554,8 +554,15 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     for (auto source : p->sources) {
         if (source) {
             auto *channel = menu.addMenu(platformIcon(source->platform), source->name());
-            for (const auto &pair : QList<QPair<QString, QString>>{{"stream", "Open stream in browser"},
-                                                                   {"player", "Open player in browser"},
+            auto *openStream = channel->addAction(cfg.T("Open stream in browser"), source, [source] {
+                QDesktopServices::openUrl(QUrl(browserUrl(source->platform, source->id, "stream")));
+            });
+            openStream->setObjectName("open-stream-browser");
+            auto *copyStream = channel->addAction(cfg.T("Copy stream link"), source, [source] {
+                QGuiApplication::clipboard()->setText(browserUrl(source->platform, source->id, "stream"));
+            });
+            copyStream->setObjectName("copy-stream-link");
+            for (const auto &pair : QList<QPair<QString, QString>>{{"player", "Open player in browser"},
                                                                    {"chat", "Open chat in browser"}}) {
                 channel->addAction(cfg.T(pair.second), this, [source, pair] {
                     QDesktopServices::openUrl(QUrl(browserUrl(source->platform, source->id, pair.first)));

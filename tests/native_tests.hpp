@@ -102,4 +102,9 @@ class NativeTests : public QObject {
     void completionPopupPreservesTextAndTarget();
     void completionPopupBatchesTwitchAvatars();
     void youtubeIllustratedGuideShowsSafeSteps();
+    void stableAlternateRowsAndGeometry();
+    void twitchBadgesRetryAndChannelPriority();
+    void badgeHoverShowsImageAndName();
+    void mixedHeaderAndCopyStreamLinks();
+    void sentTwitchMessageKeepsChannelBadgeInEitherOrder();
 };

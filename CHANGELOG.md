@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1
+
+- Mantém a cor de fundo junto da mensagem e corrige a posição das linhas.
+- Melhora o carregamento e a prévia dos emblemas.
+- Organiza os títulos nos chats mistos e permite copiar o link da transmissão.
+
 ## 2.2.0
 
 - Mostra sugestões de usuários e emotes enquanto você digita, com preenchimento por Tab.

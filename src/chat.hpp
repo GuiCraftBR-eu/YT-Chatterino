@@ -18,11 +18,12 @@ class Source : public QObject {
     QHash<QString, Span> emotes;
     QHash<QString, Span> channelEmotes;
     QHash<QString, Badge> badges;
+    QHash<QString, Badge> globalBadges, channelBadges;
     bool paused = false, closed = false, historyLoaded = false, historyLoading = false;
     QVector<Message> liveBuffer;
     QString continuation, visitor;
     QJsonObject context;
-    QTimer poll, metadataTimer;
+    QTimer poll, metadataTimer, badgeRetry;
     bool requesting = false, initial = true;
     bool apiFallbackEnabled = false, apiActive = false;
     QString apiPageToken;
@@ -33,7 +34,9 @@ class Source : public QObject {
     qint64 polls = 0;
     quint64 generation = 0;
     QHash<QString, qint64> emoteLoaded;
-    qint64 badgesLoaded = 0;
+    qint64 globalBadgesLoaded = 0, channelBadgesLoaded = 0;
+    bool globalBadgesPending = false, channelBadgesPending = false;
+    QString badgeChannelRoom;
     QString name() const;
     QString room() const;
     void start();
