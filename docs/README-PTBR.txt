@@ -1,18 +1,30 @@
-YT-CHATTERINO 2.2.5 — WINDOWS 11 x64
+YT-CHATTERINO 2.2.6 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.2.5.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.2.6.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
 
 ADICIONAR UM CHAT
-Pressione Ctrl+T (ou clique em +). Cole o link de uma LIVE do YouTube ou um @canal/link da Twitch.
+Pressione Ctrl+T (ou clique em +). Cole o link de uma LIVE do YouTube, um @canal/link da Twitch ou o link de um canal da Kick.
 A leitura comum pelo site do YouTube não precisa de chave, conta do Google nem unidades de cota.
 Se o Google limitar o acesso (HTTP 429), conecte sua conta e ative por chat a alternativa
 da API oficial no menu do canal. Ela usa 5 unidades por solicitação, cerca de 986 unidades
 por hora por chat no intervalo padrão de 18,25 segundos; vários chats consomem mais.
 Twitch: Configurações > Contas > Conectar Twitch. Autorize o código no navegador uma vez.
 A tela informa a conta conectada e as permissões ativadas; não é preciso autorizar novamente para atualizar emotes.
+
+KICK: CONECTAR E ENVIAR
+Para ler, abra o link do canal; não é preciso entrar. Para enviar mensagens:
+1. Crie seu aplicativo em https://kick.com/settings/developer e cadastre exatamente
+   http://localhost:37365/callback como endereço de redirecionamento.
+2. Selecione Read user information e Write to Chat feed.
+3. Em Configurações > Contas > Kick, informe o ID e o segredo do cliente e autorize no navegador.
+O segredo e o acesso são salvos no armazenamento protegido de credenciais do sistema.
+Não compartilhe seu segredo. Em chats mistos, escolha o canal no campo de mensagem.
+A leitura usa dados públicos não oficiais da Kick; pode falhar se o site mudar e
+perder mensagens em chats muito movimentados. Moderação e edição de título da Kick
+ainda não estão disponíveis.
 
 ENVIAR / MODERAR
 Digite abaixo do chat e pressione Enter. Clique direito na mensagem da Twitch para preparar uma resposta. Ctrl + clique direito abre o menu de ações/moderação.

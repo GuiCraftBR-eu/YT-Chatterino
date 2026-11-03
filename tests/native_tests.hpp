@@ -128,4 +128,12 @@ class NativeTests : public QObject {
     void singleChannelIconAndConnectionNotices();
     void activeFiltersAreVisibleAndSynchronized();
     void versionAndToolbarControls();
+    void kickLinksAndParser();
+    void kickChatPollingAndRetry();
+    void kickSendingAndCredentialIsolation();
+    void kickTokenRefreshIsSerialized();
+    void kickCallbackRejectsWrongState();
+    void singleAndMixedChatTargetVisibility();
+    void kickSessionAndSavedChannel();
+    void kickAccountUiProtectsSecret();
 };

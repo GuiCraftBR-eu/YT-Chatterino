@@ -327,6 +327,49 @@ QWidget *SettingsWindow::accountsPage() {
     twLayout->addWidget(twReconnect);
     l->addWidget(twBox);
 
+    auto *kickBox = new QGroupBox("Kick", w);
+    auto *kickLayout = new QVBoxLayout(kickBox);
+    auto *kickStatus = text(main->cfg, "");
+    kickStatus->setObjectName("kick-account-status");
+    kickLayout->addWidget(kickStatus);
+    kickLayout->addWidget(text(main->cfg, "Reading Kick chat needs no sign-in. Sending requires your Kick developer app.", true));
+    auto *kickButton = action(main->cfg, "Sign in to Kick…", w, [this] {
+        auto *dialog = new QDialog(this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->setWindowTitle(main->cfg.T("Kick sign-in"));
+        auto *layout = new QFormLayout(dialog);
+        auto *id = new QLineEdit(dialog);
+        id->setObjectName("kick-client-id");
+        id->setText(str(main->accounts.kick["client_id"]));
+        auto *secret = new QLineEdit(dialog);
+        secret->setObjectName("kick-client-secret");
+        secret->setEchoMode(QLineEdit::Password);
+        secret->setPlaceholderText(main->cfg.T("Client secret"));
+        layout->addRow(main->cfg.T("Client ID"), id);
+        layout->addRow(main->cfg.T("Client secret"), secret);
+        auto *hint = text(main->cfg, "Register this exact redirect URL in your Kick developer app: http://localhost:37365/callback", true);
+        hint->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        layout->addRow(hint);
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+        layout->addRow(buttons);
+        connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+        connect(buttons, &QDialogButtonBox::accepted, dialog, [this, dialog, id, secret] {
+            const auto clientId = id->text();
+            const auto clientSecret = secret->text();
+            secret->clear();
+            dialog->accept();
+            main->accounts.signInKick(clientId, clientSecret);
+        });
+        dialog->show();
+        darkTitlebar(dialog);
+    });
+    kickButton->setObjectName("kick-sign-in");
+    kickLayout->addWidget(kickButton);
+    auto *kickCancel = action(main->cfg, "Cancel pending Kick sign-in", w,
+                              [this] { main->accounts.finishKick("Kick sign-in cancelled."); });
+    kickLayout->addWidget(kickCancel);
+    l->addWidget(kickBox);
+
     auto *ytBox = new QGroupBox("YouTube", w);
     auto *ytLayout = new QVBoxLayout(ytBox);
     auto *ytStatus = text(main->cfg, "");
@@ -406,6 +449,14 @@ QWidget *SettingsWindow::accountsPage() {
         twReconnect->setVisible(twReady);
         twReconnect->setEnabled(!twPending);
 
+        const bool kickConnected = accounts.connected("kick");
+        kickStatus->setText(accounts.kickRefreshing ? cfg.T("Refreshing saved sign-in…")
+                           : kickConnected ? cfg.T("Signed in as {name}", {{"name", str(accounts.kick["name"])}})
+                           : !accounts.kickIssue.isEmpty() ? cfg.T(accounts.kickIssue) : cfg.T("Not connected"));
+        kickButton->setText(cfg.T(accounts.kickBusy ? "Waiting for Kick…" : kickConnected
+                                  ? "Reconnect / change Kick account…" : "Sign in to Kick…"));
+        kickButton->setEnabled(!accounts.kickBusy && !accounts.kickRefreshing);
+        kickCancel->setVisible(accounts.kickBusy);
         const bool ytReady = accounts.googleAllowsWriting();
         const bool ytPending = accounts.googleBusy || accounts.googleRefreshing;
         const bool ytSaved = !str(accounts.google.value("access_token")).isEmpty();
@@ -792,7 +843,7 @@ QWidget *SettingsWindow::savedPage() {
         for (const auto &v : main->cfg.data["saved_channels"].toArray()) {
             auto d = v.toObject();
             auto *item = new QListWidgetItem(
-                (str(d["platform"]) == "twitch" ? "TW · " : "YT · ") + str(d["title"]), list);
+                (str(d["platform"]) == "twitch" ? "TW · " : str(d["platform"]) == "kick" ? "K · " : "YT · ") + str(d["title"]), list);
             item->setData(Qt::UserRole, d);
         }
     };
@@ -800,7 +851,7 @@ QWidget *SettingsWindow::savedPage() {
     l->addWidget(list, 1);
     auto *addRow = new QHBoxLayout;
     auto *platform = new QComboBox(w);
-    platform->addItems({"Twitch", "YouTube"});
+    platform->addItems({"Twitch", "YouTube", "Kick"});
     auto *address = new QLineEdit(w);
     address->setPlaceholderText(main->cfg.T("@channel or channel URL"));
     addRow->addWidget(platform);
@@ -829,6 +880,12 @@ QWidget *SettingsWindow::savedPage() {
                 store("twitch", login, login);
                 address->clear();
             }
+            return;
+        }
+        if (platform->currentIndex() == 2) {
+            const auto login = kickLogin(value.contains('/') || value.startsWith("kick:", Qt::CaseInsensitive)
+                                             ? value : "kick:" + value);
+            if (!login.isEmpty()) { store("kick", login, login); address->clear(); }
             return;
         }
         QUrl url(value.startsWith('@')    ? "https://www.youtube.com/" + value
@@ -1157,13 +1214,18 @@ QWidget *SettingsWindow::tutorialPage() {
     }
     l->addWidget(topics, 1);
     for (const auto &section : QList<QPair<QString, QString>>{
-             {"Read chats", "Click +. Paste a YouTube live link or Twitch @channel. Reading YouTube needs no "
-                            "API key or account. YouTube stays connected in background tabs."},
+             {"Read chats", "Click +. Paste a YouTube live link, Twitch @channel or Kick channel link. "
+                            "Reading YouTube and Kick needs no API key or account."},
              {"Twitch: connect, send and moderate",
               "Settings → Accounts shows your sign-in and enabled permissions. Connect Twitch there if "
               "needed and approve the code in your browser. Right-click a message to prepare a reply; "
               "Ctrl+right-click opens moderation actions. Moderation requires the channel's owner/moderator "
               "role; title/category edits require the broadcaster account."},
+             {"Kick: connect and send",
+              "Create a Kick developer app with redirect URL http://localhost:37365/callback and choose "
+              "Read user information and Write to Chat feed. In Settings → Accounts, enter its client ID "
+              "and secret, then approve access in your browser. Your secret is saved in system credential "
+              "storage. Kick chat reading uses the public site and may miss messages in very busy chats."},
              {"YouTube: connect, send and moderate",
               "Create a Google Cloud project, enable YouTube Data API v3, configure the consent screen and "
               "create a Desktop OAuth client. Download its JSON. "

@@ -476,7 +476,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
             }
         }
     }
-    std::sort(spans.begin(), spans.end(), [](const Span &a, const Span &b) {
+    std::stable_sort(spans.begin(), spans.end(), [](const Span &a, const Span &b) {
         return a.start == b.start ? a.end > b.end : a.start < b.start;
     });
     int offset = 0;
@@ -749,7 +749,7 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
         preview = doc->resource(QTextDocument::ImageResource, QUrl(tooltipUrls.value(0))).value<QImage>();
     const auto host = QUrl(tooltipUrls.value(0)).host();
     const auto source = hub->sources.value(messages[row].source);
-    const QString provider = (isBadge || isChannel) && source ? (source->platform == "twitch" ? "Twitch" : "YouTube")
+    const QString provider = (isBadge || isChannel) && source ? (source->platform == "twitch" ? "Twitch" : source->platform == "kick" ? "Kick" : "YouTube")
                              : host.contains("betterttv") ? "BTTV" : host.contains("7tv") ? "7TV"
                              : host.contains("jtvnw") ? "Twitch" : host.contains("ggpht") ||
                                        host.contains("googleusercontent") ? "YouTube" : QString();
@@ -765,7 +765,7 @@ void ChatView::showChannelTooltip(Source *source, QPoint global) {
     tooltipPosition = -1;
     QImage preview = url.isEmpty() ? QImage() : hub->images->get({url}, false);
     if (preview.isNull()) preview = channelIcon(source, hub->images, 112);
-    showImageTooltip(source->name(), "Channel", source->platform == "twitch" ? "Twitch" : "YouTube", preview, global);
+    showImageTooltip(source->name(), "Channel", source->platform == "twitch" ? "Twitch" : source->platform == "kick" ? "Kick" : "YouTube", preview, global);
 }
 
 void ChatView::showImageTooltip(const QString &name, const QString &kind, const QString &provider,
@@ -961,7 +961,7 @@ void ChatView::contextMenuEvent(QContextMenuEvent *e) {
 
 bool ChatView::canReply(const Message &message) const {
     auto *source = hub->sources.value(message.source);
-    return source && source->platform == "twitch" && !message.id.isEmpty() && !message.system &&
+    return source && (source->platform == "twitch" || source->platform == "kick") && !message.id.isEmpty() && !message.system &&
            !message.deleted;
 }
 
@@ -1595,11 +1595,14 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     connect(sendButton, &QPushButton::clicked, this, &Pane::send);
     connect(emoteButton, &QPushButton::clicked, this, &Pane::openEmotes);
     connect(input, &Composer::escapePressed, this, &Pane::cancelReply);
-    connect(input, &QLineEdit::textChanged, this, [this](QString text) {
-        int limit = targetSource() && targetSource()->platform == "youtube" ? 200 : 500;
+    auto updateCount = [this](QString text) {
+        const QString platform = targetSource() ? targetSource()->platform : QString();
+        int limit = platform == "youtube" ? 200 : 500;
+        int length = platformCharacterCount(text, platform);
         countLabel->setText(text.isEmpty() ? QString()
-                                           : QString("%1/%2").arg(characterCount(text)).arg(limit));
-    });
+                                           : QString("%1/%2").arg(length).arg(limit));
+    };
+    connect(input, &QLineEdit::textChanged, this, updateCount);
     connect(input, &Composer::completeRequested, this, [this] {
         QStringList c;
         input->candidateVisuals.clear();
@@ -1674,7 +1677,8 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
             }
         }
     });
-    connect(target, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] {
+    connect(target, qOverload<int>(&QComboBox::currentIndexChanged), this, [this, updateCount] {
+        updateCount(input->text());
         input->hideSuggestions();
         input->scheduleSuggestions();
         if (!detached) {
@@ -1779,7 +1783,7 @@ void Pane::setSources(QList<Source *> list) {
         }
         sources << s;
         s->viewCaps[reinterpret_cast<quintptr>(this)] = hub->cfg->cap(key());
-        target->addItem((s->platform == "twitch" ? "TW · " : "YT · ") + s->name(), s->key);
+        target->addItem((s->platform == "twitch" ? "TW · " : s->platform == "kick" ? "K · " : "YT · ") + s->name(), s->key);
         connect(s, &Source::message, this, [this, s](Message m) { incoming(s, m); });
         connect(s, &Source::changed, this, [this] {
             refresh();
@@ -1796,6 +1800,7 @@ void Pane::setSources(QList<Source *> list) {
             }
         });
     }
+    target->setVisible(!detached && sources.size() > 1);
     filter = hub->cfg->data["chat_filters"].toObject()[key()].toObject();
     view->messageCap = hub->cfg->cap(key());
     view->mixed = sources.size() > 1;
@@ -1884,7 +1889,7 @@ void Pane::refresh() {
                                  .arg(seconds % 60, 2, 10, QChar('0'));
                 }
             }
-            if (appearance["header_category"].toBool(true) && source->platform == "twitch" &&
+            if (appearance["header_category"].toBool(true) && source->platform != "youtube" &&
                 !str(source->header["category"]).isEmpty()) parts << str(source->header["category"]);
             if (appearance["header_title"].toBool(true)) parts << title;
             const QString text = parts.join(" - ");
@@ -1945,7 +1950,7 @@ void Pane::refresh() {
     for (int i = 0; i < sources.size(); ++i) {
         if (sources[i]) {
             target->setItemText(i,
-                                (sources[i]->platform == "twitch" ? "TW · " : "YT · ") + sources[i]->name());
+                                (sources[i]->platform == "twitch" ? "TW · " : sources[i]->platform == "kick" ? "K · " : "YT · ") + sources[i]->name());
         }
     }
     if (selected >= 0) {
@@ -2017,7 +2022,7 @@ void Pane::send() {
 
 void Pane::startReply(Message m) {
     auto s = hub->sources.value(m.source);
-    if (!s || s->platform != "twitch" || m.id.isEmpty() || m.deleted) {
+    if (!s || (s->platform != "twitch" && s->platform != "kick") || m.id.isEmpty() || m.deleted) {
         return;
     }
     target->setCurrentIndex(sources.indexOf(s));
@@ -2508,6 +2513,8 @@ QWidget *Workspace::restoreNode(const QJsonObject &node, int depth) {
             if (!hub->sources.contains(key)) {
                 if (key.startsWith("twitch:") && !twitchLogin('@' + key.mid(7)).isEmpty()) {
                     hub->source("twitch", key.mid(7));
+                } else if (key.startsWith("kick:") && kickLogin(key) == key.mid(5)) {
+                    hub->source("kick", key.mid(5));
                 } else if (videoId(key) == key) {
                     hub->source("youtube", key);
                 }

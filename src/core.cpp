@@ -166,6 +166,24 @@ QString twitchLogin(const QString &input) {
                                                                                   : QString();
 }
 
+QString kickLogin(const QString &input) {
+    QString value = input.trimmed(), candidate;
+    if (value.startsWith("kick:", Qt::CaseInsensitive)) {
+        candidate = value.mid(5).trimmed();
+        if (candidate.startsWith('@')) candidate.remove(0, 1);
+    } else {
+        QUrl url(value.contains("://") ? value : "https://" + value);
+        const auto host = url.host().toLower();
+        if ((url.scheme() != "https" && url.scheme() != "http") || !url.userInfo().isEmpty() ||
+            (host != "kick.com" && host != "www.kick.com" && host != "player.kick.com")) return {};
+        auto parts = url.path().split('/', Qt::SkipEmptyParts);
+        candidate = parts.value(parts.value(0).compare("popout", Qt::CaseInsensitive) == 0 ? 1 : 0);
+        if (QStringList{"browse", "categories", "dashboard", "login", "settings", "signup", "search", "terms"}
+                .contains(candidate.toLower())) return {};
+    }
+    return QRegularExpression("^[A-Za-z0-9_-]{1,25}$").match(candidate).hasMatch() ? candidate.toLower() : QString();
+}
+
 QStringList words(const QString &input) {
     auto list = input.split(QRegularExpression("[,\\n]"), Qt::SkipEmptyParts);
     for (auto &s : list) {
@@ -227,6 +245,14 @@ int characterCount(const QString &text) {
     return text.toUcs4().size();
 }
 
+int platformCharacterCount(const QString &text, const QString &platform) {
+    if (platform != "kick") return characterCount(text);
+    QTextBoundaryFinder boundaries(QTextBoundaryFinder::Grapheme, text);
+    int result = 0;
+    while (boundaries.toNextBoundary() >= 0) ++result;
+    return result;
+}
+
 QIcon platformIcon(const QString &platform) {
     QPixmap p(24, 24);
     p.fill(Qt::transparent);
@@ -247,6 +273,12 @@ QIcon platformIcon(const QString &platform) {
         g.setBrush(QColor("#9146ff"));
         g.drawRect(10, 7, 3, 7);
         g.drawRect(15, 7, 3, 7);
+    } else if (platform == "kick") {
+        g.setBrush(QColor("#53fc18"));
+        g.drawRoundedRect(QRectF(1, 1, 22, 22), 3, 3);
+        g.setPen(Qt::black);
+        g.setFont(QFont("Segoe UI", 17, QFont::Black));
+        g.drawText(p.rect(), Qt::AlignCenter, "K");
     } else {
         g.setPen(QColor("#4a9cdb"));
         g.setFont(QFont("Segoe UI", 18, QFont::Bold));
@@ -969,6 +1001,12 @@ QVector<Message> collectThread(const QVector<Message> &history, const Message &s
 }
 
 QString browserUrl(const QString &platform, const QString &id, const QString &destination) {
+    if (platform == "kick") {
+        if (kickLogin("kick:" + id) != id) return {};
+        if (destination == "player") return "https://player.kick.com/" + id;
+        if (destination == "chat") return "https://kick.com/popout/" + id + "/chat";
+        return "https://kick.com/" + id;
+    }
     if (platform == "twitch") {
         if (!QRegularExpression("^[a-z0-9_]{1,25}$").match(id).hasMatch()) {
             return {};
