@@ -75,6 +75,7 @@ static QJsonObject metadata(const QString &html, const QString &id, QString *err
             {"avatar", avatar},
             {"title", d["title"]},
             {"live", live},
+            {"started_at", at(p, {"microformat", "playerMicroformatRenderer", "liveBroadcastDetails", "startTimestamp"})},
             {"viewers", double(viewers)}};
 }
 
@@ -90,6 +91,11 @@ Source::Source(Hub *h, QString p, QString value)
     badgeRetry.setInterval(30000);
     connect(&badgeRetry, &QTimer::timeout, this, &Source::loadBadges);
     metadataTimer.setInterval(300000);
+    decorationTimer.setInterval(60000);
+    connect(&decorationTimer, &QTimer::timeout, this, &Source::refreshDecorations);
+    connect(hub->accounts, &Accounts::changed, this, [this] {
+        if (platform == "twitch" && !hub->testMode && !closed) refreshDecorations();
+    });
     connect(&poll, &QTimer::timeout, this, [this] {
         if (apiActive) {
             youtubeApiPoll();
@@ -129,6 +135,7 @@ void Source::start() {
         youtubeConnect();
     }
     metadataTimer.start();
+    if (platform == "twitch") decorationTimer.start();
 }
 
 void Source::stop() {
@@ -137,6 +144,7 @@ void Source::stop() {
     poll.stop();
     metadataTimer.stop();
     badgeRetry.stop();
+    decorationTimer.stop();
     if (platform == "twitch") {
         hub->twitch.part(this);
     }
@@ -148,6 +156,8 @@ void Source::reconnect() {
     }
     ++generation;
     requesting = false;
+    decorationPending = pollDecorationPending = false;
+    setDecorations({}, {});
     emoteLoaded.clear();
     globalBadgesLoaded = channelBadgesLoaded = 0;
     globalBadgesPending = channelBadgesPending = false;
@@ -271,10 +281,8 @@ void Source::redact(const QJsonObject &target) {
                       (str(target["message_id"]) == m.id || str(target["message_id"]) == m.apiId ||
                        str(target["message_id"]) == m.webId)) ||
                      (!str(target["user_id"]).isEmpty() && str(target["user_id"]) == m.uid);
-        if (match) {
+        if (match && !m.system) {
             m.deleted = true;
-            m.text = hub->cfg->T("[message deleted]");
-            m.emotes.clear();
         }
         if (!m.reply.isEmpty() &&
             ((!str(target["message_id"]).isEmpty() && str(m.reply["id"]) == str(target["message_id"])) ||
@@ -330,6 +338,7 @@ void Source::refreshHeader() {
             if (uid.isEmpty()) {
                 return;
             }
+            const bool roomChanged = self->room() != uid;
             self->header["channel_id"] = uid;
             self->header["channel"] = user["display_name"];
             self->header["avatar"] = user["profile_image_url"];
@@ -356,6 +365,8 @@ void Source::refreshHeader() {
                                            self->header["live"] = live;
                                            self->header["viewers"] =
                                                live ? items[0].toObject()["viewer_count"] : QJsonValue(0);
+                                           self->header["started_at"] =
+                                               live ? items[0].toObject()["started_at"] : QJsonValue();
                                            if (live) {
                                                self->header["title"] = items[0].toObject()["title"];
                                                self->header["category"] = items[0].toObject()["game_name"];
@@ -367,8 +378,152 @@ void Source::refreshHeader() {
                                        "GET", {{"user_id", uid}});
             self->loadEmotes(uid);
             self->loadBadges();
+            if (roomChanged) self->refreshDecorations();
         },
         "GET", {{"login", id}});
+}
+
+void Source::setDecorations(QJsonObject pin, QJsonObject pollState) {
+    if (pinned == pin && activePoll == pollState) return;
+    pinned = std::move(pin);
+    activePoll = std::move(pollState);
+    emit decorationsChanged();
+}
+
+void Source::refreshDecorations() {
+    if (closed || hub->testMode || platform != "twitch" || room().isEmpty()) return;
+    auto *accounts = hub->accounts;
+    const QString uid = str(accounts->twitch["user_id"]), broadcaster = room();
+    const bool pinsAllowed = accounts->twitchAllows({"moderator:manage:chat_messages"}) ||
+                             accounts->twitchAllows({"moderator:read:chat_messages"});
+    const bool pollsAllowed = uid == broadcaster && (accounts->twitchAllows({"channel:read:polls"}) ||
+                                                       accounts->twitchAllows({"channel:manage:polls"}));
+    const QString signature = uid + ":" + broadcaster + ":" + QString::number(pinsAllowed) + ":" +
+                              QString::number(pollsAllowed);
+    if (signature != decorationSignature) {
+        decorationSignature = signature;
+        ++decorationGeneration;
+        decorationPending = pollDecorationPending = false;
+        pinRetryAfter = 0;
+        setDecorations({}, {});
+    }
+    if (uid.isEmpty()) return;
+    if (!pinsAllowed && !pinned.isEmpty()) setDecorations({}, activePoll);
+    if (!pollsAllowed && !activePoll.isEmpty()) setDecorations(pinned, {});
+    const auto epoch = generation;
+    const auto decorationEpoch = decorationGeneration;
+    QPointer<Source> self(this);
+    if (pinsAllowed && !decorationPending && QDateTime::currentSecsSinceEpoch() >= pinRetryAfter) {
+        decorationPending = true;
+        accounts->helix("chat/pins", [self, epoch, decorationEpoch](QJsonObject data, QString error) {
+            if (!self || self->closed || self->generation != epoch ||
+                self->decorationGeneration != decorationEpoch) return;
+            self->decorationPending = false;
+            if (!error.isEmpty()) {
+                if (error.contains("403")) self->pinRetryAfter = QDateTime::currentSecsSinceEpoch() + 300;
+                self->setDecorations({}, self->activePoll);
+                return;
+            }
+            const auto item = first(data["data"].toArray()).toObject();
+            QJsonObject pin;
+            const QString body = str(at(item, {"message", "text"}));
+            if (!body.isEmpty()) pin = {{"id", item["message_id"]}, {"name", item["sender_user_name"]},
+                                       {"text", body}};
+            self->setDecorations(pin, self->activePoll);
+        }, "GET", {{"broadcaster_id", broadcaster}, {"moderator_id", uid}});
+    }
+    if (pollsAllowed && !pollDecorationPending) {
+        pollDecorationPending = true;
+        accounts->helix("polls", [self, epoch, decorationEpoch](QJsonObject data, QString error) {
+            if (!self || self->closed || self->generation != epoch ||
+                self->decorationGeneration != decorationEpoch) return;
+            self->pollDecorationPending = false;
+            QJsonObject state;
+            if (error.isEmpty()) for (const auto &value : data["data"].toArray()) {
+                const auto item = value.toObject();
+                if (str(item["status"]) != "ACTIVE") continue;
+                QStringList choices;
+                for (const auto &choice : item["choices"].toArray()) {
+                    auto option = choice.toObject();
+                    choices << str(option["title"]) + " (" + QString::number(option["votes"].toInt()) + ")";
+                }
+                state = {{"text", item["title"]}, {"options", choices.join(" · ")}};
+                break;
+            }
+            self->setDecorations(self->pinned, state);
+        }, "GET", {{"broadcaster_id", broadcaster}, {"first", "20"}});
+    }
+}
+
+void Source::youtubeApiPollState(const QJsonObject &data) {
+    const auto metadata = at(data, {"activePollItem", "snippet", "pollDetails", "metadata"}).toObject();
+    QJsonObject state;
+    const QString question = str(metadata["questionText"]);
+    if (!question.isEmpty() && str(metadata["status"]).compare("closed", Qt::CaseInsensitive) != 0) {
+        QStringList choices;
+        for (const auto &value : metadata["options"].toArray()) {
+            const auto option = value.toObject();
+            QString choice = str(option["optionText"]);
+            const QString tally = str(option["tally"]);
+            if (!tally.isEmpty()) choice += " (" + tally + ")";
+            if (!choice.isEmpty()) choices << choice;
+        }
+        state = {{"text", question}, {"options", choices.join(" · ")}};
+    }
+    setDecorations(pinned, state);
+}
+
+void Source::youtubeBannerActions(const QJsonArray &actions) {
+    auto pin = pinned, pollState = activePoll;
+    for (const auto &value : actions) {
+        const auto action = value.toObject();
+        const auto add = action["addBannerToLiveChatCommand"].toObject();
+        const auto banner = at(add, {"bannerRenderer", "liveChatBannerRenderer"}).toObject();
+        if (!banner.isEmpty()) {
+            const auto content = banner["contents"].toObject();
+            for (auto i = content.begin(); i != content.end(); ++i) {
+                if (!i.key().contains("MessageRenderer")) continue;
+                const auto parsed = parseYouTube(i.value().toObject(), i.key());
+                if (!parsed.text.isEmpty()) {
+                    pin = {{"id", str(banner["actionId"])}, {"name", parsed.name}, {"text", parsed.text}};
+                    break;
+                }
+            }
+        }
+        const auto remove = action["removeBannerForLiveChatCommand"].toObject();
+        if (!remove.isEmpty() && !str(pin["id"]).isEmpty() &&
+            str(remove["targetActionId"]) == str(pin["id"])) pin = {};
+        const auto panel = action["showLiveChatActionPanelAction"].toObject();
+        if (!panel.isEmpty()) {
+            const auto poll = at(panel, {"panelToShow", "liveChatActionPanelRenderer", "contents", "pollRenderer"}).toObject();
+            QString question = textOf(poll["question"]);
+            if (question.isEmpty()) question = textOf(at(poll, {"header", "pollHeaderRenderer", "title"}));
+            QStringList choices;
+            for (const auto &choice : poll["choices"].toArray()) {
+                auto text = textOf(choice.toObject()["text"]);
+                if (!text.isEmpty()) choices << text;
+            }
+            if (!question.isEmpty() || !choices.isEmpty())
+                pollState = {{"text", question}, {"options", choices.join(" · ")}};
+        }
+        if (action.contains("closeLiveChatActionPanelAction")) pollState = {};
+    }
+    setDecorations(pin, pollState);
+}
+
+void Source::youtubeWebPollState(const QJsonObject &response) {
+    if (activePoll.isEmpty()) return;
+    QJsonObject state = activePoll;
+    walk(response["frameworkUpdates"], [&](const QJsonObject &node) {
+        const auto entity = node["liveChatPollStateEntity"].toObject();
+        if (entity.isEmpty()) return;
+        const auto runs = at(entity, {"collapsedMetadataText", "runs"}).toArray();
+        if (runs.size() >= 3) {
+            const QString question = str(runs[2].toObject()["text"]);
+            if (!question.isEmpty()) state["text"] = question;
+        }
+    });
+    setDecorations(pinned, state);
 }
 
 void Source::loadHistory() {
@@ -574,7 +729,8 @@ void Source::youtubePopout(QJsonObject chat, QJsonObject config) {
                 return;
             }
             auto html = QString::fromUtf8(bytes);
-            auto full = at(embeddedJson(html, "ytInitialData"), {"contents", "liveChatRenderer"}).toObject();
+            const auto initialData = embeddedJson(html, "ytInitialData");
+            auto full = at(initialData, {"contents", "liveChatRenderer"}).toObject();
             if (!full.isEmpty()) {
                 chat = full;
             }
@@ -583,6 +739,7 @@ void Source::youtubePopout(QJsonObject chat, QJsonObject config) {
                 config[i.key()] = i.value();
             }
             self->youtubeContinue(chat, config);
+            self->youtubeWebPollState(initialData);
         },
         "GET", {},
         {{"User-Agent",
@@ -632,6 +789,7 @@ void Source::youtubeContinue(QJsonObject chat, QJsonObject config) {
 }
 
 void Source::youtubeActions(const QJsonArray &actions, bool historical) {
+    youtubeBannerActions(actions);
     for (const auto &v : actions) {
         auto a = v.toObject();
         auto item = at(a, {"addChatItemAction", "item"}).toObject();
@@ -704,6 +862,7 @@ void Source::youtubePoll() {
             self->continuation = continuationOf(chat, &self->recommendedMs);
             self->visitor = str(at(d, {"responseContext", "visitorData"}));
             self->youtubeActions(chat["actions"].toArray(), self->initial);
+            self->youtubeWebPollState(d);
             self->initial = false;
             self->requesting = false;
             if (self->hub->youtubeCooldownRemaining() == 0) {
@@ -868,6 +1027,7 @@ void Source::youtubeApiPoll() {
             return;
         }
         self->apiRetryMs = 120000;
+        self->youtubeApiPollState(data);
         for (const auto &value : data["items"].toArray()) {
             auto item = value.toObject();
             auto snippet = item["snippet"].toObject();
@@ -891,6 +1051,12 @@ void Source::youtubeApiPoll() {
             m.stamp = QDateTime::fromString(str(snippet["publishedAt"]), Qt::ISODateWithMs);
             if (!m.stamp.isValid()) m.stamp = QDateTime::fromString(str(snippet["publishedAt"]), Qt::ISODate);
             m.history = self->initial;
+            if (QStringList{"newSponsorEvent", "memberMilestoneChatEvent", "membershipGiftingEvent",
+                            "giftMembershipReceivedEvent", "superChatEvent", "superStickerEvent", "giftEvent"}
+                    .contains(type)) {
+                m.special = "alert";
+                if (m.name.isEmpty()) m.name = "YouTube";
+            }
             for (const auto &role : QList<QPair<QString, QString>>{{"isChatOwner", "owner"},
                        {"isChatModerator", "moderator"}, {"isChatSponsor", "subscriber"}}) {
                 if (author[role.first].toBool()) {
@@ -1057,7 +1223,7 @@ void TwitchConnection::line(const QString &raw) {
     if (!source) {
         return;
     }
-    if (p.command == "PRIVMSG") {
+    if ((p.command == "PRIVMSG" || p.command == "USERNOTICE") && !p.message.text.isEmpty()) {
         if (source->historyLoading) {
             source->liveBuffer << p.message;
             if (source->liveBuffer.size() > source->retentionCap()) {
@@ -1302,6 +1468,7 @@ void Hub::youtubeChatId(Source *s, std::function<void(QString, QString)> done) {
                                   self->header["channel"] = snippet["channelTitle"];
                                   self->header["title"] = snippet["title"];
                                   self->header["live"] = true;
+                                  self->header["started_at"] = at(item, {"liveStreamingDetails", "actualStartTime"});
                                   self->loadEmotes(channelId);
                                   emit self->changed();
                               }

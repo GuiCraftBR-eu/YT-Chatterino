@@ -194,14 +194,14 @@ int ChatView::estimate(const Message &m) const {
     const auto a = hub->cfg->appearance();
     const QFontMetrics fm(hub->cfg->messageFont());
     int width = qMax(120, viewport()->width() - 14);
-    QString text = m.name + ": " + m.text;
+    QString text = m.name + ": " + visibleMessageText(m, *hub->cfg);
     int lines = qMax(1, (fm.horizontalAdvance(text) + width - 1) / width);
     lines += text.count('\n');
     int height = lines * fm.lineSpacing() + 8;
     if (!m.reply.isEmpty() && !threadMode) {
         height += fm.lineSpacing();
     }
-    if (!m.emotes.isEmpty()) {
+    if (!m.emotes.isEmpty() && (!m.deleted || hub->cfg->data["show_deleted_messages"].toBool(false))) {
         height = qMax(height, a["emote_size"].toInt(36) + 8);
     }
     return height;
@@ -459,9 +459,10 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
     cursor.insertText(m.name, format(username, userColor(m)));
     detail.nameEnd = cursor.position();
     cursor.insertText(": ", normalFormat);
-    QString body = m.deleted ? hub->cfg->T("[message deleted]") : m.text;
-    QVector<Span> spans = m.deleted ? QVector<Span>() : m.emotes;
-    if (source && !m.deleted) {
+    const bool revealDeleted = m.deleted && hub->cfg->data["show_deleted_messages"].toBool(false);
+    QString body = visibleMessageText(m, *hub->cfg);
+    QVector<Span> spans = m.deleted && !revealDeleted ? QVector<Span>() : m.emotes;
+    if (source && (!m.deleted || revealDeleted)) {
         auto matches = QRegularExpression("\\S+").globalMatch(body);
         while (matches.hasNext()) {
             auto match = matches.next();
@@ -483,7 +484,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         static const QRegularExpression mentions(
             "(?<![\\p{L}\\p{N}_@])@[\\p{L}\\p{N}_][\\p{L}\\p{N}_.-]{0,63}");
         QVector<MentionSpan> candidates;
-        if (!m.deleted) for (const auto &mention : m.mentions) {
+        if (!m.deleted || revealDeleted) for (const auto &mention : m.mentions) {
             if (mention.start >= bodyStart && mention.end <= bodyStart + text.size() && mention.end > mention.start)
                 candidates.append({mention.start - bodyStart, mention.end - bodyStart, mention.name, mention.uid});
         }
@@ -604,6 +605,9 @@ void ChatView::paintEvent(QPaintEvent *) {
         painter.fillRect(rect, background);
         painter.save();
         painter.translate(6, y + 3);
+        if (messages[i].deleted && hub->cfg->data["show_deleted_messages"].toBool(false)) {
+            painter.setOpacity(0.5);
+        }
         QAbstractTextDocumentLayout::PaintContext context;
         context.palette.setColor(QPalette::Text, QColor("#efeff1"));
         auto start = selectionStart, end = selectionEnd;
@@ -1479,6 +1483,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         auto *title = new QLabel(row);
         title->setObjectName("mixed-channel-title");
         title->setTextFormat(Qt::PlainText);
+        title->setWordWrap(true);
         title->setFont(QFont("Segoe UI", 9, QFont::Bold));
         title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         title->installEventFilter(this);
@@ -1497,6 +1502,13 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     actions->setText("▾");
     hl->addWidget(actions);
     layout->addWidget(header);
+    decorations = new QWidget(this);
+    decorations->setObjectName("chat-decorations");
+    auto *decorationLayout = new QVBoxLayout(decorations);
+    decorationLayout->setContentsMargins(4, 2, 4, 2);
+    decorationLayout->setSpacing(2);
+    layout->addWidget(decorations);
+    decorations->hide();
     header->setStyleSheet("background:#111111;");
     header->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(actions, &QToolButton::clicked, this, [this, actions] {
@@ -1689,7 +1701,18 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         reload();
         refresh();
     });
-    connect(hub->cfg, &Config::languageChanged, this, &Pane::refresh);
+    connect(hub->cfg, &Config::languageChanged, this, [this] { refresh(); refreshDecorations(); });
+    headerClock.setInterval(1000);
+    connect(&headerClock, &QTimer::timeout, this, [this] {
+        if (!isVisible() || !hub->cfg->appearance()["header_duration"].toBool(true)) return;
+        for (auto source : sources) {
+            if (source && source->header["live"].toBool() && !str(source->header["started_at"]).isEmpty()) {
+                refresh();
+                break;
+            }
+        }
+    });
+    headerClock.start();
     setSources(list);
     if (detached) {
         header->hide();
@@ -1743,6 +1766,7 @@ void Pane::setSources(QList<Source *> list) {
             refresh();
             reload();
         });
+        connect(s, &Source::decorationsChanged, this, &Pane::refreshDecorations);
         connect(s, &Source::redacted, this, [this](QJsonObject target) {
             if (detached || reply.id.isEmpty()) {
                 return;
@@ -1763,6 +1787,38 @@ void Pane::setSources(QList<Source *> list) {
     }
     reload();
     refresh();
+    refreshDecorations();
+}
+
+void Pane::refreshDecorations() {
+    auto *box = qobject_cast<QVBoxLayout *>(decorations->layout());
+    while (auto *item = box->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    int count = 0;
+    for (auto source : sources) {
+        if (!source) continue;
+        const auto add = [&](const QString &heading, const QJsonObject &value) {
+            if (str(value["text"]).isEmpty()) return;
+            QString text = heading;
+            if (sources.size() > 1) text += " · " + source->name();
+            const QString author = str(value["name"]);
+            text += "\n" + (author.isEmpty() ? QString() : author + ": ") + str(value["text"]);
+            if (!str(value["options"]).isEmpty()) text += "\n" + str(value["options"]);
+            auto *label = new QLabel(text, decorations);
+            label->setObjectName("chat-decoration");
+            label->setTextFormat(Qt::PlainText);
+            label->setWordWrap(true);
+            label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            label->setStyleSheet("background:#1c1c20; color:#e9e9ec; border-left:2px solid #9147ff; padding:4px;");
+            box->addWidget(label);
+            ++count;
+        };
+        add(hub->cfg->T("Pinned message"), source->pinned);
+        add(hub->cfg->T("Poll"), source->activePoll);
+    }
+    decorations->setVisible(count > 0 && !detached);
 }
 
 void Pane::refresh() {
@@ -1776,6 +1832,7 @@ void Pane::refresh() {
             {{"name", reply.login.isEmpty() ? reply.name : reply.login}, {"body", reply.text.left(120)}}));
     }
     QStringList titles, fullTitles;
+    const auto appearance = hub->cfg->appearance();
     for (auto source : sources) {
         if (source) {
             QString count;
@@ -1790,12 +1847,24 @@ void Pane::refresh() {
             if (title.isEmpty()) {
                 title = source->name();
             }
-            QString text = count + " - ";
-            if (source->platform == "twitch" && !str(source->header["category"]).isEmpty()) {
-                text += str(source->header["category"]) + " - ";
+            QStringList parts;
+            if (appearance["header_viewers"].toBool(true)) parts << count;
+            if (appearance["header_duration"].toBool(true) && source->header["live"].toBool()) {
+                const auto start = QDateTime::fromString(str(source->header["started_at"]), Qt::ISODate);
+                const qint64 seconds = start.isValid() ? start.secsTo(QDateTime::currentDateTimeUtc()) : -1;
+                if (seconds >= 0) {
+                    const qint64 hours = seconds / 3600;
+                    parts << QString("%1:%2:%3").arg(hours, 2, 10, QChar('0'))
+                                 .arg((seconds / 60) % 60, 2, 10, QChar('0'))
+                                 .arg(seconds % 60, 2, 10, QChar('0'));
+                }
             }
-            titles << text + title;
-            fullTitles << source->name() + " — " + text + title;
+            if (appearance["header_category"].toBool(true) && source->platform == "twitch" &&
+                !str(source->header["category"]).isEmpty()) parts << str(source->header["category"]);
+            if (appearance["header_title"].toBool(true)) parts << title;
+            const QString text = parts.join(" - ");
+            titles << text;
+            fullTitles << source->name() + (text.isEmpty() ? QString() : " — " + text);
         }
     }
     const bool isMixed = sources.size() > 1;
@@ -1804,6 +1873,30 @@ void Pane::refresh() {
     mixedHeader->setVisible(isMixed);
     headerText->setText(titles.value(0));
     mixedHeader->setToolTip(fullTitles.join('\n'));
+    auto *mixedLayout = qobject_cast<QVBoxLayout *>(mixedHeader->layout());
+    while (mixedIcons.size() < sources.size()) {
+        auto *row = new QWidget(mixedHeader);
+        auto *rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(5);
+        auto *icon = new QLabel(row);
+        icon->setObjectName("mixed-channel-icon");
+        icon->setFixedSize(20, 20);
+        icon->setMouseTracking(true);
+        icon->installEventFilter(this);
+        auto *title = new QLabel(row);
+        title->setObjectName("mixed-channel-title");
+        title->setTextFormat(Qt::PlainText);
+        title->setWordWrap(true);
+        title->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        title->installEventFilter(this);
+        rowLayout->addWidget(icon);
+        rowLayout->addWidget(title, 1);
+        mixedLayout->insertWidget(mixedLayout->count() - 1, row);
+        mixedIcons << icon;
+        mixedTitles << title;
+    }
     for (int i = 0; i < mixedIcons.size(); ++i) {
         auto *icon = mixedIcons[i];
         auto *title = mixedTitles[i];
@@ -1816,8 +1909,7 @@ void Pane::refresh() {
         title->setText(titles.value(i));
         title->setToolTip(fullTitles.value(i));
     }
-    mixedMore->setVisible(isMixed && titles.size() > 3);
-    mixedMore->setText(hub->cfg->T("and {count} more", {{"count", QString::number(qMax(0, int(titles.size()) - 3))}}));
+    mixedMore->hide();
     if (isMixed) header->setMinimumHeight(0);
     headerIcon->setPixmap(
         platformIcon(sources.size() == 1 && sources[0] ? sources[0]->platform : "mixed").pixmap(18, 18));
@@ -1841,7 +1933,7 @@ void Pane::reload() {
     for (auto s : sources) {
         if (s) {
             for (const auto &m : s->history) {
-                if (accepts(m, filter) && (!extraFilter || extraFilter(m))) {
+                if (accepts(m, filter, hub->cfg) && (!extraFilter || extraFilter(m))) {
                     all << m;
                 }
             }
@@ -1856,7 +1948,7 @@ void Pane::incoming(Source *s, Message m) {
     if (detached && !threadId.isEmpty()) {
         return;
     }
-    if (accepts(m, filter) && (!extraFilter || extraFilter(m))) {
+    if (accepts(m, filter, hub->cfg) && (!extraFilter || extraFilter(m))) {
         view->append(m);
     }
 }
@@ -1954,7 +2046,7 @@ void Pane::resizeEvent(QResizeEvent *event) {
     if (!detached) {
         QTimer::singleShot(0, this, [this] {
             if (sources.size() <= 1 && headerText->width() > 50) {
-                int h = qBound(24, headerText->heightForWidth(headerText->width()) + 6, 130);
+                int h = qMax(24, headerText->heightForWidth(headerText->width()) + 6);
                 if (header->minimumHeight() != h) {
                     header->setMinimumHeight(h);
                 }

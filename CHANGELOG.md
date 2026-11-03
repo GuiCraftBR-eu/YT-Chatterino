@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.3
+
+- Mostra duração e permite escolher os campos do cabeçalho; títulos longos são exibidos em várias linhas.
+- Mostra avisos reconhecidos de inscrições, membros e recompensas e permite destacá-los.
+- Acrescenta mensagens fixadas e enquetes quando o serviço e as permissões da conta disponibilizam os dados.
+- Permite mostrar mensagens recebidas antes da exclusão com opacidade reduzida.
+
 ## 2.2.2
 
 - Mostra os ícones dos canais nos chats mistos, com prévia ao passar o mouse.
