@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube e da Twitch, com abas, painéis e emo
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.2.1](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.2.1) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.2.2](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.2.2) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube e da Twitch, com abas, painéis e emo
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.2.1 | Instalação |
+| Sistema | Download da versão 2.2.2 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.2.1/YT-Chatterino-Windows11-2.2.1.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.2.1/yt-chatterino-2.2.1-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.2.2/YT-Chatterino-Windows11-2.2.2.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.2.2/yt-chatterino-2.2.2-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.2.1-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.2.2-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.2.1).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.2.2).
 
 ## Primeiros passos
 
@@ -42,8 +42,8 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 
 ## O que você pode fazer
 
-- **Organizar os chats:** abas, painéis lado a lado ou empilhados e painel misto.
-- **Conversar:** respostas na Twitch, preenchimento de nomes e seletor de emotes nativos, BTTV e 7TV.
+- **Organizar os chats:** abas, painéis lado a lado ou empilhados e painel misto com ícones de canais.
+- **Conversar:** respostas na Twitch, preenchimento de nomes, histórico de mensagens enviadas e seletor de emotes nativos, BTTV e 7TV.
 - **Acompanhar mensagens:** pesquisa, filtros, destaques e sons; histórico padrão de 2.000 mensagens por painel.
 - **Personalizar:** fontes, emotes, emblemas, cores, horários e janela sempre no topo.
 - **Moderar:** ações conforme as permissões da sua conta e os recursos de cada plataforma.
@@ -58,6 +58,8 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 | Preparar resposta na Twitch | Clique direito na mensagem; **Enter** para enviar |
 | Abrir ações e moderação | **Ctrl + clique direito** na mensagem |
 | Completar emotes ou nomes | **Tab / Shift+Tab** |
+| Navegar pelas mensagens enviadas nesta sessão | **↑ / ↓** no campo de mensagem |
+| Abrir histórico de usuário | Clique no nome ou em uma menção **@usuário** |
 | Rolar automaticamente | Clique com a roda e mova o mouse; **Esc** para parar |
 
 Mais opções em **Atalhos de teclado** e nos guias de uso em [português](docs/README-PTBR.txt) e [inglês](docs/README.txt).

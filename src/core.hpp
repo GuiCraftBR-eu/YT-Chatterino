@@ -77,11 +77,17 @@ struct Badge {
     QStringList urls;
 };
 
+struct MentionSpan {
+    int start = 0, end = 0;
+    QString name, uid;
+};
+
 struct Message {
     QString id, source, name, login, uid, text, color, avatar, special, apiId, webId;
     QDateTime stamp;
     QVector<Span> emotes;
     QVector<Badge> badges;
+    QVector<MentionSpan> mentions;
     QJsonObject reply;
     QString badgeInfo;
     qint64 seq = 0;

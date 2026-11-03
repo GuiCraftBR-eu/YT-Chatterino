@@ -455,7 +455,7 @@ QString Config::number(qint64 value) const {
 }
 
 QJsonObject Message::json() const {
-    QJsonArray es, bs;
+    QJsonArray es, bs, ms;
     for (const auto &e : emotes) {
         es.append(QJsonObject{{"start", e.start},
                               {"end", e.end},
@@ -470,6 +470,8 @@ QJsonObject Message::json() const {
                               {"role", b.role},
                               {"urls", QJsonArray::fromStringList(b.urls)}});
     }
+    for (const auto &m : mentions)
+        ms.append(QJsonObject{{"start", m.start}, {"end", m.end}, {"name", m.name}, {"user_id", m.uid}});
     return {{"id", id},
             {"source", source},
             {"name", name},
@@ -483,6 +485,7 @@ QJsonObject Message::json() const {
             {"badge_info", badgeInfo},
             {"native_emotes", es},
             {"badge_ids", bs},
+            {"mentions", ms},
             {"sent_at", stamp.isValid() ? stamp.toMSecsSinceEpoch() / 1000.0 : 0},
             {"_seq", seq},
             {"deleted", deleted},
@@ -540,6 +543,12 @@ Message Message::fromJson(const QJsonObject &o) {
             badge.urls << u.toString();
         }
         m.badges << badge;
+    }
+    for (const auto &v : o["mentions"].toArray()) {
+        const auto item = v.toObject();
+        const int start = item["start"].toInt(-1), end = item["end"].toInt(-1);
+        if (start >= 0 && end > start && end <= m.text.size())
+            m.mentions.append({start, end, str(item["name"]), str(item["user_id"])});
     }
     return m;
 }
@@ -680,7 +689,11 @@ static void appendRuns(Message &m, const QJsonValue &v) {
         auto r = run.toObject();
         auto emoji = r["emoji"].toObject();
         if (emoji.isEmpty()) {
-            m.text += str(r["text"]);
+            const auto text = str(r["text"]);
+            const auto uid = str(at(r, {"navigationEndpoint", "browseEndpoint", "browseId"}));
+            if (text.startsWith('@') && text.size() > 1 && uid.startsWith("UC"))
+                m.mentions.append({int(m.text.size()), int(m.text.size() + text.size()), text.mid(1).trimmed(), uid});
+            m.text += text;
             continue;
         }
         QString code = firstItem(emoji["shortcuts"].toArray()).toString();
@@ -728,6 +741,10 @@ Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical)
             for (auto &e : m.emotes) {
                 e.start += prefix.size();
                 e.end += prefix.size();
+            }
+            for (auto &mention : m.mentions) {
+                mention.start += prefix.size();
+                mention.end += prefix.size();
             }
         }
     } else if (kind.contains("Membership") || kind.contains("Sponsorship")) {

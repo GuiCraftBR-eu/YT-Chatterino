@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.2
+
+- Mostra os ícones dos canais nos chats mistos, com prévia ao passar o mouse.
+- Permite abrir o histórico de usuários mencionados e navegar pelas mensagens enviadas.
+- Mantém a janela de emotes aberta e bloqueia a digitação enquanto uma mensagem é enviada.
+
 ## 2.2.1
 
 - Mantém a cor de fundo junto da mensagem e corrige a posição das linhas.

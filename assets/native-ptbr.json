@@ -232,5 +232,6 @@
   "Subscriber": "Inscrito",
   "Verified": "Verificado",
   "Copy stream link": "Copiar link da transmissão",
-  "and {count} more": "e mais {count}"
+  "and {count} more": "e mais {count}",
+  "Channel": "Canal"
 }

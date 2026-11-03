@@ -107,4 +107,10 @@ class NativeTests : public QObject {
     void badgeHoverShowsImageAndName();
     void mixedHeaderAndCopyStreamLinks();
     void sentTwitchMessageKeepsChannelBadgeInEitherOrder();
+    void mixedChannelLogosAndPreviews();
+    void sendLocksInputAndKeepsHistory();
+    void pickerStaysOpenForMultipleEmotes();
+    void mentionsOpenCorrectUserHistory();
+    void youtubeChannelAvatarFromOwnerMessage();
+    void youtubeStructuredMentionAndChannelAvatar();
 };
