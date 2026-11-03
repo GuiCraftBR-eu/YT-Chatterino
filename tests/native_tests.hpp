@@ -126,4 +126,6 @@ class NativeTests : public QObject {
     void permissionAwareMenusAndUserCards();
     void twitchModerationPagination();
     void singleChannelIconAndConnectionNotices();
+    void activeFiltersAreVisibleAndSynchronized();
+    void versionAndToolbarControls();
 };

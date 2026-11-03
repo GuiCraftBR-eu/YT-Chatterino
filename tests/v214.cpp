@@ -80,7 +80,7 @@ void NativeTests::compactTabBarKeepsControlsUsable() {
     QVERIFY(app->quotaLabel->text().startsWith("YT ~"));
     auto *controls = app->tabs->cornerWidget(Qt::TopRightCorner);
     QVERIFY(controls && controls->isVisible());
-    for (auto *button : {app->addButton, app->layoutButton, app->gear}) {
+    for (auto *button : {app->addButton, app->gear}) {
         QVERIFY(button->isVisible());
         QCOMPARE(button->size(), QSize(23, 23));
         QVERIFY(controls->rect().contains(QRect(button->mapTo(controls, QPoint()), button->size())));

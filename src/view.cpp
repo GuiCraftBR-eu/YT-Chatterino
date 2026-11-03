@@ -1502,6 +1502,13 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     mixedLayout->addWidget(mixedMore);
     hl->addWidget(mixedHeader, 1);
     mixedHeader->hide();
+    filterButton = new QToolButton(header);
+    filterButton->setObjectName("active-filter");
+    filterButton->setStyleSheet("QToolButton{color:#f0c674;background:#29251c;border-radius:3px;padding:3px 5px;}"
+                                "QToolButton:hover{background:#443a27;}");
+    filterButton->hide();
+    hl->addWidget(filterButton);
+    connect(filterButton, &QToolButton::clicked, this, [this] { emit filtersRequested(this); });
     auto *actions = new QToolButton(header);
     actions->setText("▾");
     hl->addWidget(actions);
@@ -1705,6 +1712,12 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         reload();
         refresh();
     });
+    connect(hub->cfg, &Config::filtersChanged, this, [this](const QString &changedKey) {
+        if (changedKey != key()) return;
+        filter = hub->cfg->data["chat_filters"].toObject()[key()].toObject();
+        reload();
+        refresh();
+    });
     connect(hub->cfg, &Config::languageChanged, this, [this] { refresh(); refreshDecorations(); });
     historyReload.setSingleShot(true);
     connect(&historyReload, &QTimer::timeout, this, &Pane::reload);
@@ -1828,6 +1841,12 @@ void Pane::refreshDecorations() {
 }
 
 void Pane::refresh() {
+    const bool hasFilter = !filter["hidden_users"].toArray().isEmpty() ||
+        !filter["include_terms"].toArray().isEmpty() || !filter["exclude_terms"].toArray().isEmpty() ||
+        filter["hide_deleted"].toBool() || filter["hide_system"].toBool();
+    filterButton->setText(hub->cfg->T("Filters"));
+    filterButton->setToolTip(hub->cfg->T("Filters are active. Click to review them."));
+    filterButton->setVisible(hasFilter && !detached);
     input->setPlaceholderText(hub->cfg->T("Send a message…"));
     sendButton->setText(hub->cfg->T("Send"));
     searchInput->setPlaceholderText(hub->cfg->T("Search messages…"));

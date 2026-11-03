@@ -20,7 +20,7 @@ class MainWindow : public QMainWindow {
     Updater updater;
     QTabWidget *tabs;
     QLabel *quotaLabel;
-    QToolButton *updateArrow, *gear, *addButton, *layoutButton;
+    QToolButton *updateArrow, *gear, *addButton;
     QPointer<SettingsWindow> settings;
     QTranslator *standardTranslator = nullptr;
     QHash<QString, QPointer<QDialog>> userCards;
