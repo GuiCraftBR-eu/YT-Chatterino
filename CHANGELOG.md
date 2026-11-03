@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.4
+
+- Corrige reconexões repetidas e deixa o chat ao vivo independente do carregamento do histórico da Twitch.
+- Reúne e organiza o histórico disponível de todos os canais em chats mistos, com nova tentativa após falhas.
+- Recupera os próprios emblemas da Twitch a partir do estado do usuário em cada canal.
+- Exibe o ícone do canal e mostra opções de edição e moderação conforme os cargos identificados.
+
 ## 2.2.3
 
 - Mostra duração e permite escolher os campos do cabeçalho; títulos longos são exibidos em várias linhas.

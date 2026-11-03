@@ -1,4 +1,11 @@
 {
+  "Change title…": "Alterar título…",
+  "Change title / category…": "Alterar título / categoria…",
+  "Change title": "Alterar título",
+  "Change title / category": "Alterar título / categoria",
+  "Recent Twitch history unavailable; live chat continues independently.": "Histórico recente da Twitch indisponível; o chat ao vivo continua independente.",
+  "YouTube moderator controls": "Controles de moderação do YouTube",
+  "For another creator's channel, controls appear once the app sees your moderator badge in a recent message from your connected YouTube account. A channel owner can always see the controls for their own channel.": "No canal de outra pessoa, os controles aparecem quando o app vê seu emblema de moderador em uma mensagem recente da sua conta conectada do YouTube. O dono sempre vê os controles do próprio canal.",
   "Stream header": "Cabeçalho da transmissão",
   "Show viewer count": "Mostrar número de espectadores",
   "Show stream duration": "Mostrar duração da transmissão",

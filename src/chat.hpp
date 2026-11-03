@@ -21,10 +21,17 @@ class Source : public QObject {
     QHash<QString, Badge> badges;
     QHash<QString, Badge> globalBadges, channelBadges;
     bool paused = false, closed = false, historyLoaded = false, historyLoading = false;
-    QVector<Message> liveBuffer;
+    QVector<Badge> ownTwitchBadges;
+    QString ownTwitchUserId, ownTwitchDisplayName, ownTwitchColor, ownTwitchBadgeInfo;
+    bool twitchModeratorKnown = false, twitchModerator = false, twitchJoined = false;
+    QString youtubeRoleUserId;
+    QDateTime youtubeRoleStamp;
+    bool youtubeModeratorKnown = false, youtubeModerator = false;
+    QHash<QString, qint64> connectionNotices;
     QString continuation, visitor;
     QJsonObject context;
-    QTimer poll, metadataTimer, badgeRetry, decorationTimer;
+    QTimer poll, metadataTimer, badgeRetry, decorationTimer, historyRetry;
+    int historyRetryMs = 30000;
     bool decorationPending = false, pollDecorationPending = false;
     qint64 pinRetryAfter = 0;
     quint64 decorationGeneration = 0;
@@ -50,6 +57,9 @@ class Source : public QObject {
     void stop();
     void publish(Message message);
     void status(const QString &text);
+    void connectionStatus(const QString &text);
+    void updateTwitchUserState(const QJsonObject &tags);
+    void resetTwitchUserState();
     void redact(const QJsonObject &target);
     void trim();
     int retentionCap() const;
@@ -78,6 +88,7 @@ class Source : public QObject {
     void message(yc::Message message);
     void changed();
     void decorationsChanged();
+    void permissionsChanged();
     void redacted(QJsonObject target);
 };
 
@@ -91,9 +102,13 @@ class TwitchConnection : public QObject {
     QByteArray buffer;
     QHash<QString, QPointer<Source>> channels;
     bool registered = false, connecting = false, closing = false, authRejected = false;
+    bool intentionalDisconnect = false;
+    quint64 connectionAttempt = 0;
+    QByteArray connectionIdentity;
     void join(Source *source);
     void part(Source *source);
     void connectServer();
+    void reconnect();
     void line(const QString &line);
     void close();
 };
@@ -134,6 +149,10 @@ class Hub : public QObject {
     void send(Source *source, QString text, Message reply, JsonCallback done);
     void moderate(Source *source, const Message &message, QString action, int duration, JsonCallback done);
     void canModerate(Source *source, std::function<void(bool, QString)> done);
+    void moderatedPage(QPointer<Source> source, QString userId, QString cursor, int page,
+                       std::function<void(bool, QString)> done);
+    bool hasModerationRole(const Source *source) const;
+    bool canEditChannel(const Source *source) const;
     void youtubeChatId(Source *source, std::function<void(QString, QString)> done);
     void youtubeMessageId(Source *source, Message message, std::function<void(QString, QString)> done);
     void editChannel(Source *source, QString title, QString categoryId, JsonCallback done);

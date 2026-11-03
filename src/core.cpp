@@ -566,6 +566,28 @@ static QString decodeTag(QString s) {
     return out;
 }
 
+QVector<Badge> parseTwitchBadges(const QString &tags) {
+    QVector<Badge> result;
+    for (const auto &entry : tags.split(',', Qt::SkipEmptyParts)) {
+        Badge badge;
+        badge.id = entry.section('/', 0, 0);
+        badge.version = entry.section('/', 1);
+        badge.role = badge.id == "broadcaster" ? "owner" : badge.id;
+        badge.label = '[' + badge.id.toUpper() + ']';
+        if (!badge.id.isEmpty() && !badge.version.isEmpty()) result << badge;
+    }
+    return result;
+}
+
+bool messageOrder(const Message &a, const Message &b) {
+    if (a.history != b.history) return a.history;
+    if (a.history) {
+        if (a.stamp.isValid() != b.stamp.isValid()) return a.stamp.isValid();
+        if (a.stamp.isValid() && a.stamp != b.stamp) return a.stamp < b.stamp;
+    }
+    return a.seq < b.seq;
+}
+
 ParsedIrc parseIrc(QString line) {
     ParsedIrc p;
     QString prefix;
@@ -620,14 +642,7 @@ ParsedIrc parseIrc(QString line) {
         ts = str(p.tags["rm-received-ts"]).toLongLong();
     }
     m.stamp = ts ? QDateTime::fromMSecsSinceEpoch(ts) : QDateTime::currentDateTime();
-    for (const auto &s : str(p.tags["badges"]).split(',', Qt::SkipEmptyParts)) {
-        Badge b;
-        b.id = s.section('/', 0, 0);
-        b.version = s.section('/', 1);
-        b.role = b.id == "broadcaster" ? "owner" : b.id;
-        b.label = '[' + b.id.toUpper() + ']';
-        m.badges << b;
-    }
+    m.badges = parseTwitchBadges(str(p.tags["badges"]));
     for (const auto &entry : str(p.tags["emotes"]).split('/', Qt::SkipEmptyParts)) {
         QString eid = entry.section(':', 0, 0);
         for (const auto &range : entry.section(':', 1).split(',')) {

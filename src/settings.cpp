@@ -1170,6 +1170,10 @@ QWidget *SettingsWindow::tutorialPage() {
               "In Accounts choose the JSON, then Sign in to YouTube and approve in your browser. Select your "
               "channel or Brand Account. Sending uses about 20 units; deletion about 20–26; bans/timeouts "
               "200. You must be the owner/moderator to moderate. Public reading stays free."},
+             {"YouTube moderator controls",
+              "For another creator's channel, controls appear once the app sees your moderator badge in a "
+              "recent message from your connected YouTube account. A channel owner can always see the "
+              "controls for their own channel."},
              {"Google sign-in blocked (403 / access_denied)", Accounts::googleSignInHelp()},
              {"YouTube chat limited (HTTP 429)",
               "Web reading may be temporarily limited by Google. Sign in to YouTube in Accounts, then "

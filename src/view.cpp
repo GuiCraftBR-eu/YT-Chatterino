@@ -256,7 +256,7 @@ static QTextCharFormat format(const QFont &font, QColor color) {
     return f;
 }
 
-static QImage channelIcon(Source *source, Images *images, int size) {
+QImage channelIcon(Source *source, Images *images, int size) {
     QImage result(size, size, QImage::Format_ARGB32_Premultiplied);
     result.fill(Qt::transparent);
     QPainter painter(&result);
@@ -1459,6 +1459,10 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     auto *hl = new QHBoxLayout(header);
     hl->setContentsMargins(6, 3, 4, 3);
     headerIcon = new QLabel(header);
+    headerIcon->setObjectName("channel-header-icon");
+    headerIcon->setFixedSize(20, 20);
+    headerIcon->setMouseTracking(true);
+    headerIcon->installEventFilter(this);
     hl->addWidget(headerIcon);
     headerText = new QLabel(header);
     headerText->setWordWrap(true);
@@ -1702,6 +1706,8 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         refresh();
     });
     connect(hub->cfg, &Config::languageChanged, this, [this] { refresh(); refreshDecorations(); });
+    historyReload.setSingleShot(true);
+    connect(&historyReload, &QTimer::timeout, this, &Pane::reload);
     headerClock.setInterval(1000);
     connect(&headerClock, &QTimer::timeout, this, [this] {
         if (!isVisible() || !hub->cfg->appearance()["header_duration"].toBool(true)) return;
@@ -1911,8 +1917,11 @@ void Pane::refresh() {
     }
     mixedMore->hide();
     if (isMixed) header->setMinimumHeight(0);
-    headerIcon->setPixmap(
-        platformIcon(sources.size() == 1 && sources[0] ? sources[0]->platform : "mixed").pixmap(18, 18));
+    if (sources.size() == 1 && sources[0]) {
+        headerIcon->setProperty("source-key", sources[0]->key);
+        headerIcon->setAccessibleName(sources[0]->name());
+        headerIcon->setPixmap(QPixmap::fromImage(channelIcon(sources[0], hub->images, 20)));
+    }
     int selected = target->currentIndex();
     for (int i = 0; i < sources.size(); ++i) {
         if (sources[i]) {
@@ -1939,7 +1948,7 @@ void Pane::reload() {
             }
         }
     }
-    std::sort(all.begin(), all.end(), [](const Message &a, const Message &b) { return a.seq < b.seq; });
+    std::stable_sort(all.begin(), all.end(), messageOrder);
     view->setMessages(all);
 }
 
@@ -1949,7 +1958,8 @@ void Pane::incoming(Source *s, Message m) {
         return;
     }
     if (accepts(m, filter, hub->cfg) && (!extraFilter || extraFilter(m))) {
-        view->append(m);
+        if (m.history) historyReload.start(0);
+        else view->append(m);
     }
 }
 
@@ -2014,7 +2024,8 @@ void Pane::showSearch() {
 }
 
 bool Pane::eventFilter(QObject *object, QEvent *event) {
-    if (auto *icon = qobject_cast<QLabel *>(object); view && icon && mixedIcons.contains(icon)) {
+    if (auto *icon = qobject_cast<QLabel *>(object);
+        view && icon && (icon == headerIcon || mixedIcons.contains(icon))) {
         auto *source = hub->sources.value(icon->property("source-key").toString());
         if (event->type() == QEvent::MouseMove) {
             view->showChannelTooltip(source, static_cast<QMouseEvent *>(event)->globalPosition().toPoint());
