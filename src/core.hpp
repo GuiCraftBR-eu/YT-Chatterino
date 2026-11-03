@@ -103,6 +103,8 @@ struct ParsedIrc {
 };
 
 ParsedIrc parseIrc(QString line);
+QVector<Badge> parseTwitchBadges(const QString &tags);
+bool messageOrder(const Message &a, const Message &b);
 Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical = false);
 QSet<QString> roles(const Message &m);
 QColor userColor(const Message &m);

@@ -41,6 +41,7 @@ class MainWindow : public QMainWindow {
     void populatePaneMenu(QMenu &menu, Pane *pane);
     void tabMenu(int index, QPoint position);
     void messageMenu(Pane *pane, Message message, QPoint position);
+    void populateMessageMenu(QMenu &menu, Pane *pane, Message message);
     void showUser(Pane *pane, Source *source, Message message);
     void showThread(Source *source, Message message);
     void editChannel(Source *source);

@@ -312,8 +312,8 @@ Workspace *MainWindow::addWorkspace(QList<Source *> sources, QString title) {
         refreshTabs();
         refreshQuota();
     });
-    w->add(sources);
     tabs->setCurrentIndex(tabs->addTab(w, title));
+    w->add(sources);
     refreshTabs();
     return w;
 }
@@ -553,7 +553,8 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     }
     for (auto source : p->sources) {
         if (source) {
-            auto *channel = menu.addMenu(platformIcon(source->platform), source->name());
+            auto *channel = menu.addMenu(QIcon(QPixmap::fromImage(channelIcon(source, &images, 20))),
+                                         source->name());
             auto *openStream = channel->addAction(cfg.T("Open stream in browser"), source, [source] {
                 QDesktopServices::openUrl(QUrl(browserUrl(source->platform, source->id, "stream")));
             });
@@ -625,8 +626,12 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
                 });
             }
             channel->addAction(cfg.T("Save channel"), this, [this, source] { saveChannel(source); });
-            channel->addAction(cfg.T("Edit title / category…"), this,
-                               [this, source] { editChannel(source); });
+            if (hub.canEditChannel(source)) {
+                auto *edit = channel->addAction(
+                    cfg.T(source->platform == "youtube" ? "Change title…" : "Change title / category…"),
+                    this, [this, source] { editChannel(source); });
+                edit->setObjectName("channel-edit");
+            }
             if (p->sources.size() > 1) {
                 channel->addAction(cfg.T("Remove from mixed feed"), p, [p, source] {
                     QList<Source *> keep;
@@ -737,6 +742,11 @@ void MainWindow::tabMenu(int index, QPoint position) {
 
 void MainWindow::messageMenu(Pane *pane, Message message, QPoint position) {
     QMenu m(this);
+    populateMessageMenu(m, pane, message);
+    m.exec(position);
+}
+
+void MainWindow::populateMessageMenu(QMenu &m, Pane *pane, Message message) {
     auto *copy = m.addAction(cfg.T("Copy"), pane->view, &ChatView::copySelection);
     copy->setEnabled(!pane->view->selectedText().isEmpty());
     const QString copiedBody = visibleMessageText(message, cfg);
@@ -769,43 +779,45 @@ void MainWindow::messageMenu(Pane *pane, Message message, QPoint position) {
                 m.addAction(cfg.T("Open reply thread"), this, [=, this] { showThread(source, message); });
             }
         }
-        auto *moderation = m.addMenu(cfg.T("Moderation"));
-        for (const auto &action : QList<QPair<QString, QString>>{{"delete", "Delete this message"},
-                                                                 {"timeout60", "Timeout · 1 minute"},
-                                                                 {"timeout600", "Timeout · 10 minutes"},
-                                                                 {"timeout3600", "Timeout · 1 hour"},
-                                                                 {"ban", "Ban user…"},
-                                                                 {"unban", "Unban user"}}) {
-            if (action.first == "unban" && source->platform != "twitch") {
-                continue;
-            }
-            auto *a = moderation->addAction(cfg.T(action.second), this, [=, this] {
-                if (action.first == "ban" &&
-                    QMessageBox::question(this, cfg.T("Ban user"),
-                                          cfg.T("Ban {name} from {channel}?",
-                                                {{"name", message.name}, {"channel", source->name()}})) !=
-                        QMessageBox::Yes) {
-                    return;
+        if (hub.hasModerationRole(source)) {
+            auto *moderation = m.addMenu(cfg.T("Moderation"));
+            moderation->setObjectName("moderation-menu");
+            for (const auto &action : QList<QPair<QString, QString>>{{"delete", "Delete this message"},
+                                                                     {"timeout60", "Timeout · 1 minute"},
+                                                                     {"timeout600", "Timeout · 10 minutes"},
+                                                                     {"timeout3600", "Timeout · 1 hour"},
+                                                                     {"ban", "Ban user…"},
+                                                                     {"unban", "Unban user"}}) {
+                if (action.first == "unban" && source->platform != "twitch") {
+                    continue;
                 }
-                QString operation = action.first;
-                int duration = 0;
-                if (operation.startsWith("timeout")) {
-                    duration = operation.mid(7).toInt();
-                    operation = "timeout";
-                }
-                QPointer<MainWindow> safe(this);
-                hub.moderate(source, message, operation, duration, [safe](QJsonObject, QString error) {
-                    if (safe && !error.isEmpty()) {
-                        QMessageBox::warning(safe, safe->cfg.T("Moderation"), safe->cfg.T(error));
+                auto *a = moderation->addAction(cfg.T(action.second), this, [=, this] {
+                    if (action.first == "ban" &&
+                        QMessageBox::question(this, cfg.T("Ban user"),
+                                              cfg.T("Ban {name} from {channel}?",
+                                                    {{"name", message.name}, {"channel", source->name()}})) !=
+                            QMessageBox::Yes) {
+                        return;
                     }
+                    QString operation = action.first;
+                    int duration = 0;
+                    if (operation.startsWith("timeout")) {
+                        duration = operation.mid(7).toInt();
+                        operation = "timeout";
+                    }
+                    QPointer<MainWindow> safe(this);
+                    hub.moderate(source, message, operation, duration, [safe](QJsonObject, QString error) {
+                        if (safe && !error.isEmpty()) {
+                            QMessageBox::warning(safe, safe->cfg.T("Moderation"), safe->cfg.T(error));
+                        }
+                    });
                 });
-            });
-            if (action.first == "delete" && source->platform == "twitch" && message.uid == source->room()) {
-                a->setEnabled(false);
+                if (action.first == "delete" && source->platform == "twitch" && message.uid == source->room()) {
+                    a->setEnabled(false);
+                }
             }
         }
     }
-    m.exec(position);
 }
 
 void MainWindow::highlightUser(QString name) {
@@ -943,7 +955,7 @@ void MainWindow::openSaved(QJsonObject item) {
 void MainWindow::editChannel(Source *source) {
     auto *dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setWindowTitle(cfg.T("Edit title / category"));
+    dialog->setWindowTitle(cfg.T(source->platform == "youtube" ? "Change title" : "Change title / category"));
     auto *layout = new QFormLayout(dialog);
     auto *title = new QLineEdit(str(source->header["title"]), dialog);
     layout->addRow(cfg.T("Title"), title);
@@ -1555,7 +1567,10 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
         }
     }));
     layout->addLayout(actions);
-    auto *mods = new QHBoxLayout;
+    auto *moderationRow = new QWidget(d);
+    moderationRow->setObjectName("user-card-moderation");
+    auto *mods = new QHBoxLayout(moderationRow);
+    mods->setContentsMargins(0, 0, 0, 0);
     for (const auto &pair :
          QList<QPair<QString, int>>{{"Unban", -1}, {"1m", 60}, {"10m", 600}, {"1h", 3600}, {"Ban", 0}}) {
         if (pair.second == -1 && source->platform != "twitch") {
@@ -1583,7 +1598,15 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
         b->setEnabled(!roles(message).contains("owner"));
         mods->addWidget(b);
     }
-    layout->addLayout(mods);
+    layout->addWidget(moderationRow);
+    QPointer<Source> permissionSource(source);
+    auto updateModeration = [this, permissionSource, moderationRow] {
+        moderationRow->setVisible(permissionSource && hub.hasModerationRole(permissionSource));
+    };
+    updateModeration();
+    connect(source, &Source::permissionsChanged, d, updateModeration);
+    connect(source, &Source::message, d, [updateModeration](Message) { updateModeration(); });
+    connect(&accounts, &Accounts::changed, d, updateModeration);
     auto *count = label(cfg, "Recent messages retained in this channel", true);
     layout->addWidget(count);
     auto *view = new ChatView(&hub, d);

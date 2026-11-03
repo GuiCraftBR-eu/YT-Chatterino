@@ -1,4 +1,5 @@
 #include "chat.hpp"
+#include <algorithm>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <mmsystem.h>
@@ -90,10 +91,21 @@ Source::Source(Hub *h, QString p, QString value)
     badgeRetry.setSingleShot(true);
     badgeRetry.setInterval(30000);
     connect(&badgeRetry, &QTimer::timeout, this, &Source::loadBadges);
+    historyRetry.setSingleShot(true);
+    connect(&historyRetry, &QTimer::timeout, this, &Source::loadHistory);
     metadataTimer.setInterval(300000);
     decorationTimer.setInterval(60000);
     connect(&decorationTimer, &QTimer::timeout, this, &Source::refreshDecorations);
     connect(hub->accounts, &Accounts::changed, this, [this] {
+        if (platform == "twitch" && !ownTwitchUserId.isEmpty() &&
+            ownTwitchUserId != str(hub->accounts->twitch["user_id"])) resetTwitchUserState();
+        if (platform == "youtube" && !youtubeRoleUserId.isEmpty() &&
+            youtubeRoleUserId != str(hub->accounts->google["channel_id"])) {
+            youtubeRoleUserId.clear();
+            youtubeRoleStamp = {};
+            youtubeModeratorKnown = youtubeModerator = false;
+            emit permissionsChanged();
+        }
         if (platform == "twitch" && !hub->testMode && !closed) refreshDecorations();
     });
     connect(&poll, &QTimer::timeout, this, [this] {
@@ -144,6 +156,7 @@ void Source::stop() {
     poll.stop();
     metadataTimer.stop();
     badgeRetry.stop();
+    historyRetry.stop();
     decorationTimer.stop();
     if (platform == "twitch") {
         hub->twitch.part(this);
@@ -156,6 +169,8 @@ void Source::reconnect() {
     }
     ++generation;
     requesting = false;
+    historyLoading = false;
+    historyRetry.stop();
     decorationPending = pollDecorationPending = false;
     setDecorations({}, {});
     emoteLoaded.clear();
@@ -165,8 +180,9 @@ void Source::reconnect() {
     continuation.clear();
     retryMs = 5000;
     if (platform == "twitch") {
-        hub->twitch.connectServer();
+        hub->twitch.reconnect();
         refreshHeader();
+        if (!historyLoaded) loadHistory();
     } else {
         poll.stop();
         apiPageToken.clear();
@@ -214,6 +230,20 @@ void Source::publish(Message m) {
         return;
     }
     m.source = key;
+    const auto googleId = str(hub->accounts->google["channel_id"]);
+    if (platform == "youtube" && !googleId.isEmpty() && m.uid == googleId && !m.system &&
+        (!m.own || !m.badges.isEmpty()) &&
+        (!youtubeRoleStamp.isValid() || !m.stamp.isValid() || m.stamp >= youtubeRoleStamp)) {
+        const auto userRoles = roles(m);
+        const bool moderator = userRoles.contains("owner") || userRoles.contains("moderator");
+        const bool changed = !youtubeModeratorKnown || youtubeModerator != moderator ||
+                             youtubeRoleUserId != googleId;
+        youtubeRoleUserId = googleId;
+        youtubeRoleStamp = m.stamp;
+        youtubeModeratorKnown = true;
+        youtubeModerator = moderator;
+        if (changed) emit permissionsChanged();
+    }
     if (platform == "youtube" && !m.uid.isEmpty() && m.uid == room() &&
         str(header["avatar"]).isEmpty() && !m.avatar.isEmpty()) {
         header["avatar"] = m.avatar;
@@ -272,6 +302,57 @@ void Source::status(const QString &s) {
     m.text = s;
     m.stamp = QDateTime::currentDateTime();
     publish(m);
+}
+
+void Source::connectionStatus(const QString &text) {
+    const auto now = QDateTime::currentMSecsSinceEpoch();
+    if (connectionNotices.contains(text) && now - connectionNotices.value(text) < 60000) return;
+    connectionNotices[text] = now;
+    status(text);
+}
+
+void Source::resetTwitchUserState() {
+    ownTwitchBadges.clear();
+    ownTwitchUserId.clear();
+    ownTwitchDisplayName.clear();
+    ownTwitchColor.clear();
+    ownTwitchBadgeInfo.clear();
+    const bool changed = twitchModeratorKnown || twitchModerator;
+    twitchModeratorKnown = twitchModerator = false;
+    if (changed) emit permissionsChanged();
+}
+
+void Source::updateTwitchUserState(const QJsonObject &tags) {
+    ownTwitchUserId = str(hub->accounts->twitch["user_id"]);
+    if (tags.contains("display-name")) ownTwitchDisplayName = str(tags["display-name"]);
+    if (tags.contains("color")) ownTwitchColor = str(tags["color"]);
+    if (tags.contains("badge-info")) ownTwitchBadgeInfo = str(tags["badge-info"]);
+    if (tags.contains("badges")) ownTwitchBadges = parseTwitchBadges(str(tags["badges"]));
+    const bool known = tags.contains("mod") || tags.contains("badges");
+    bool moderator = str(tags["mod"]) == "1";
+    for (const auto &badge : ownTwitchBadges)
+        moderator |= badge.role == "moderator" || badge.role == "owner";
+    if (known != twitchModeratorKnown || moderator != twitchModerator) {
+        twitchModeratorKnown = known;
+        twitchModerator = moderator;
+        emit permissionsChanged();
+    }
+    bool updated = false;
+    if (!ownTwitchUserId.isEmpty()) for (auto &message : history) {
+        if (message.own && message.uid == ownTwitchUserId && message.badges.isEmpty()) {
+            const bool differs = !ownTwitchBadges.isEmpty() ||
+                                 (!ownTwitchBadgeInfo.isEmpty() && message.badgeInfo != ownTwitchBadgeInfo) ||
+                                 (!ownTwitchColor.isEmpty() && message.color != ownTwitchColor) ||
+                                 (!ownTwitchDisplayName.isEmpty() && message.name != ownTwitchDisplayName);
+            if (!differs) continue;
+            message.badges = ownTwitchBadges;
+            message.badgeInfo = ownTwitchBadgeInfo;
+            if (!ownTwitchColor.isEmpty()) message.color = ownTwitchColor;
+            if (!ownTwitchDisplayName.isEmpty()) message.name = ownTwitchDisplayName;
+            updated = true;
+        }
+    }
+    if (updated) emit changed();
 }
 
 void Source::redact(const QJsonObject &target) {
@@ -527,35 +608,53 @@ void Source::youtubeWebPollState(const QJsonObject &response) {
 }
 
 void Source::loadHistory() {
-    if (historyLoaded || historyLoading || !hub->cfg->data["load_twitch_history"].toBool(true) ||
+    if (closed || platform != "twitch" || historyLoaded || historyLoading ||
+        !hub->cfg->data["load_twitch_history"].toBool(true) ||
         hub->testMode) {
         return;
     }
     historyLoading = true;
     QPointer<Source> self(this);
+    const auto epoch = generation;
     hub->net->json(
         Network::query(
             "https://recent-messages.robotty.de/api/v2/recent-messages/" + id,
             {{"limit", "200"}, {"hide_moderated_messages", "true"}, {"hide_moderation_messages", "true"}}),
-        [self](QJsonObject d, QString error) {
-            if (!self) {
+        [self, epoch](QJsonObject d, QString error) {
+            if (!self || self->closed || self->generation != epoch) {
                 return;
             }
             self->historyLoading = false;
+            if (!error.isEmpty() || !d["messages"].isArray()) {
+                self->connectionStatus(self->hub->cfg->T(
+                    "Recent Twitch history unavailable; live chat continues independently."));
+                self->historyRetry.start(self->historyRetryMs + int(qHash(self->key) % 5000));
+                self->historyRetryMs = qMin(300000, self->historyRetryMs * 2);
+                return;
+            }
             self->historyLoaded = true;
+            self->historyRetryMs = 30000;
+            bool added = false;
             for (const auto &v : d["messages"].toArray()) {
                 auto p = parseIrc(v.toString());
                 if (p.command == "PRIVMSG" && p.channel == self->id) {
-                    p.message.history = true;
-                    self->publish(p.message);
+                    auto m = p.message;
+                    if (!m.id.isEmpty() && self->seen.contains(m.id)) continue;
+                    m.history = true;
+                    m.source = self->key;
+                    m.seq = ++self->hub->sequence;
+                    if (!m.id.isEmpty()) {
+                        self->seen.insert(m.id);
+                        self->seenOrder.enqueue(m.id);
+                    }
+                    self->history << m;
+                    added = true;
                 }
             }
-            for (const auto &m : std::exchange(self->liveBuffer, {})) {
-                self->publish(m);
-            }
-            if (!error.isEmpty()) {
-                self->status(self->hub->cfg->T(
-                    "Recent Twitch history unavailable; live chat is connected independently."));
+            if (added) {
+                std::stable_sort(self->history.begin(), self->history.end(), messageOrder);
+                self->trim();
+                emit self->changed();
             }
         });
 }
@@ -782,7 +881,7 @@ void Source::youtubeContinue(QJsonObject chat, QJsonObject config) {
             }
         }
     }
-    status("Connected to YouTube · no API key · 0 reading units");
+    connectionStatus("Connected to YouTube · no API key · 0 reading units");
     if (!paused) {
         poll.start(0);
     }
@@ -991,7 +1090,7 @@ void Source::youtubeApiConnect() {
             return;
         }
         self->initial = true;
-        self->status(self->hub->cfg->T("Connected with the official YouTube API · 5 units per request."));
+        self->connectionStatus(self->hub->cfg->T("Connected with the official YouTube API · 5 units per request."));
         self->youtubeApiPoll();
     });
 }
@@ -1079,6 +1178,12 @@ void Source::youtubeApiPoll() {
     }, "GET", params, {}, 5);
 }
 
+static QByteArray twitchConnectionIdentity(const Accounts *accounts) {
+    const auto value = str(accounts->twitch["login"]).toUtf8() + '\0' +
+                       str(accounts->twitch["access_token"]).toUtf8();
+    return QCryptographicHash::hash(value, QCryptographicHash::Sha256);
+}
+
 TwitchConnection::TwitchConnection(Hub *h) : QObject(h), hub(h) {
     retry.setSingleShot(true);
     retry.setInterval(5000);
@@ -1108,19 +1213,29 @@ TwitchConnection::TwitchConnection(Hub *h) : QObject(h), hub(h) {
     connect(&socket, &QSslSocket::disconnected, this, [this] {
         registered = false;
         connecting = false;
+        buffer.clear();
         heartbeat.stop();
-        if (!closing && !authRejected && !channels.isEmpty()) {
+        for (auto source : channels) {
+            if (source) {
+                source->twitchJoined = false;
+                if (source->twitchModeratorKnown) {
+                    source->twitchModeratorKnown = false;
+                    emit source->permissionsChanged();
+                }
+            }
+        }
+        if (!closing && !intentionalDisconnect && !authRejected && !channels.isEmpty()) {
             retry.start();
         }
     });
     connect(&socket, &QSslSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
-        if (closing || authRejected) {
+        if (closing || intentionalDisconnect || authRejected) {
             return;
         }
         connecting = false;
         for (auto source : channels) {
             if (source) {
-                source->status("Twitch connection interrupted. Reconnecting…");
+                source->connectionStatus("Twitch connection interrupted. Reconnecting…");
             }
         }
         retry.start();
@@ -1133,16 +1248,21 @@ TwitchConnection::TwitchConnection(Hub *h) : QObject(h), hub(h) {
     connect(hub->accounts, &Accounts::ready, this, [this] {
         authRejected = false;
         if (!channels.isEmpty()) {
-            connectServer();
+            if (!connectionIdentity.isEmpty() && connectionIdentity != twitchConnectionIdentity(hub->accounts) &&
+                (registered || connecting || socket.state() != QAbstractSocket::UnconnectedState)) {
+                reconnect();
+            } else {
+                connectServer();
+            }
         }
     });
 }
 
 void TwitchConnection::join(Source *s) {
+    if (channels.value(s->id) == s) return;
     channels[s->id] = s;
     if (registered) {
         socket.write("JOIN #" + s->id.toUtf8() + "\r\n");
-        s->status("Connected to Twitch");
     } else {
         connectServer();
     }
@@ -1150,6 +1270,7 @@ void TwitchConnection::join(Source *s) {
 
 void TwitchConnection::part(Source *s) {
     channels.remove(s->id);
+    s->twitchJoined = false;
     if (registered) {
         socket.write("PART #" + s->id.toUtf8() + "\r\n");
     }
@@ -1157,18 +1278,18 @@ void TwitchConnection::part(Source *s) {
 
 void TwitchConnection::connectServer() {
     if (hub->testMode || !hub->accounts->loaded || closing || authRejected || channels.isEmpty() ||
-        connecting) {
+        connecting || registered || socket.state() != QAbstractSocket::UnconnectedState) {
         return;
     }
     connecting = true;
     retry.stop();
-    socket.abort();
-    hub->accounts->twitchToken([this](QString token, QString error) {
-        connecting = false;
-        if (closing) {
+    const auto attempt = ++connectionAttempt;
+    hub->accounts->twitchToken([this, attempt](QString token, QString error) {
+        if (closing || attempt != connectionAttempt) {
             return;
         }
         if (!error.isEmpty()) {
+            connecting = false;
             for (auto s : channels) {
                 if (s) {
                     s->status(error);
@@ -1177,11 +1298,33 @@ void TwitchConnection::connectServer() {
             return;
         }
         if (token.isEmpty()) {
+            connecting = false;
             return;
         }
-        connecting = true;
+        connectionIdentity = twitchConnectionIdentity(hub->accounts);
         socket.connectToHostEncrypted("irc.chat.twitch.tv", 6697);
     });
+}
+
+void TwitchConnection::reconnect() {
+    if (closing || hub->testMode) return;
+    ++connectionAttempt;
+    for (auto source : channels) if (source) {
+        source->twitchJoined = false;
+        if (source->twitchModeratorKnown) {
+            source->twitchModeratorKnown = false;
+            emit source->permissionsChanged();
+        }
+    }
+    retry.stop();
+    intentionalDisconnect = true;
+    socket.abort();
+    intentionalDisconnect = false;
+    registered = connecting = false;
+    connectionIdentity.clear();
+    buffer.clear();
+    heartbeat.stop();
+    connectServer();
 }
 
 void TwitchConnection::line(const QString &raw) {
@@ -1204,12 +1347,13 @@ void TwitchConnection::line(const QString &raw) {
         return;
     }
     if (p.command == "001") {
+        if (registered) return;
         registered = true;
         connecting = false;
+        retry.stop();
         for (auto i = channels.begin(); i != channels.end(); ++i) {
             if (i.value()) {
                 socket.write("JOIN #" + i.key().toUtf8() + "\r\n");
-                i.value()->status("Connected to Twitch");
             }
         }
         return;
@@ -1224,13 +1368,12 @@ void TwitchConnection::line(const QString &raw) {
         return;
     }
     if ((p.command == "PRIVMSG" || p.command == "USERNOTICE") && !p.message.text.isEmpty()) {
-        if (source->historyLoading) {
-            source->liveBuffer << p.message;
-            if (source->liveBuffer.size() > source->retentionCap()) {
-                source->liveBuffer.removeFirst();
-            }
-        } else {
-            source->publish(p.message);
+        source->publish(p.message);
+    } else if (p.command == "USERSTATE") {
+        source->updateTwitchUserState(p.tags);
+        if (!source->twitchJoined) {
+            source->twitchJoined = true;
+            source->connectionStatus("Connected to Twitch");
         }
     } else if (p.command == "ROOMSTATE") {
         QString room = str(p.tags["room-id"]);
@@ -1251,6 +1394,7 @@ void TwitchConnection::line(const QString &raw) {
 
 void TwitchConnection::close() {
     closing = true;
+    ++connectionAttempt;
     retry.stop();
     heartbeat.stop();
     socket.abort();
@@ -1542,6 +1686,12 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
                         m.uid = str(accounts->twitch["user_id"]);
                         m.text = text;
                         m.own = true;
+                        if (!m.uid.isEmpty() && self->ownTwitchUserId == m.uid) {
+                            m.badges = self->ownTwitchBadges;
+                            m.badgeInfo = self->ownTwitchBadgeInfo;
+                            m.color = self->ownTwitchColor;
+                            if (!self->ownTwitchDisplayName.isEmpty()) m.name = self->ownTwitchDisplayName;
+                        }
                         m.stamp = QDateTime::currentDateTime();
                         if (!reply.id.isEmpty()) {
                             m.reply = {{"id", reply.id},
@@ -1594,28 +1744,90 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
     });
 }
 
+bool Hub::canEditChannel(const Source *s) const {
+    if (!s) return false;
+    if (s->platform == "twitch") {
+        const auto uid = str(accounts->twitch["user_id"]), login = str(accounts->twitch["login"]);
+        return !str(accounts->twitch["access_token"]).isEmpty() &&
+               ((!uid.isEmpty() && uid == s->room()) ||
+                (!login.isEmpty() && login.compare(s->id, Qt::CaseInsensitive) == 0));
+    }
+    const auto uid = str(accounts->google["channel_id"]);
+    return !uid.isEmpty() && uid == s->room() &&
+           (!str(accounts->google["access_token"]).isEmpty() ||
+            !str(accounts->google["refresh_token"]).isEmpty());
+}
+
+bool Hub::hasModerationRole(const Source *s) const {
+    if (!s) return false;
+    if (canEditChannel(s)) return true;
+    if (s->platform == "twitch") {
+        const auto uid = str(accounts->twitch["user_id"]);
+        return !uid.isEmpty() && !str(accounts->twitch["access_token"]).isEmpty() &&
+               s->ownTwitchUserId == uid &&
+               s->twitchModeratorKnown && s->twitchModerator;
+    }
+    const auto uid = str(accounts->google["channel_id"]);
+    if (uid.isEmpty() || (str(accounts->google["access_token"]).isEmpty() &&
+                          str(accounts->google["refresh_token"]).isEmpty())) return false;
+    if (s->youtubeRoleUserId == uid && s->youtubeModeratorKnown) return s->youtubeModerator;
+    for (auto i = s->history.crbegin(); i != s->history.crend(); ++i) {
+        if (i->uid == uid && !i->system && (!i->own || !i->badges.isEmpty())) {
+            const auto userRoles = roles(*i);
+            return userRoles.contains("owner") || userRoles.contains("moderator");
+        }
+    }
+    return false;
+}
+
 void Hub::canModerate(Source *s, std::function<void(bool, QString)> done) {
-    QString uid = str(accounts->twitch["user_id"]);
+    if (!s) { done(false, "The channel was closed."); return; }
+    const QString uid = str(accounts->twitch["user_id"]);
+    if (uid.isEmpty() || s->room().isEmpty()) {
+        done(false, "Channel or account information is still loading.");
+        return;
+    }
     if (s->room() == uid) {
         done(true, {});
         return;
     }
-    QPointer<Source> safe(s);
+    if (s->ownTwitchUserId == uid && s->twitchModeratorKnown) {
+        done(s->twitchModerator, {});
+        return;
+    }
+    moderatedPage(s, uid, {}, 0, std::move(done));
+}
+
+void Hub::moderatedPage(QPointer<Source> safe, QString uid, QString cursor, int page,
+                        std::function<void(bool, QString)> done) {
+    QMap<QString, QString> params{{"user_id", uid}, {"first", "100"}};
+    if (!cursor.isEmpty()) params["after"] = cursor;
     accounts->helix("moderation/channels",
-                    [safe, done](QJsonObject d, QString e) {
+                    [this, safe, uid, cursor, page, done](QJsonObject d, QString e) {
                         if (!safe) {
                             done(false, "The channel was closed.");
                             return;
                         }
-                        bool found = false;
+                        if (!e.isEmpty()) { done(false, e); return; }
+                        if (uid != str(accounts->twitch["user_id"])) {
+                            done(false, "The Twitch account changed.");
+                            return;
+                        }
                         for (const auto &v : d["data"].toArray()) {
                             if (str(v.toObject()["broadcaster_id"]) == safe->room()) {
-                                found = true;
+                                done(true, {});
+                                return;
                             }
                         }
-                        done(found, e);
+                        const auto next = str(at(d, {"pagination", "cursor"}));
+                        if (next.isEmpty()) { done(false, {}); return; }
+                        if (next == cursor || page >= 99) {
+                            done(false, "Twitch moderator list pagination failed.");
+                            return;
+                        }
+                        moderatedPage(safe, uid, next, page + 1, done);
                     },
-                    "GET", {{"user_id", uid}, {"first", "100"}});
+                    "GET", params);
 }
 
 void Hub::youtubeMessageId(Source *s, Message m, std::function<void(QString, QString)> done) {

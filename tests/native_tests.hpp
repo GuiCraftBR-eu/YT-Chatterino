@@ -119,4 +119,11 @@ class NativeTests : public QObject {
     void youtubeMembershipGiftParsing();
     void youtubePinAndPollLifecycle();
     void twitchPinAndPollPermissionAndLifecycle();
+    void twitchConnectionIsIdempotent();
+    void mixedHistoryDoesNotBlockLiveMessages();
+    void twitchHistoryFailureCanRetry();
+    void twitchUserStateSuppliesOwnBadges();
+    void permissionAwareMenusAndUserCards();
+    void twitchModerationPagination();
+    void singleChannelIconAndConnectionNotices();
 };

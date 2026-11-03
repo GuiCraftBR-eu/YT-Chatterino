@@ -3,6 +3,7 @@
 #include <memory>
 
 namespace yc {
+QImage channelIcon(Source *source, Images *images, int size);
 class ChatView : public QAbstractScrollArea {
     Q_OBJECT
   public:
@@ -153,7 +154,7 @@ class Pane : public QWidget {
     QWidget *mixedHeader;
     QVector<QLabel *> mixedIcons, mixedTitles;
     QLabel *mixedMore;
-    QTimer headerClock;
+    QTimer headerClock, historyReload;
     QComboBox *target;
     Composer *input;
     QPushButton *sendButton, *emoteButton;
