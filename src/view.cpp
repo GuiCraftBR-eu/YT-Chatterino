@@ -96,6 +96,12 @@ void ChatView::setMessages(QVector<Message> list) {
             m.seq = synthetic--;
         }
     }
+    bool stripe = false;
+    for (const auto &m : messages) {
+        if (rowStripes.contains(m.seq)) stripe = rowStripes.value(m.seq);
+        else rowStripes.insert(m.seq, stripe);
+        stripe = !stripe;
+    }
     documents.clear();
     documentUse.clear();
     details.clear();
@@ -104,6 +110,12 @@ void ChatView::setMessages(QVector<Message> list) {
         heights << estimate(m);
     }
     trim();
+    QSet<qint64> retained;
+    for (const auto &m : messages) retained.insert(m.seq);
+    for (auto it = rowStripes.begin(); it != rowStripes.end();) {
+        if (!retained.contains(it.key())) it = rowStripes.erase(it);
+        else ++it;
+    }
     auto locate = [this](qint64 seq) {
         for (int i = 0; i < messages.size(); ++i) {
             if (messages[i].seq == seq) {
@@ -135,6 +147,9 @@ void ChatView::append(Message m) {
     if (!m.seq) {
         m.seq = synthetic--;
     }
+    if (!rowStripes.contains(m.seq)) {
+        rowStripes.insert(m.seq, !messages.isEmpty() && !rowStripes.value(messages.last().seq));
+    }
     messages << m;
     heights << estimate(m);
     trim();
@@ -156,6 +171,7 @@ void ChatView::trim() {
         documents.remove(messages[i].seq);
         documentUse.remove(messages[i].seq);
         details.remove(messages[i].seq);
+        rowStripes.remove(messages[i].seq);
     }
     messages.remove(0, extra);
     heights.remove(0, qMin(extra, int(heights.size())));
@@ -332,7 +348,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         cursor.insertText('[' + source->name() + "] ",
                           format(normal, QColor(source->platform == "twitch" ? "#b99aff" : "#ff7777")));
     }
-    auto insertImage = [&](QStringList urls, QString code, int size, bool gif, bool isEmote = false) {
+    auto insertImage = [&](QStringList urls, QString code, int size, bool gif, bool isEmote = false,
+                           bool isBadge = false) {
         if (urls.isEmpty()) {
             cursor.insertText(code + ' ', format(normal, QColor("#bf94ff")));
             return;
@@ -354,6 +371,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         if (isEmote && !gif) {
             detail.emoteImages[cursor.position()] = {code, urls};
         }
+        if (isBadge) detail.badgeImages[cursor.position()] = {code, urls};
         detail.imageSizes[urls[0]] = fitted;
         detail.imageKeys[urls[0]] = image.cacheKey();
         doc->addResource(QTextDocument::ImageResource, QUrl(urls[0]),
@@ -367,6 +385,15 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
                 badge = full;
             }
         }
+        QString label = badge.label;
+        if (label.isEmpty() || (label.startsWith('[') && label.endsWith(']'))) {
+            if (badge.role == "owner") label = hub->cfg->T(source && source->platform == "twitch" ? "Broadcaster" : "Owner");
+            else if (badge.role == "moderator") label = hub->cfg->T("Moderator");
+            else if (badge.role == "subscriber") label = hub->cfg->T("Subscriber");
+            else if (badge.role == "vip") label = "VIP";
+            else if (badge.role == "verified") label = hub->cfg->T("Verified");
+            else { label = badge.id; label.replace('-', ' '); label.replace('_', ' '); }
+        }
         const bool youtubeVerified = source && source->platform == "youtube" && badge.role == "verified";
         if (youtubeVerified || (badge.urls.isEmpty() && (badge.role == "owner" || badge.role == "moderator" ||
                                                         badge.role == "subscriber" || badge.role == "vip"))) {
@@ -379,11 +406,12 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
             f.setHeight(size);
             f.setVerticalAlignment(QTextCharFormat::AlignMiddle);
             detail.imageCodes[cursor.position()] = '[' + badge.role + ']';
+            detail.badgeImages[cursor.position()] = {label, {url}};
             cursor.insertImage(f);
             cursor.insertText(" ", normalFormat);
         } else {
-            insertImage(badge.urls, badge.label.isEmpty() ? '[' + badge.id + ']' : badge.label,
-                        a["badge_size"].toInt(18), false);
+            insertImage(badge.urls, label.isEmpty() ? '[' + badge.id + ']' : label,
+                        a["badge_size"].toInt(18), false, false, true);
             cursor.insertText(" ", normalFormat);
         }
     }
@@ -472,7 +500,8 @@ void ChatView::paintEvent(QPaintEvent *) {
     int scroll = verticalScrollBar()->value(), row = rowAt(scroll);
     bool changed = false;
     auto a = hub->cfg->appearance();
-    for (int i = qMax(0, row); i < messages.size() && offsets.value(i) - scroll < viewport()->height(); ++i) {
+    int y = offsets.value(qMax(0, row)) - scroll;
+    for (int i = qMax(0, row); i < messages.size() && y < viewport()->height(); ++i) {
         auto doc = document(i);
         if (!doc) {
             continue;
@@ -491,11 +520,11 @@ void ChatView::paintEvent(QPaintEvent *) {
             heights[i] = height;
             changed = true;
         }
-        int y = offsets.value(i) - scroll;
         QRect rect(0, y, viewport()->width(), height);
         QColor background = highlight(messages[i], *hub->cfg, hub->accounts->names());
         if (!background.isValid()) {
-            background = a["alternate_rows"].toBool(true) && i % 2 ? QColor("#0e0e0e") : QColor(Qt::black);
+            background = a["alternate_rows"].toBool(true) && rowStripes.value(messages[i].seq)
+                             ? QColor("#0e0e0e") : QColor(Qt::black);
         }
         painter.fillRect(rect, background);
         painter.save();
@@ -519,15 +548,12 @@ void ChatView::paintEvent(QPaintEvent *) {
         }
         doc->documentLayout()->draw(&painter, context);
         painter.restore();
+        y += height;
     }
     if (changed) {
-        QTimer::singleShot(0, this, [this] {
-            rebuildOffsets();
-            if (follow) {
-                verticalScrollBar()->setValue(verticalScrollBar()->maximum());
-            }
-            viewport()->update();
-        });
+        rebuildOffsets();
+        if (follow) verticalScrollBar()->setValue(verticalScrollBar()->maximum());
+        viewport()->update();
     }
     if (autoScrolling) {
         painter.setRenderHint(QPainter::Antialiasing);
@@ -578,7 +604,9 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
     }
     const int row = rowAt(y);
     auto doc = document(row);
-    const auto info = details.value(messages[row].seq).emoteImages;
+    const auto detail = details.value(messages[row].seq);
+    auto info = detail.emoteImages;
+    for (auto i = detail.badgeImages.cbegin(); i != detail.badgeImages.cend(); ++i) info.insert(i.key(), i.value());
     if (info.isEmpty()) {
         hideEmoteTooltip();
         return false;
@@ -640,15 +668,21 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
     tooltipUrls = item.second;
     tooltipMessage = messages[row].seq;
     tooltipPosition = position;
-    const auto image = hub->images->get(tooltipUrls, true);
+    const bool isBadge = detail.badgeImages.contains(position);
+    const auto image = tooltipUrls.value(0).startsWith("badge:")
+                           ? doc->resource(QTextDocument::ImageResource, QUrl(tooltipUrls.value(0))).value<QImage>()
+                           : hub->images->get(tooltipUrls, true);
     emotePreview->setPixmap(QPixmap::fromImage(image).scaled(112, 112, Qt::KeepAspectRatio,
                                                               Qt::SmoothTransformation));
     emoteTooltipName->setText(item.first);
     const auto host = QUrl(tooltipUrls.value(0)).host();
-    const QString provider = host.contains("betterttv") ? "BTTV" : host.contains("7tv") ? "7TV"
+    const auto source = hub->sources.value(messages[row].source);
+    const QString provider = isBadge && source ? (source->platform == "twitch" ? "Twitch" : "YouTube")
+                             : host.contains("betterttv") ? "BTTV" : host.contains("7tv") ? "7TV"
                              : host.contains("jtvnw") ? "Twitch" : host.contains("ggpht") ||
                                        host.contains("googleusercontent") ? "YouTube" : QString();
-    emoteTooltipProvider->setText(provider.isEmpty() ? hub->cfg->T("Emote") : provider + " · " + hub->cfg->T("Emote"));
+    const QString kind = hub->cfg->T(isBadge ? "Badge" : "Emote");
+    emoteTooltipProvider->setText(provider.isEmpty() ? kind : provider + " · " + kind);
     emoteTooltip->adjustSize();
     auto *screen = QGuiApplication::screenAt(global);
     const QRect available = screen ? screen->availableGeometry() : QRect(global, QSize(400, 400));
@@ -1556,10 +1590,19 @@ void Pane::refresh() {
             if (source->platform == "twitch" && !str(source->header["category"]).isEmpty()) {
                 text += str(source->header["category"]) + " - ";
             }
+            if (sources.size() > 1) {
+                text = (source->platform == "twitch" ? "TW · " : "YT · ") + source->name() + " — " + text;
+            }
             titles << text + title;
         }
     }
-    headerText->setText(titles.join("   |   "));
+    headerText->setToolTip(sources.size() > 1 ? titles.join('\n') : QString());
+    if (titles.size() > 3) {
+        const auto remaining = titles.size() - 3;
+        titles = titles.mid(0, 3);
+        titles << hub->cfg->T("and {count} more", {{"count", QString::number(remaining)}});
+    }
+    headerText->setText(titles.join('\n'));
     headerIcon->setPixmap(
         platformIcon(sources.size() == 1 && sources[0] ? sources[0]->platform : "mixed").pixmap(18, 18));
     int selected = target->currentIndex();

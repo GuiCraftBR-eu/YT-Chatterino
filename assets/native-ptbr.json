@@ -224,5 +224,13 @@
   "Step {current} of {total}": "Etapa {current} de {total}",
   "Screenshots show Google Cloud in English; labels may vary by language. Never share your JSON or saved tokens.": "As imagens mostram o Google Cloud em inglês; os nomes podem variar conforme o idioma. Nunca compartilhe seu JSON nem os tokens salvos.",
   "Open Google Cloud": "Abrir Google Cloud",
-  "View full image": "Ver imagem completa"
+  "View full image": "Ver imagem completa",
+  "Badge": "Emblema",
+  "Broadcaster": "Transmissor",
+  "Owner": "Proprietário",
+  "Moderator": "Moderador",
+  "Subscriber": "Inscrito",
+  "Verified": "Verificado",
+  "Copy stream link": "Copiar link da transmissão",
+  "and {count} more": "e mais {count}"
 }

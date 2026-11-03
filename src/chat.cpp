@@ -78,6 +78,9 @@ Source::Source(Hub *h, QString p, QString value)
     apiFallbackEnabled = settings["youtube_api_fallback"].toBool(false);
     apiInterval = qBound(18.25, settings["youtube_api_interval_seconds"].toDouble(18.25), 600.0);
     poll.setSingleShot(true);
+    badgeRetry.setSingleShot(true);
+    badgeRetry.setInterval(30000);
+    connect(&badgeRetry, &QTimer::timeout, this, &Source::loadBadges);
     metadataTimer.setInterval(300000);
     connect(&poll, &QTimer::timeout, this, [this] {
         if (apiActive) {
@@ -125,6 +128,7 @@ void Source::stop() {
     closed = true;
     poll.stop();
     metadataTimer.stop();
+    badgeRetry.stop();
     if (platform == "twitch") {
         hub->twitch.part(this);
     }
@@ -137,7 +141,9 @@ void Source::reconnect() {
     ++generation;
     requesting = false;
     emoteLoaded.clear();
-    badgesLoaded = 0;
+    globalBadgesLoaded = channelBadgesLoaded = 0;
+    globalBadgesPending = channelBadgesPending = false;
+    badgeRetry.stop();
     continuation.clear();
     retryMs = 5000;
     if (platform == "twitch") {
@@ -189,14 +195,20 @@ void Source::publish(Message m) {
     if (closed) {
         return;
     }
+    m.source = key;
     if (!m.system && !m.id.isEmpty() && seen.contains(m.id)) {
         for (auto &old : history) {
-            if (old.id == m.id && old.own) {
-                m.seq = old.seq;
-                m.own = true;
-                m.deleted = m.deleted || old.deleted;
-                old = m;
-                emit changed();
+            if (old.id == m.id) {
+                if (old.own && !m.own) {
+                    m.seq = old.seq;
+                    m.own = true;
+                    m.deleted = m.deleted || old.deleted;
+                    old = m;
+                    emit changed();
+                } else if (m.own && !old.own) {
+                    old.own = true;
+                    emit changed();
+                }
                 break;
             }
         }
@@ -219,7 +231,6 @@ void Source::publish(Message m) {
             }
         }
     }
-    m.source = key;
     m.seq = ++hub->sequence;
     history << m;
     trim();
@@ -427,41 +438,60 @@ void Source::loadEmotes(QString channelId) {
 }
 
 void Source::loadBadges() {
-    if (platform != "twitch" || hub->testMode) {
+    if (platform != "twitch" || hub->testMode || closed) {
         return;
     }
     const auto now = QDateTime::currentSecsSinceEpoch();
-    if (now - badgesLoaded < 21600) {
-        return;
+    const QString channelRoom = room();
+    if (badgeChannelRoom != channelRoom) {
+        badgeChannelRoom = channelRoom;
+        channelBadges.clear();
+        channelBadgesLoaded = 0;
+        channelBadgesPending = false;
+        badges = globalBadges;
     }
-    if (!room().isEmpty()) {
-        badgesLoaded = now;
-    }
-    QPointer<Source> self(this);
-    auto ready = [self](QJsonObject d, QString e) {
-        if (!self || !e.isEmpty()) {
-            return;
-        }
-        for (const auto &set : d["data"].toArray()) {
-            auto o = set.toObject();
-            for (const auto &v : o["versions"].toArray()) {
-                auto b = v.toObject();
-                Badge badge;
-                badge.id = str(o["set_id"]);
-                badge.version = str(b["id"]);
-                badge.label = str(b["title"]);
-                badge.urls = {str(b["image_url_4x"]), str(b["image_url_2x"]), str(b["image_url_1x"])};
-                badge.urls.removeAll({});
-                badge.role = badge.id == "broadcaster" ? "owner" : badge.id;
-                self->badges[badge.id + '/' + badge.version] = badge;
+    auto request = [this](bool channel, QString requestedRoom) {
+        auto &pending = channel ? channelBadgesPending : globalBadgesPending;
+        pending = true;
+        QPointer<Source> self(this);
+        const auto epoch = generation;
+        auto ready = [self, epoch, channel, requestedRoom](QJsonObject data, QString error) {
+            if (!self || self->closed || self->generation != epoch ||
+                (channel && self->badgeChannelRoom != requestedRoom)) return;
+            (channel ? self->channelBadgesPending : self->globalBadgesPending) = false;
+            if (!error.isEmpty() || !data["data"].isArray()) {
+                if (!self->badgeRetry.isActive()) self->badgeRetry.start();
+                return;
             }
-        }
-        emit self->changed();
+            QHash<QString, Badge> loaded;
+            for (const auto &set : data["data"].toArray()) {
+                const auto object = set.toObject();
+                for (const auto &v : object["versions"].toArray()) {
+                    const auto version = v.toObject();
+                    Badge badge;
+                    badge.id = str(object["set_id"]);
+                    badge.version = str(version["id"]);
+                    badge.label = str(version["title"]);
+                    badge.urls = {str(version["image_url_4x"]), str(version["image_url_2x"]), str(version["image_url_1x"])};
+                    badge.urls.removeAll({});
+                    badge.role = badge.id == "broadcaster" ? "owner" : badge.id;
+                    if (!badge.id.isEmpty() && !badge.version.isEmpty() && !badge.urls.isEmpty())
+                        loaded[badge.id + '/' + badge.version] = badge;
+                }
+            }
+            (channel ? self->channelBadges : self->globalBadges) = loaded;
+            (channel ? self->channelBadgesLoaded : self->globalBadgesLoaded) = QDateTime::currentSecsSinceEpoch();
+            self->badges = self->globalBadges;
+            for (auto i = self->channelBadges.cbegin(); i != self->channelBadges.cend(); ++i)
+                self->badges[i.key()] = i.value();
+            emit self->changed();
+        };
+        if (channel) hub->accounts->helix("chat/badges", ready, "GET", {{"broadcaster_id", requestedRoom}});
+        else hub->accounts->helix("chat/badges/global", ready);
     };
-    hub->accounts->helix("chat/badges/global", ready);
-    if (!room().isEmpty()) {
-        hub->accounts->helix("chat/badges", ready, "GET", {{"broadcaster_id", room()}});
-    }
+    if (!globalBadgesPending && now - globalBadgesLoaded >= 21600) request(false, {});
+    if (!channelRoom.isEmpty() && !channelBadgesPending && now - channelBadgesLoaded >= 21600)
+        request(true, channelRoom);
 }
 
 void Source::youtubeConnect() {

@@ -10,6 +10,7 @@ class ChatView : public QAbstractScrollArea {
     Hub *hub;
     QVector<Message> messages;
     QVector<int> heights, offsets;
+    QHash<qint64, bool> rowStripes;
     QHash<qint64, QSharedPointer<QTextDocument>> documents;
     QHash<qint64, qint64> documentUse;
     qint64 documentClock = 0;
@@ -18,6 +19,7 @@ class ChatView : public QAbstractScrollArea {
         int nameStart = 0, nameEnd = 0, replyEnd = 0;
         QHash<int, QString> imageCodes;
         QHash<int, QPair<QString, QStringList>> emoteImages;
+        QHash<int, QPair<QString, QStringList>> badgeImages;
         QSet<QString> urls;
         QHash<QString, QSize> imageSizes;
         QHash<QString, qint64> imageKeys;
