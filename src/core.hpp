@@ -59,6 +59,7 @@ class Config : public QObject {
     QString number(qint64 value) const;
   signals:
     void appearanceChanged();
+    void filtersChanged(const QString &key);
     void languageChanged();
 
   private:

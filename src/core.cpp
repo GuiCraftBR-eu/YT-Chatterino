@@ -257,6 +257,7 @@ QIcon platformIcon(const QString &platform) {
 
 void configureApplication(QApplication &app) {
     app.setApplicationName("YT-Chatterino");
+    app.setApplicationDisplayName(QStringLiteral("YT-Chatterino " APP_VERSION "v"));
     app.setApplicationVersion(APP_VERSION);
     app.setOrganizationName("YT-Chatterino");
     app.setWindowIcon(QIcon(":/ytchatterino.ico"));

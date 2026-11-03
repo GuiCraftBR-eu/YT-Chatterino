@@ -52,7 +52,7 @@ MainWindow::MainWindow(QString profile, bool testing)
     accounts.window = this;
     standardTranslator = new StandardTranslator(&cfg, this);
     qApp->installTranslator(standardTranslator);
-    setWindowTitle("YT-Chatterino");
+    setWindowTitle(QStringLiteral("YT-Chatterino " APP_VERSION "v"));
     setWindowIcon(QIcon(":/ytchatterino.ico"));
     resize(520, 760);
     setMinimumSize(340, 300);
@@ -87,8 +87,6 @@ MainWindow::MainWindow(QString profile, bool testing)
     sl->setSpacing(2);
     addButton = new QToolButton(strip);
     addButton->setText("+");
-    layoutButton = new QToolButton(strip);
-    layoutButton->setText("▦");
     quotaLabel = new QLabel(strip);
     quotaLabel->setStyleSheet("color:#a4a4ad;font-size:10px;padding:0 3px;");
     updateArrow = new QToolButton(strip);
@@ -97,18 +95,16 @@ MainWindow::MainWindow(QString profile, bool testing)
     updateArrow->hide();
     gear = new QToolButton(strip);
     gear->setText("⚙");
-    for (auto *control : {addButton, layoutButton, updateArrow, gear}) {
+    for (auto *control : {addButton, updateArrow, gear}) {
         control->setObjectName("chat-control");
         control->setFixedSize(23, 23);
     }
     sl->addWidget(addButton);
-    sl->addWidget(layoutButton);
     sl->addWidget(quotaLabel);
     sl->addWidget(updateArrow);
     sl->addWidget(gear);
     tabs->setCornerWidget(strip, Qt::TopRightCorner);
     connect(addButton, &QToolButton::clicked, this, [this] { addChats(); });
-    connect(layoutButton, &QToolButton::clicked, this, [this] { addChats("horizontal", currentPane()); });
     connect(gear, &QToolButton::clicked, this, [this] { showSettings(); });
     gear->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(gear, &QWidget::customContextMenuRequested, this, [this] { gearMenu(); });
@@ -326,6 +322,7 @@ void MainWindow::attachPane(Pane *p) {
         refreshQuota();
     });
     connect(p, &Pane::menuRequested, this, &MainWindow::paneMenu);
+    connect(p, &Pane::filtersRequested, this, &MainWindow::filters);
     connect(p, &Pane::messageMenu, this, &MainWindow::messageMenu);
     connect(p, &Pane::userRequested, this, &MainWindow::showUser);
     connect(p, &Pane::threadRequested, this, &MainWindow::showThread);
@@ -336,7 +333,7 @@ void MainWindow::refreshTabs() {
         auto *empty = new QWidget(tabs);
         empty->setObjectName("empty-placeholder");
         auto *layout = new QVBoxLayout(empty);
-        auto *hint = new QLabel(cfg.T("Click + to add chats.\nUse ▦ to split or mix channels."), empty);
+        auto *hint = new QLabel(cfg.T("Click + to add chats.\nChoose a split or mixed layout in the dialog."), empty);
         hint->setAlignment(Qt::AlignCenter);
         hint->setStyleSheet("color:#8b8b94;");
         layout->addWidget(hint);
@@ -382,7 +379,6 @@ void MainWindow::refreshQuota() {
 
 void MainWindow::refreshLanguage() {
     addButton->setToolTip(cfg.T("Add chats (Ctrl+T)"));
-    layoutButton->setToolTip(cfg.T("Split or mix chats (Ctrl+Shift+T)"));
     gear->setToolTip(cfg.T("Settings (Ctrl+P)"));
     refreshTabs();
     refreshQuota();
@@ -882,8 +878,7 @@ void MainWindow::filters(Pane *p) {
         all[pane->key()] = filter;
         cfg.data["chat_filters"] = all;
         cfg.save();
-        pane->filter = filter;
-        pane->reload();
+        emit cfg.filtersChanged(pane->key());
     });
     connect(buttons, &QDialogButtonBox::rejected, d, &QDialog::close);
     d->resize(460, 400);
