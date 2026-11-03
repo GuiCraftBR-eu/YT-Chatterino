@@ -32,6 +32,9 @@ class Source : public QObject {
     QJsonObject context;
     QTimer poll, metadataTimer, badgeRetry, decorationTimer, historyRetry;
     int historyRetryMs = 30000;
+    QString kickChannelId, kickLastPollId, kickPollHead;
+    bool kickInitial = true, kickConnecting = false;
+    int kickRetryMs = 5000;
     bool decorationPending = false, pollDecorationPending = false;
     qint64 pinRetryAfter = 0;
     quint64 decorationGeneration = 0;
@@ -72,6 +75,10 @@ class Source : public QObject {
     void loadEmotes(QString channelId = {});
     void loadBadges();
     void loadHistory();
+    void kickConnect();
+    void kickPoll();
+    void kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Message>> batch, bool historical);
+    void kickError(QString error);
     void youtubeConnect();
     void youtubePopout(QJsonObject chat, QJsonObject config);
     void youtubePoll();

@@ -21,7 +21,12 @@ class Accounts : public QObject {
     Quota *quota;
     Vault vault;
     QWidget *window = nullptr;
-    QJsonObject twitch, google;
+    QJsonObject twitch, google, kick;
+    QTcpServer kickCallbackServer;
+    QTimer kickTimeout;
+    bool kickBusy = false, kickRefreshing = false;
+    QString kickIssue, kickVerifier, kickState, kickClientId, kickClientSecret;
+    QList<TokenCallback> kickRefreshWaiters;
     bool loaded = false, twitchBusy = false, googleBusy = false;
     bool persistenceEnabled = true;
     QPointer<QDialog> twitchDialog;
@@ -45,6 +50,12 @@ class Accounts : public QObject {
     bool googleClientConfigured() const;
     static QSet<QString> fullTwitchScopes();
     static QString googleSignInHelp();
+    void signInKick(QString clientId, QString clientSecret);
+    void kickCallback();
+    void finishKick(QString error = {});
+    void kickToken(TokenCallback done);
+    void saveKick();
+    void kickApi(QString endpoint, JsonCallback done, QByteArray method = "GET", QJsonObject body = {});
     void twitchToken(TokenCallback done);
     void requireTwitch(const QSet<QString> &scopes, TokenCallback done);
     void signInTwitch(const QSet<QString> &scopes = {});

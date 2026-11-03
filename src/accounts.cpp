@@ -8,7 +8,9 @@ namespace yc {
 Vault::Vault(Config *c) : QObject(c), cfg(c) {}
 
 QString Vault::target(const QString &provider) const {
-    QString t = "YT-Chatterino/" + (provider == "twitch" ? QString("Twitch OAuth") : QString("Google OAuth"));
+    QString t = "YT-Chatterino/" + (provider == "twitch" ? QString("Twitch OAuth")
+                                    : provider == "google" ? QString("Google OAuth")
+                                    : provider == "kick" ? QString("Kick OAuth") : provider);
     if (qEnvironmentVariableIsSet("YTCHATTERINO_DATA_DIR") ||
         cfg->home != QDir::toNativeSeparators(QDir::homePath())) {
         t += '/' +
@@ -126,9 +128,16 @@ Accounts::Accounts(Config *c, Network *n, Quota *q, QObject *parent)
     googleTimeout.setSingleShot(true);
     connect(&googleTimeout, &QTimer::timeout, this, &Accounts::cancelGoogle);
     connect(&callbackServer, &QTcpServer::newConnection, this, &Accounts::googleCallback);
+    kickTimeout.setSingleShot(true);
+    connect(&kickTimeout, &QTimer::timeout, this, [this] { finishKick("Kick sign-in timed out."); });
+    connect(&kickCallbackServer, &QTcpServer::newConnection, this, &Accounts::kickCallback);
 }
 
 void Accounts::load() {
+    vault.read("kick", [this](QByteArray bytes, QString) {
+        kick = QJsonDocument::fromJson(bytes).object();
+        emit changed();
+    });
     vault.read("twitch", [this](QByteArray b, QString) {
         twitch = QJsonDocument::fromJson(b).object();
         auto legacy = cfg->data["twitch_auth"].toObject();
@@ -194,7 +203,7 @@ void Accounts::validateTwitch() {
 
 QStringList Accounts::names() const {
     QStringList list;
-    for (const auto &s : {str(twitch["login"]), str(google["channel_title"]), str(google["title"])}) {
+    for (const auto &s : {str(twitch["login"]), str(google["channel_title"]), str(google["title"]), str(kick["name"])}) {
         if (!s.isEmpty()) {
             list << s;
         }
@@ -224,8 +233,9 @@ QSet<QString> Accounts::googleScopes() const {
 }
 
 bool Accounts::connected(const QString &provider) const {
-    const auto &auth = provider == "twitch" ? twitch : google;
-    const auto &issue = provider == "twitch" ? twitchIssue : googleIssue;
+    if (provider != "twitch" && provider != "google" && provider != "kick") return false;
+    const auto &auth = provider == "twitch" ? twitch : provider == "kick" ? kick : google;
+    const auto &issue = provider == "twitch" ? twitchIssue : provider == "kick" ? kickIssue : googleIssue;
     return issue.isEmpty() && !str(auth.value("access_token")).isEmpty() &&
            auth.value("expires_at").toDouble() > QDateTime::currentSecsSinceEpoch();
 }

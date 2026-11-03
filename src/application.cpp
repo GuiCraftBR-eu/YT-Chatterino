@@ -395,7 +395,7 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setWindowTitle(cfg.T("Add chats"));
     auto *layout = new QVBoxLayout(dialog);
-    layout->addWidget(label(cfg, "YouTube links or Twitch @channels · one per line"));
+    layout->addWidget(label(cfg, "YouTube links, Twitch @channels or Kick links · one per line"));
     auto *input = new QPlainTextEdit(dialog);
     input->setMinimumHeight(90);
     layout->addWidget(input);
@@ -430,8 +430,10 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
     QList<Source *> list;
     QStringList invalid;
     for (const auto &link : links) {
-        QString tw = twitchLogin(link), yt = videoId(link);
-        if (!tw.isEmpty()) {
+        QString kick = kickLogin(link), tw = twitchLogin(link), yt = videoId(link);
+        if (!kick.isEmpty()) {
+            list << hub.source("kick", kick);
+        } else if (!tw.isEmpty()) {
             list << hub.source("twitch", tw);
         } else if (!yt.isEmpty()) {
             list << hub.source("youtube", yt);
@@ -445,7 +447,7 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
     if (list.isEmpty()) {
         if (!invalid.isEmpty()) {
             QMessageBox::warning(this, cfg.T("Add chats"),
-                                 cfg.T("Enter a YouTube live link or Twitch @channel."));
+                                 cfg.T("Enter a YouTube live link, Twitch @channel or Kick link."));
         }
         return;
     }
@@ -767,7 +769,7 @@ void MainWindow::populateMessageMenu(QMenu &m, Pane *pane, Message message) {
             pane->input->insert('@' + (message.login.isEmpty() ? message.name : message.login) + ' ');
             pane->input->setFocus();
         });
-        if (source->platform == "twitch") {
+        if (source->platform == "twitch" || source->platform == "kick") {
             auto *reply =
                 m.addAction(cfg.T("Reply to message"), pane, [pane, message] { pane->startReply(message); });
             reply->setEnabled(!message.deleted && !message.id.isEmpty());
@@ -887,7 +889,7 @@ void MainWindow::filters(Pane *p) {
 }
 
 void MainWindow::saveChannel(Source *s) {
-    QString id = s->platform == "twitch" ? s->id : s->room();
+    QString id = s->platform == "youtube" ? s->room() : s->id;
     if (id.isEmpty()) {
         QMessageBox::information(this, cfg.T("Saved channels"),
                                  cfg.T("Wait for the channel details to load."));
@@ -907,8 +909,8 @@ void MainWindow::saveChannel(Source *s) {
 }
 
 void MainWindow::openSaved(QJsonObject item) {
-    if (str(item["platform"]) == "twitch") {
-        addWorkspace({hub.source("twitch", str(item["channel_id"]))});
+    if (str(item["platform"]) == "twitch" || str(item["platform"]) == "kick") {
+        addWorkspace({hub.source(str(item["platform"]), str(item["channel_id"]))});
         return;
     }
     statusBar()->showMessage(cfg.T("Looking for current live broadcasts…"));
@@ -1236,10 +1238,12 @@ void MainWindow::restoreSession() {
         QString p = str(spec["platform"]), id = str(spec["id"]);
         if (p == "twitch" && twitchLogin('@' + id) == id) {
             hub.source(p, id);
+        } else if (p == "kick" && kickLogin("kick:" + id) == id) {
+            hub.source(p, id);
         } else if (p == "youtube" && videoId(id) == id) {
             hub.source(p, id);
         }
-        auto source = hub.sources.value(p == "twitch" ? "twitch:" + id : id);
+        auto source = hub.sources.value(p == "youtube" ? id : p + ":" + id);
         if (source) {
             source->paused = spec["paused"].toBool();
         }
@@ -1354,7 +1358,7 @@ bool MainWindow::eventFilter(QObject *o, QEvent *e) {
 }
 
 void MainWindow::showThread(Source *source, Message selected) {
-    if (!source || source->platform != "twitch" || selected.reply.isEmpty()) {
+    if (!source || (source->platform != "twitch" && source->platform != "kick") || selected.reply.isEmpty()) {
         return;
     }
     QString root;
@@ -1548,6 +1552,7 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
             return;
         }
         QString url = source->platform == "twitch" ? "https://www.twitch.tv/" + message.login
+                      : source->platform == "kick" ? "https://kick.com/" + message.login
                                                    : "https://www.youtube.com/channel/" + message.uid;
         QDesktopServices::openUrl(QUrl(url));
     }));

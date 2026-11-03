@@ -1,18 +1,27 @@
-YT-CHATTERINO 2.2.5 — WINDOWS 11 x64
+YT-CHATTERINO 2.2.6 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.2.5.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.2.6.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
 
 ADD A CHAT
-Press Ctrl+T (or click +). Paste a YouTube LIVE VIDEO link or Twitch @channel/link.
+Press Ctrl+T (or click +). Paste a YouTube LIVE VIDEO link, Twitch @channel/link, or Kick channel link.
 Normal YouTube web reading needs no API key, Google account or quota.
 If Google returns HTTP 429, sign in and optionally enable the official API fallback per chat
 in the channel menu. It costs 5 units per request, about 986 units per hour per chat
 at the default 18.25-second interval; multiple chats use more.
 Twitch: Settings > Accounts > Connect Twitch. Approve the browser code once.
 Accounts shows your connected identity and enabled permissions. Refreshing subscriber emotes reuses your saved sign-in.
+
+KICK: CONNECT AND SEND
+Open a Kick channel link to read without signing in. To send, create an application at
+https://kick.com/settings/developer with the exact redirect http://localhost:37365/callback
+and select Read user information and Write to Chat feed. Enter its client ID and secret
+under Settings > Accounts > Kick, then approve in your browser. Credentials use the OS
+credential store; do not share your secret. Choose a target only in mixed chats.
+Reading uses unofficial public Kick website data, may break when the site changes and
+can miss messages in busy chats. Kick moderation and title editing are not yet available.
 
 SEND / MODERATE
 Type below a chat and press Enter. Right-click a Twitch message to prepare a reply. Ctrl+right-click opens actions/moderation.
