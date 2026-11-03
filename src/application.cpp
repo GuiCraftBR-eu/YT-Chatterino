@@ -739,8 +739,9 @@ void MainWindow::messageMenu(Pane *pane, Message message, QPoint position) {
     QMenu m(this);
     auto *copy = m.addAction(cfg.T("Copy"), pane->view, &ChatView::copySelection);
     copy->setEnabled(!pane->view->selectedText().isEmpty());
+    const QString copiedBody = visibleMessageText(message, cfg);
     m.addAction(cfg.T("Copy message"), this,
-                [message] { QApplication::clipboard()->setText(message.name + ": " + message.text); });
+                [message, copiedBody] { QApplication::clipboard()->setText(message.name + ": " + copiedBody); });
     m.addAction(cfg.T("Select all"), pane->view, [pane] {
         if (pane->view->messages.isEmpty()) {
             return;
@@ -1041,6 +1042,11 @@ void MainWindow::globalSearch() {
     auto *searchTimer = new QTimer(d);
     searchTimer->setSingleShot(true);
     searchTimer->setInterval(120);
+    connect(&cfg, &Config::appearanceChanged, d, [input, results, status, searchTimer] {
+        results->clear();
+        status->clear();
+        if (!input->text().isEmpty()) searchTimer->start();
+    });
     connect(input, &QLineEdit::textChanged, d, [results, status, searchTimer](const QString &query) {
         results->clear();
         status->clear();
@@ -1063,9 +1069,10 @@ void MainWindow::globalSearch() {
                     if (count >= 2000) {
                         break;
                     }
-                    if ((m.name + ' ' + m.text).contains(query, Qt::CaseInsensitive)) {
+                    const QString body = visibleMessageText(m, cfg);
+                    if ((m.name + ' ' + body).contains(query, Qt::CaseInsensitive)) {
                         auto *item = new QListWidgetItem(
-                            tabs->tabText(i) + " · " + m.name + ": " + m.text.left(180), results);
+                            tabs->tabText(i) + " · " + m.name + ": " + body.left(180), results);
                         item->setData(Qt::UserRole, w->uid);
                         item->setData(Qt::UserRole + 1, p->uid);
                         item->setData(Qt::UserRole + 2, m.seq);
@@ -1406,8 +1413,6 @@ ThreadWindow::ThreadWindow(MainWindow *m, Source *s, Message selected, QString i
             (!str(target["user_id"]).isEmpty() && str(target["user_id"]) == parentMessage.uid) ||
             target["all"].toBool()) {
             parentMessage.deleted = true;
-            parentMessage.text = main->cfg.T("[message deleted]");
-            parentMessage.emotes.clear();
         }
         rebuild();
     });

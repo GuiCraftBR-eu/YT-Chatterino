@@ -113,4 +113,10 @@ class NativeTests : public QObject {
     void mentionsOpenCorrectUserHistory();
     void youtubeChannelAvatarFromOwnerMessage();
     void youtubeStructuredMentionAndChannelAvatar();
+    void streamHeaderWrapAndOptions();
+    void deletedMessagesOptInAndOpacity();
+    void twitchAlertsAndHighlight();
+    void youtubeMembershipGiftParsing();
+    void youtubePinAndPollLifecycle();
+    void twitchPinAndPollPermissionAndLifecycle();
 };

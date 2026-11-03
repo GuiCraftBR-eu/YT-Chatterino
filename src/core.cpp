@@ -589,16 +589,16 @@ ParsedIrc parseIrc(QString line) {
     p.channel = p.params.left(bodyPos < 0 ? p.params.size() : bodyPos).section(' ', 0, 0);
     p.channel.remove('#');
     p.channel = p.channel.toLower();
-    if (p.command != "PRIVMSG") {
+    if (p.command != "PRIVMSG" && p.command != "USERNOTICE") {
         return p;
     }
     const int singleWord = p.params.indexOf(' ');
-    if (bodyPos < 0 && singleWord < 0) {
+    if (p.command == "PRIVMSG" && bodyPos < 0 && singleWord < 0) {
         return p;
     }
     auto &m = p.message;
     m.id = str(p.tags["id"]);
-    m.login = prefix.section('!', 0, 0);
+    m.login = p.command == "USERNOTICE" ? str(p.tags["login"]) : prefix.section('!', 0, 0);
     m.name = str(p.tags["display-name"]);
     if (m.name.isEmpty()) {
         m.name = m.login;
@@ -606,7 +606,8 @@ ParsedIrc parseIrc(QString line) {
     m.uid = str(p.tags["user-id"]);
     m.color = str(p.tags["color"]);
     m.badgeInfo = str(p.tags["badge-info"]);
-    m.text = p.params.mid(bodyPos >= 0 ? bodyPos + 2 : singleWord + 1);
+    m.text = bodyPos >= 0 ? p.params.mid(bodyPos + 2)
+                          : (p.command == "PRIVMSG" ? p.params.mid(singleWord + 1) : QString());
     if (m.text.startsWith("\x01"
                           "ACTION ")) {
         m.text = m.text.mid(8);
@@ -676,6 +677,19 @@ ParsedIrc parseIrc(QString line) {
                    {"thread_id", p.tags["reply-thread-parent-msg-id"]},
                    {"thread_login", p.tags["reply-thread-parent-user-login"]}};
     }
+    if (p.command == "USERNOTICE") {
+        const QString notice = str(p.tags["system-msg"]);
+        if (!notice.isEmpty()) {
+            const QString prefix = notice + (m.text.isEmpty() ? QString() : " — ");
+            m.text.prepend(prefix);
+            for (auto &span : m.emotes) { span.start += prefix.size(); span.end += prefix.size(); }
+        }
+        if (m.name.isEmpty()) m.name = "Twitch";
+        m.special = "alert";
+    } else if (!str(p.tags["custom-reward-id"]).isEmpty() ||
+               !str(p.tags["bits"]).isEmpty() || str(p.tags["msg-id"]) == "highlighted-message") {
+        m.special = "alert";
+    }
     return p;
 }
 
@@ -714,11 +728,13 @@ static void appendRuns(Message &m, const QJsonValue &v) {
 
 Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical) {
     Message m;
+    const auto header = at(o, {"header", "liveChatSponsorshipsHeaderRenderer"}).toObject();
+    const auto author = header.isEmpty() ? o : header;
     m.id = str(o["id"]);
-    m.name = textOf(o["authorName"]);
+    m.name = textOf(author["authorName"]);
     m.uid = str(o["authorExternalChannelId"]);
     m.login = m.name;
-    m.avatar = imageUrls(o["authorPhoto"]).value(0);
+    m.avatar = imageUrls(author["authorPhoto"]).value(0);
     m.history = historical;
     qint64 micro = str(o["timestampUsec"]).toLongLong();
     m.stamp = micro ? QDateTime::fromMSecsSinceEpoch(micro / 1000) : QDateTime::currentDateTime();
@@ -751,9 +767,10 @@ Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical)
         m.special = "member";
         if (m.text.isEmpty()) {
             m.text = textOf(o["headerPrimaryText"]);
+            if (m.text.isEmpty()) m.text = textOf(header["primaryText"]);
         }
     }
-    for (const auto &v : o["authorBadges"].toArray()) {
+    for (const auto &v : author["authorBadges"].toArray()) {
         auto b = v.toObject()["liveChatAuthorBadgeRenderer"].toObject();
         QString type = str(at(b, {"icon", "iconType"}));
         Badge badge;
@@ -805,10 +822,18 @@ QColor userColor(const Message &m) {
     return QColor(palette[quint8(h[0]) % palette.size()]);
 }
 
+QString visibleMessageText(const Message &m, const Config &cfg) {
+    return m.deleted && !cfg.data["show_deleted_messages"].toBool(false)
+               ? cfg.T("[message deleted]") : m.text;
+}
+
 QColor highlight(const Message &m, const Config &cfg, const QStringList &ownNames, bool *mentioned) {
     const auto settings = cfg.feature("highlight"), users = settings["users"].toObject(),
                rs = settings["roles"].toObject();
     QColor c;
+    if (!m.special.isEmpty() && settings["alerts"].toBool(false)) {
+        c = QColor(settings["mention_color"].toString("#227400"));
+    }
     for (auto i = users.begin(); i != users.end(); ++i) {
         if (stripAt(i.key()) == stripAt(m.login) || stripAt(i.key()) == stripAt(m.name)) {
             c = QColor(i.value().toString());
@@ -832,8 +857,9 @@ QColor highlight(const Message &m, const Config &cfg, const QStringList &ownName
         terms << ownNames;
     }
     bool match = false;
+    const QString body = visibleMessageText(m, cfg);
     for (const auto &word : terms) {
-        if (wordMatch(m.text, word)) {
+        if (wordMatch(body, word)) {
             match = true;
             break;
         }
@@ -847,7 +873,7 @@ QColor highlight(const Message &m, const Config &cfg, const QStringList &ownName
     return c;
 }
 
-bool accepts(const Message &m, const QJsonObject &f) {
+bool accepts(const Message &m, const QJsonObject &f, const Config *cfg) {
     if (m.system) {
         return !f["hide_system"].toBool();
     }
@@ -856,10 +882,11 @@ bool accepts(const Message &m, const QJsonObject &f) {
             return false;
         }
     }
+    const auto body = cfg ? visibleMessageText(m, *cfg) : m.text;
     auto include = f["include_terms"].toArray();
     bool found = include.isEmpty();
     for (const auto &v : include) {
-        if (m.text.contains(v.toString(), Qt::CaseInsensitive)) {
+        if (body.contains(v.toString(), Qt::CaseInsensitive)) {
             found = true;
         }
     }
@@ -867,7 +894,7 @@ bool accepts(const Message &m, const QJsonObject &f) {
         return false;
     }
     for (const auto &v : f["exclude_terms"].toArray()) {
-        if (m.text.contains(v.toString(), Qt::CaseInsensitive)) {
+        if (body.contains(v.toString(), Qt::CaseInsensitive)) {
             return false;
         }
     }

@@ -108,7 +108,8 @@ QSet<QString> roles(const Message &m);
 QColor userColor(const Message &m);
 QColor highlight(const Message &m, const Config &cfg, const QStringList &ownNames = {},
                  bool *mention = nullptr);
-bool accepts(const Message &m, const QJsonObject &filter);
+QString visibleMessageText(const Message &message, const Config &config);
+bool accepts(const Message &m, const QJsonObject &filter, const Config *config = nullptr);
 QString threadRoot(const Message &m, const QHash<QString, Message> &messages);
 QVector<Message> collectThread(const QVector<Message> &history, const Message &selected, QString *root);
 QString browserUrl(const QString &platform, const QString &id, const QString &destination);

@@ -148,11 +148,12 @@ class Pane : public QWidget {
     QList<QPointer<Source>> sources;
     QString uid;
     bool detached;
-    QWidget *header, *replyBar, *searchBar;
+    QWidget *header, *replyBar, *searchBar, *decorations;
     QLabel *headerText, *headerIcon, *replyLabel, *countLabel, *searchCount;
     QWidget *mixedHeader;
     QVector<QLabel *> mixedIcons, mixedTitles;
     QLabel *mixedMore;
+    QTimer headerClock;
     QComboBox *target;
     Composer *input;
     QPushButton *sendButton, *emoteButton;
@@ -165,6 +166,7 @@ class Pane : public QWidget {
     std::function<bool(const Message &)> extraFilter;
     QString threadId;
     void refresh();
+    void refreshDecorations();
     void reload();
     void incoming(Source *source, Message message);
     void send();

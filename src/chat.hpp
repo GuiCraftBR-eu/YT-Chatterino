@@ -11,6 +11,7 @@ class Source : public QObject {
     Hub *hub;
     QString platform, id, key;
     QJsonObject header;
+    QJsonObject pinned, activePoll;
     QVector<Message> history;
     QHash<quintptr, int> viewCaps;
     QSet<QString> seen;
@@ -23,7 +24,11 @@ class Source : public QObject {
     QVector<Message> liveBuffer;
     QString continuation, visitor;
     QJsonObject context;
-    QTimer poll, metadataTimer, badgeRetry;
+    QTimer poll, metadataTimer, badgeRetry, decorationTimer;
+    bool decorationPending = false, pollDecorationPending = false;
+    qint64 pinRetryAfter = 0;
+    quint64 decorationGeneration = 0;
+    QString decorationSignature;
     bool requesting = false, initial = true;
     bool apiFallbackEnabled = false, apiActive = false;
     QString apiPageToken;
@@ -49,6 +54,11 @@ class Source : public QObject {
     void trim();
     int retentionCap() const;
     void refreshHeader();
+    void refreshDecorations();
+    void setDecorations(QJsonObject pin, QJsonObject poll);
+    void youtubeBannerActions(const QJsonArray &actions);
+    void youtubeWebPollState(const QJsonObject &response);
+    void youtubeApiPollState(const QJsonObject &data);
     void loadEmotes(QString channelId = {});
     void loadBadges();
     void loadHistory();
@@ -67,6 +77,7 @@ class Source : public QObject {
   signals:
     void message(yc::Message message);
     void changed();
+    void decorationsChanged();
     void redacted(QJsonObject target);
 };
 

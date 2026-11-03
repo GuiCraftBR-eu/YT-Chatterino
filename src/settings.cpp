@@ -321,6 +321,8 @@ QWidget *SettingsWindow::accountsPage() {
                                [this] { main->accounts.signInTwitch(Accounts::fullTwitchScopes()); });
     twLayout->addWidget(twStatus);
     twLayout->addWidget(twPermissions);
+    twLayout->addWidget(text(main->cfg,
+        "Pinned Twitch messages require moderator access. Twitch polls are available only in your own channel.", true));
     twLayout->addWidget(twButton);
     twLayout->addWidget(twReconnect);
     l->addWidget(twBox);
@@ -390,6 +392,7 @@ QWidget *SettingsWindow::accountsPage() {
                  {"Moderation",
                   {"user:read:moderated_channels", "moderator:manage:chat_messages",
                    "moderator:manage:banned_users"}},
+                 {"Polls in your channel", {"channel:read:polls"}},
                  {"Title / category editing", {"channel:manage:broadcast"}}}) {
             permissions << (accounts.twitchAllows(item.second) ? "✓ " : "○ ") + cfg.T(item.first);
         }
@@ -468,6 +471,16 @@ QWidget *SettingsWindow::appearancePage() {
                                         {"alternate_rows", "Alternate message backgrounds"}}) {
         auto *check = new QCheckBox(cfg.T(pair.second), w);
         check->setChecked(a[pair.first].toBool());
+        checks[pair.first] = check;
+        form->addRow(check);
+    }
+    section("Stream header");
+    for (const auto &pair : QList<QPair<QString, QString>>{
+             {"header_viewers", "Show viewer count"}, {"header_duration", "Show stream duration"},
+             {"header_category", "Show category"}, {"header_title", "Show stream title"}}) {
+        auto *check = new QCheckBox(cfg.T(pair.second), w);
+        check->setObjectName(pair.first);
+        check->setChecked(a[pair.first].toBool(true));
         checks[pair.first] = check;
         form->addRow(check);
     }
@@ -556,6 +569,10 @@ QWidget *SettingsWindow::messagesPage() {
     auto *history = new QCheckBox(main->cfg.T("Load recent Twitch messages when opening a channel"), w);
     history->setChecked(main->cfg.data["load_twitch_history"].toBool(true));
     form->addRow(history);
+    auto *deleted = new QCheckBox(main->cfg.T("Show deleted messages received while connected"), w);
+    deleted->setObjectName("show-deleted-messages");
+    deleted->setChecked(main->cfg.data["show_deleted_messages"].toBool(false));
+    form->addRow(deleted);
     l->addLayout(form);
     l->addWidget(text(main->cfg,
                       "Twitch history uses recent-messages.robotty.de without account tokens. Availability "
@@ -565,9 +582,10 @@ QWidget *SettingsWindow::messagesPage() {
                       "YouTube and Twitch stay connected in background tabs. Pause YouTube manually from "
                       "Channel actions when needed.",
                       true));
-    l->addWidget(action(main->cfg, "Apply message limits / history", w, [this, cap, history] {
+    l->addWidget(action(main->cfg, "Apply message limits / history", w, [this, cap, history, deleted] {
         main->cfg.data["message_limit"] = cap->value();
         main->cfg.data["load_twitch_history"] = history->isChecked();
+        main->cfg.data["show_deleted_messages"] = deleted->isChecked();
         main->cfg.save();
         for (auto s : main->hub.sources) {
             s->trim();
@@ -626,8 +644,12 @@ QWidget *SettingsWindow::highlightsPage() {
     auto *mention = new QCheckBox(cfg.T("Highlight mentions of my signed-in names"), w);
     mention->setChecked(settings["mention_me"].toBool(true));
     form->addRow(mention);
+    auto *alerts = new QCheckBox(cfg.T("Highlight subscription, membership and reward alerts"), w);
+    alerts->setObjectName("highlight-chat-alerts");
+    alerts->setChecked(settings["alerts"].toBool(false));
+    form->addRow(alerts);
     l->addLayout(form);
-    l->addWidget(action(cfg, "Apply highlights", w, [this, users, terms, mention, roleChecks, colors] {
+    l->addWidget(action(cfg, "Apply highlights", w, [this, users, terms, mention, alerts, roleChecks, colors] {
         QJsonObject people, roles;
         for (const auto &line : users->toPlainText().split('\n')) {
             auto parts = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
@@ -659,6 +681,7 @@ QWidget *SettingsWindow::highlightsPage() {
         h["roles"] = roles;
         h["words"] = strings(words(terms->text()));
         h["mention_me"] = mention->isChecked();
+        h["alerts"] = alerts->isChecked();
         main->cfg.setFeature("highlight", h);
     }));
     l->addStretch();
