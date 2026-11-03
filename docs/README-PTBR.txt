@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.2.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.2.2 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.2.1.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.2.2.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -33,6 +33,8 @@ Dê dois cliques no cabeçalho para ampliar/restaurar o painel. Alt+Setas: focar
 Ctrl+F / Ctrl+Shift+F: buscar no painel / em todos os chats. Ctrl+K: troca rápida.
 Ctrl+F5: reconectar painel. Ctrl+P: configurações. Ctrl++ / Ctrl+- / Ctrl+0: tamanho do texto.
 Tab / Shift+Tab: completar emotes ou @nomes. Clique no botão de sorriso para abrir o seletor de emotes.
+No campo de mensagem, use as setas para cima e para baixo para percorrer as mensagens enviadas nesta sessão.
+Clique em uma menção @usuário para ver o cartão e o histórico disponível desse usuário no canal.
 Clique com a roda no chat e mova o ponteiro para rolar automaticamente. Clique novamente ou use Esc para parar.
 A roda física usa velocidade 2× por padrão; ajuste em Aparência. O touchpad mantém a rolagem em pixels.
 No seletor, Inscritos, Canal, Globais e Emojis têm listas separadas. A busca filtra a aba atual.

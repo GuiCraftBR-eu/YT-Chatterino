@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.2.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.2.2 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.2.1.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.2.2.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -33,6 +33,8 @@ Double-click a header to zoom/restore a pane. Alt+Arrows: focus another pane.
 Ctrl+F / Ctrl+Shift+F: search pane / all chats. Ctrl+K: quick switch.
 Ctrl+F5: reconnect pane. Ctrl+P: settings. Ctrl++ / Ctrl+- / Ctrl+0: text size.
 Tab / Shift+Tab: complete emotes or @names. Click the smile button for the emote picker.
+In the message field, use Up and Down to browse messages sent during this session.
+Click an @mention to open the user's card and available message history in that channel.
 Middle-click the chat and move the pointer for autoscroll. Click again or press Esc to stop.
 Physical wheel speed defaults to 2×; change it in Appearance. Touchpads keep their pixel scrolling.
 The picker separates Subs, Channel, Global and Emojis. Search filters the current tab.

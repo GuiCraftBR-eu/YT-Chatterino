@@ -1592,7 +1592,8 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
         QVector<Message> list;
         for (const auto &m : safeSource->history) {
             if (!m.system && ((!message.uid.isEmpty() && message.uid == m.uid) ||
-                              (message.uid.isEmpty() && stripAt(m.login) == stripAt(message.login)))) {
+                              (message.uid.isEmpty() && (stripAt(m.login) == stripAt(message.login) ||
+                                                         stripAt(m.name) == stripAt(message.login))))) {
                 list << m;
             }
         }

@@ -49,8 +49,15 @@ static QJsonObject metadata(const QString &html, const QString &id, QString *err
     }
     bool live = d["isLive"].toBool();
     qint64 viewers = -1;
+    QString avatar;
     auto data = embeddedJson(html, "ytInitialData");
     walk(data, [&](const QJsonObject &node) {
+        const auto owner = node["videoOwnerRenderer"].toObject();
+        if (!owner.isEmpty() && avatar.isEmpty()) {
+            const auto ownerId = str(at(owner, {"navigationEndpoint", "browseEndpoint", "browseId"}));
+            if (ownerId.isEmpty() || ownerId == str(d["channelId"]))
+                avatar = imageUrls(owner["thumbnail"]).value(0);
+        }
         auto v = node["videoViewCountRenderer"].toObject();
         if (live && v["isLive"].toBool()) {
             auto digits = textOf(v["viewCount"]);
@@ -65,6 +72,7 @@ static QJsonObject metadata(const QString &html, const QString &id, QString *err
     }
     return {{"channel", d["author"]},
             {"channel_id", d["channelId"]},
+            {"avatar", avatar},
             {"title", d["title"]},
             {"live", live},
             {"viewers", double(viewers)}};
@@ -196,6 +204,11 @@ void Source::publish(Message m) {
         return;
     }
     m.source = key;
+    if (platform == "youtube" && !m.uid.isEmpty() && m.uid == room() &&
+        str(header["avatar"]).isEmpty() && !m.avatar.isEmpty()) {
+        header["avatar"] = m.avatar;
+        emit changed();
+    }
     if (!m.system && !m.id.isEmpty() && seen.contains(m.id)) {
         for (auto &old : history) {
             if (old.id == m.id) {
@@ -226,6 +239,7 @@ void Source::publish(Message m) {
                 old.webId = m.id;
                 old.badges = m.badges;
                 old.emotes = m.emotes;
+                old.mentions = m.mentions;
                 emit changed();
                 return;
             }
@@ -293,6 +307,7 @@ void Source::refreshHeader() {
                             QString error;
                             auto d = metadata(QString::fromUtf8(b), self->id, &error);
                             if (error.isEmpty()) {
+                                if (str(d["avatar"]).isEmpty()) d["avatar"] = self->header["avatar"];
                                 self->header = d;
                                 emit self->changed();
                                 emit self->hub->sourceChanged(self);
@@ -521,6 +536,7 @@ void Source::youtubeConnect() {
                 self->youtubeError(metadataError, 60000);
                 return;
             }
+            if (str(info["avatar"]).isEmpty()) info["avatar"] = self->header["avatar"];
             self->header = info;
             emit self->changed();
             emit self->hub->sourceChanged(self);
@@ -1613,6 +1629,10 @@ void Hub::profile(Source *s, Message m, JsonCallback done) {
             "GET",
             m.uid.isEmpty() ? QMap<QString, QString>{{"login", m.login}}
                             : QMap<QString, QString>{{"id", m.uid}});
+        return;
+    }
+    if (m.uid.isEmpty()) {
+        done({}, "Public details unavailable");
         return;
     }
     accounts->youtube("channels",

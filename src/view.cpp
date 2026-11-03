@@ -30,6 +30,11 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     connect(hub->cfg, &Config::appearanceChanged, this, &ChatView::invalidate);
     connect(hub->cfg, &Config::languageChanged, this, &ChatView::invalidate);
     connect(hub->images, &Images::ready, this, [this](const QString &url) {
+        if (emoteTooltip && emoteTooltip->isVisible() && tooltipUrls.value(0) == url) {
+            const auto image = hub->images->get(tooltipUrls, false);
+            if (!image.isNull()) emotePreview->setPixmap(QPixmap::fromImage(image).scaled(
+                112, 112, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        }
         bool changed = false;
         for (auto i = details.begin(); i != details.end();) {
             if (i->urls.contains(url)) {
@@ -251,6 +256,29 @@ static QTextCharFormat format(const QFont &font, QColor color) {
     return f;
 }
 
+static QImage channelIcon(Source *source, Images *images, int size) {
+    QImage result(size, size, QImage::Format_ARGB32_Premultiplied);
+    result.fill(Qt::transparent);
+    QPainter painter(&result);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QPainterPath circle;
+    circle.addEllipse(QRectF(0, 0, size, size));
+    painter.setClipPath(circle);
+    const auto url = source ? str(source->header["avatar"]) : QString();
+    const auto image = url.isEmpty() ? QImage() : images->get({url}, false);
+    if (!image.isNull()) {
+        const auto scaled = image.scaled(size, size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+        painter.drawImage(QPoint((size - scaled.width()) / 2, (size - scaled.height()) / 2), scaled);
+    } else {
+        painter.fillRect(result.rect(), QColor("#353540"));
+        painter.setPen(Qt::white);
+        QFont font("Segoe UI", qMax(7, size / 2), QFont::Bold);
+        painter.setFont(font);
+        painter.drawText(result.rect(), Qt::AlignCenter, source ? source->name().left(1).toUpper() : "?");
+    }
+    return result;
+}
+
 static QImage roleBadge(const QString &role, int size) {
     QImage image(size * 2, size * 2, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
@@ -344,10 +372,6 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         details[m.seq] = detail;
         return doc;
     }
-    if (mixed && source) {
-        cursor.insertText('[' + source->name() + "] ",
-                          format(normal, QColor(source->platform == "twitch" ? "#b99aff" : "#ff7777")));
-    }
     auto insertImage = [&](QStringList urls, QString code, int size, bool gif, bool isEmote = false,
                            bool isBadge = false) {
         if (urls.isEmpty()) {
@@ -378,6 +402,22 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
                          image.scaled(fitted, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         cursor.insertImage(f);
     };
+    if (mixed && source) {
+        const auto url = str(source->header["avatar"]);
+        const QString resource = url.isEmpty() ? "channel:" + source->key : url;
+        if (!url.isEmpty()) detail.urls.insert(url);
+        const auto icon = channelIcon(source, hub->images, 24);
+        doc->addResource(QTextDocument::ImageResource, QUrl(resource), icon);
+        QTextImageFormat channelFormat;
+        channelFormat.setName(resource);
+        channelFormat.setWidth(18);
+        channelFormat.setHeight(18);
+        channelFormat.setVerticalAlignment(QTextCharFormat::AlignMiddle);
+        detail.imageCodes[cursor.position()] = '[' + source->name() + ']';
+        detail.channelImages[cursor.position()] = {source->name(), {resource}};
+        cursor.insertImage(channelFormat);
+        cursor.insertText(" ", normalFormat);
+    }
     for (auto badge : m.badges) {
         if (badge.urls.isEmpty() && source) {
             auto full = source->badges.value(badge.id + '/' + badge.version);
@@ -439,12 +479,47 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         return a.start == b.start ? a.end > b.end : a.start < b.start;
     });
     int offset = 0;
-    auto insertText = [&](const QString &text) {
+    auto insertPlain = [&](const QString &text, int bodyStart) {
+        static const QRegularExpression mentions(
+            "(?<![\\p{L}\\p{N}_@])@[\\p{L}\\p{N}_][\\p{L}\\p{N}_.-]{0,63}");
+        QVector<MentionSpan> candidates;
+        if (!m.deleted) for (const auto &mention : m.mentions) {
+            if (mention.start >= bodyStart && mention.end <= bodyStart + text.size() && mention.end > mention.start)
+                candidates.append({mention.start - bodyStart, mention.end - bodyStart, mention.name, mention.uid});
+        }
+        auto matches = mentions.globalMatch(text);
+        while (matches.hasNext()) {
+            const auto match = matches.next();
+            QString value = match.captured();
+            while (value.endsWith('.')) value.chop(1);
+            if (value.size() < 2) continue;
+            const int start = match.capturedStart(), end = start + value.size();
+            bool overlap = false;
+            for (const auto &candidate : candidates)
+                if (start < candidate.end && end > candidate.start) { overlap = true; break; }
+            if (!overlap) candidates.append({start, end, value.mid(1), {}});
+        }
+        std::sort(candidates.begin(), candidates.end(), [](const MentionSpan &a, const MentionSpan &b) {
+            return a.start < b.start;
+        });
+        int from = 0;
+        for (const auto &candidate : candidates) {
+            if (candidate.start < from || candidate.end > text.size()) continue;
+            cursor.insertText(text.mid(from, candidate.start - from), normalFormat);
+            const int start = cursor.position();
+            cursor.insertText(text.mid(candidate.start, candidate.end - candidate.start),
+                              format(normal, QColor("#94c9ff")));
+            detail.mentions.append({start, cursor.position(), candidate.name, candidate.uid});
+            from = candidate.end;
+        }
+        cursor.insertText(text.mid(from), normalFormat);
+    };
+    auto insertText = [&](const QString &text, int bodyStart) {
         auto links = QRegularExpression("https?://[^\\s<>]+").globalMatch(text);
         int from = 0;
         while (links.hasNext()) {
             auto match = links.next();
-            cursor.insertText(text.mid(from, match.capturedStart() - from), normalFormat);
+            insertPlain(text.mid(from, match.capturedStart() - from), bodyStart + from);
             auto lf = normalFormat;
             lf.setAnchor(true);
             lf.setAnchorHref(match.captured());
@@ -452,18 +527,18 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
             cursor.insertText(match.captured(), lf);
             from = match.capturedEnd();
         }
-        cursor.insertText(text.mid(from), normalFormat);
+        insertPlain(text.mid(from), bodyStart + from);
     };
     for (const auto &e : spans) {
         if (e.start < offset || e.end > body.size() || e.end <= e.start) {
             continue;
         }
-        insertText(body.mid(offset, e.start - offset));
+        insertText(body.mid(offset, e.start - offset), offset);
         insertImage(e.urls, e.code.isEmpty() ? body.mid(e.start, e.end - e.start) : e.code,
                     a["emote_size"].toInt(36), e.gif, true);
         offset = e.end;
     }
-    insertText(body.mid(offset));
+    insertText(body.mid(offset), offset);
     if (!query.isEmpty()) {
         QTextCursor found(doc.data());
         while (!(found = doc->find(query, found)).isNull()) {
@@ -587,6 +662,18 @@ QPair<int, int> ChatView::positionAt(QPoint point) {
     return {row, qBound(0, position, doc->characterCount() - 1)};
 }
 
+ChatView::Details::Mention ChatView::mentionAt(int row, QPoint point) {
+    if (row < 0 || row >= messages.size()) return {};
+    auto doc = document(row);
+    const int hit = doc->documentLayout()->hitTest(
+        QPointF(point.x() - 6, point.y() + verticalScrollBar()->value() - offsets.value(row) - 3),
+        Qt::ExactHit);
+    for (const auto &mention : details.value(messages[row].seq).mentions) {
+        if (hit >= mention.start && hit < mention.end) return mention;
+    }
+    return {};
+}
+
 void ChatView::hideEmoteTooltip() {
     if (emoteTooltip) {
         emoteTooltip->hide();
@@ -607,6 +694,7 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
     const auto detail = details.value(messages[row].seq);
     auto info = detail.emoteImages;
     for (auto i = detail.badgeImages.cbegin(); i != detail.badgeImages.cend(); ++i) info.insert(i.key(), i.value());
+    for (auto i = detail.channelImages.cbegin(); i != detail.channelImages.cend(); ++i) info.insert(i.key(), i.value());
     if (info.isEmpty()) {
         hideEmoteTooltip();
         return false;
@@ -644,6 +732,40 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
         tooltipPosition == position && tooltipUrls == info.value(position).second) {
         return true;
     }
+    auto item = info.value(position);
+    tooltipUrls = item.second;
+    tooltipMessage = messages[row].seq;
+    tooltipPosition = position;
+    const bool isBadge = detail.badgeImages.contains(position);
+    const bool isChannel = detail.channelImages.contains(position);
+    QImage preview;
+    if (!tooltipUrls.value(0).startsWith("badge:") && !tooltipUrls.value(0).startsWith("channel:"))
+        preview = hub->images->get(tooltipUrls, true);
+    if (preview.isNull())
+        preview = doc->resource(QTextDocument::ImageResource, QUrl(tooltipUrls.value(0))).value<QImage>();
+    const auto host = QUrl(tooltipUrls.value(0)).host();
+    const auto source = hub->sources.value(messages[row].source);
+    const QString provider = (isBadge || isChannel) && source ? (source->platform == "twitch" ? "Twitch" : "YouTube")
+                             : host.contains("betterttv") ? "BTTV" : host.contains("7tv") ? "7TV"
+                             : host.contains("jtvnw") ? "Twitch" : host.contains("ggpht") ||
+                                       host.contains("googleusercontent") ? "YouTube" : QString();
+    showImageTooltip(item.first, isChannel ? "Channel" : isBadge ? "Badge" : "Emote", provider, preview, global);
+    return true;
+}
+
+void ChatView::showChannelTooltip(Source *source, QPoint global) {
+    if (!source) { hideEmoteTooltip(); return; }
+    const QString url = str(source->header["avatar"]);
+    tooltipUrls = url.isEmpty() ? QStringList() : QStringList{url};
+    tooltipMessage = 0;
+    tooltipPosition = -1;
+    QImage preview = url.isEmpty() ? QImage() : hub->images->get({url}, false);
+    if (preview.isNull()) preview = channelIcon(source, hub->images, 112);
+    showImageTooltip(source->name(), "Channel", source->platform == "twitch" ? "Twitch" : "YouTube", preview, global);
+}
+
+void ChatView::showImageTooltip(const QString &name, const QString &kind, const QString &provider,
+                                const QImage &image, QPoint global) {
     if (!emoteTooltip) {
         emoteTooltip = new QFrame(this, Qt::ToolTip);
         emoteTooltip->setAttribute(Qt::WA_ShowWithoutActivating);
@@ -664,25 +786,11 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
         layout->addWidget(emoteTooltipName);
         layout->addWidget(emoteTooltipProvider);
     }
-    auto item = info.value(position);
-    tooltipUrls = item.second;
-    tooltipMessage = messages[row].seq;
-    tooltipPosition = position;
-    const bool isBadge = detail.badgeImages.contains(position);
-    const auto image = tooltipUrls.value(0).startsWith("badge:")
-                           ? doc->resource(QTextDocument::ImageResource, QUrl(tooltipUrls.value(0))).value<QImage>()
-                           : hub->images->get(tooltipUrls, true);
     emotePreview->setPixmap(QPixmap::fromImage(image).scaled(112, 112, Qt::KeepAspectRatio,
                                                               Qt::SmoothTransformation));
-    emoteTooltipName->setText(item.first);
-    const auto host = QUrl(tooltipUrls.value(0)).host();
-    const auto source = hub->sources.value(messages[row].source);
-    const QString provider = isBadge && source ? (source->platform == "twitch" ? "Twitch" : "YouTube")
-                             : host.contains("betterttv") ? "BTTV" : host.contains("7tv") ? "7TV"
-                             : host.contains("jtvnw") ? "Twitch" : host.contains("ggpht") ||
-                                       host.contains("googleusercontent") ? "YouTube" : QString();
-    const QString kind = hub->cfg->T(isBadge ? "Badge" : "Emote");
-    emoteTooltipProvider->setText(provider.isEmpty() ? kind : provider + " · " + kind);
+    emoteTooltipName->setText(name);
+    const QString translatedKind = hub->cfg->T(kind);
+    emoteTooltipProvider->setText(provider.isEmpty() ? translatedKind : provider + " · " + translatedKind);
     emoteTooltip->adjustSize();
     auto *screen = QGuiApplication::screenAt(global);
     const QRect available = screen ? screen->availableGeometry() : QRect(global, QSize(400, 400));
@@ -691,7 +799,6 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
     location.setY(qBound(available.top(), location.y(), qMax(available.top(), available.bottom() - emoteTooltip->height())));
     emoteTooltip->move(location);
     emoteTooltip->show();
-    return true;
 }
 
 bool ChatView::viewportEvent(QEvent *event) {
@@ -777,7 +884,8 @@ void ChatView::mouseMoveEvent(QMouseEvent *e) {
         bool clickable = false;
         if (pos.first >= 0) {
             auto d = details.value(messages[pos.first].seq);
-            clickable = (pos.second >= d.nameStart && pos.second < d.nameEnd) ||
+            clickable = !mentionAt(pos.first, e->position().toPoint()).name.isEmpty() ||
+                        (pos.second >= d.nameStart && pos.second < d.nameEnd) ||
                         (!threadMode && !messages[pos.first].reply.isEmpty());
         }
         viewport()->setCursor(clickable ? Qt::PointingHandCursor : Qt::IBeamCursor);
@@ -795,6 +903,22 @@ void ChatView::mouseReleaseEvent(QMouseEvent *e) {
         auto detail = details.value(m.seq);
         if (pos.second >= detail.nameStart && pos.second < detail.nameEnd && !m.system) {
             emit userClicked(m);
+        } else if (const auto mention = mentionAt(pos.first, e->position().toPoint()); !mention.name.isEmpty()) {
+            Message selected;
+            selected.source = m.source;
+            selected.name = selected.login = mention.name;
+            selected.uid = mention.uid;
+            if (auto *source = hub->sources.value(m.source)) {
+                for (auto it = source->history.crbegin(); it != source->history.crend(); ++it) {
+                    if (!it->system && ((!mention.uid.isEmpty() && it->uid == mention.uid) ||
+                        (mention.uid.isEmpty() && (stripAt(it->login) == stripAt(mention.name) ||
+                                                   stripAt(it->name) == stripAt(mention.name))))) {
+                        selected = *it;
+                        break;
+                    }
+                }
+            }
+            emit userClicked(selected);
         } else if (!threadMode && !m.reply.isEmpty()) {
             emit threadClicked(m);
         } else {
@@ -1056,6 +1180,9 @@ Composer::Composer(Images *imageCache, QWidget *parent) : QLineEdit(parent), ima
         }
     });
     connect(this, &QLineEdit::selectionChanged, this, &Composer::scheduleSuggestions);
+    connect(this, &QLineEdit::textEdited, this, [this] {
+        if (!applyingHistory) historyIndex = -1;
+    });
     connect(images, &Images::ready, this, [this](const QString &url) {
         if (!suggestionPopup || !suggestionPopup->isVisible()) return;
         for (int row = 0; row < suggestionPopup->count(); ++row) {
@@ -1066,6 +1193,14 @@ Composer::Composer(Images *imageCache, QWidget *parent) : QLineEdit(parent), ima
             }
         }
     });
+}
+
+void Composer::recordSent(const QString &text) {
+    if (text.trimmed().isEmpty()) return;
+    sentHistory << text;
+    if (sentHistory.size() > 200) sentHistory.removeFirst();
+    historyIndex = -1;
+    historyDraft.clear();
 }
 
 QString Composer::completionPrefix() const {
@@ -1213,6 +1348,10 @@ void Composer::hideEvent(QHideEvent *event) {
 }
 
 void Composer::keyPressEvent(QKeyEvent *e) {
+    if (isReadOnly()) {
+        QLineEdit::keyPressEvent(e);
+        return;
+    }
     if (e->key() == Qt::Key_Escape) {
         if (suggestionPopup && suggestionPopup->isVisible()) {
             hideSuggestions();
@@ -1229,8 +1368,29 @@ void Composer::keyPressEvent(QKeyEvent *e) {
                                        suggestionPopup->count());
         return;
     }
-    if (e->key() == Qt::Key_Up && text().isEmpty()) {
-        setText(lastSent);
+    if (e->key() == Qt::Key_Up && e->modifiers() == Qt::NoModifier && !sentHistory.isEmpty()) {
+        if (historyIndex < 0) {
+            historyDraft = text();
+            historyIndex = sentHistory.size();
+        }
+        historyIndex = qMax(0, historyIndex - 1);
+        applyingHistory = true;
+        setText(sentHistory[historyIndex]);
+        applyingHistory = false;
+        hideSuggestions();
+        return;
+    }
+    if (e->key() == Qt::Key_Down && e->modifiers() == Qt::NoModifier && historyIndex >= 0) {
+        ++historyIndex;
+        applyingHistory = true;
+        if (historyIndex >= sentHistory.size()) {
+            historyIndex = -1;
+            setText(historyDraft);
+        } else {
+            setText(sentHistory[historyIndex]);
+        }
+        applyingHistory = false;
+        hideSuggestions();
         return;
     }
     if (e->key() == Qt::Key_Tab || e->key() == Qt::Key_Backtab) {
@@ -1301,6 +1461,38 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     headerText->setTextFormat(Qt::PlainText);
     headerText->setFont(QFont("Segoe UI", 9, QFont::Bold));
     hl->addWidget(headerText, 1);
+    mixedHeader = new QWidget(header);
+    mixedHeader->setObjectName("mixed-channel-header");
+    auto *mixedLayout = new QVBoxLayout(mixedHeader);
+    mixedLayout->setContentsMargins(0, 0, 0, 0);
+    mixedLayout->setSpacing(2);
+    for (int i = 0; i < 3; ++i) {
+        auto *row = new QWidget(mixedHeader);
+        auto *rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(5);
+        auto *icon = new QLabel(row);
+        icon->setObjectName("mixed-channel-icon");
+        icon->setFixedSize(20, 20);
+        icon->setMouseTracking(true);
+        icon->installEventFilter(this);
+        auto *title = new QLabel(row);
+        title->setObjectName("mixed-channel-title");
+        title->setTextFormat(Qt::PlainText);
+        title->setFont(QFont("Segoe UI", 9, QFont::Bold));
+        title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        title->installEventFilter(this);
+        rowLayout->addWidget(icon);
+        rowLayout->addWidget(title, 1);
+        mixedLayout->addWidget(row);
+        mixedIcons << icon;
+        mixedTitles << title;
+    }
+    mixedMore = new QLabel(mixedHeader);
+    mixedMore->setObjectName("mixed-channel-more");
+    mixedLayout->addWidget(mixedMore);
+    hl->addWidget(mixedHeader, 1);
+    mixedHeader->hide();
     auto *actions = new QToolButton(header);
     actions->setText("▾");
     hl->addWidget(actions);
@@ -1334,6 +1526,11 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     searchBar->hide();
     view = new ChatView(hub, this);
     layout->addWidget(view, 1);
+    connect(hub->images, &Images::ready, this, [this](const QString &url) {
+        for (const auto &source : sources) {
+            if (source && str(source->header["avatar"]) == url) { refresh(); break; }
+        }
+    });
     replyBar = new QWidget(this);
     auto *rl = new QHBoxLayout(replyBar);
     rl->setContentsMargins(5, 2, 4, 2);
@@ -1507,6 +1704,7 @@ Source *Pane::targetSource() const {
 }
 
 Pane::~Pane() {
+    for (auto *icon : mixedIcons) icon->removeEventFilter(this);
     for (auto s : sources) {
         if (s) {
             s->viewCaps.remove(reinterpret_cast<quintptr>(this));
@@ -1519,6 +1717,12 @@ QString Pane::key() const {
 }
 
 void Pane::setSources(QList<Source *> list) {
+    if (sending) {
+        ++sendEpoch;
+        sending = false;
+        input->setReadOnly(false);
+        sendButton->setEnabled(true);
+    }
     for (auto source : sources) {
         if (source) {
             disconnect(source, nullptr, this, nullptr);
@@ -1571,7 +1775,7 @@ void Pane::refresh() {
             "Replying to @{name}: {body}",
             {{"name", reply.login.isEmpty() ? reply.name : reply.login}, {"body", reply.text.left(120)}}));
     }
-    QStringList titles;
+    QStringList titles, fullTitles;
     for (auto source : sources) {
         if (source) {
             QString count;
@@ -1590,19 +1794,31 @@ void Pane::refresh() {
             if (source->platform == "twitch" && !str(source->header["category"]).isEmpty()) {
                 text += str(source->header["category"]) + " - ";
             }
-            if (sources.size() > 1) {
-                text = (source->platform == "twitch" ? "TW · " : "YT · ") + source->name() + " — " + text;
-            }
             titles << text + title;
+            fullTitles << source->name() + " — " + text + title;
         }
     }
-    headerText->setToolTip(sources.size() > 1 ? titles.join('\n') : QString());
-    if (titles.size() > 3) {
-        const auto remaining = titles.size() - 3;
-        titles = titles.mid(0, 3);
-        titles << hub->cfg->T("and {count} more", {{"count", QString::number(remaining)}});
+    const bool isMixed = sources.size() > 1;
+    headerText->setVisible(!isMixed);
+    headerIcon->setVisible(!isMixed);
+    mixedHeader->setVisible(isMixed);
+    headerText->setText(titles.value(0));
+    mixedHeader->setToolTip(fullTitles.join('\n'));
+    for (int i = 0; i < mixedIcons.size(); ++i) {
+        auto *icon = mixedIcons[i];
+        auto *title = mixedTitles[i];
+        auto *source = i < sources.size() ? sources[i].data() : nullptr;
+        icon->parentWidget()->setVisible(isMixed && source);
+        if (!source) continue;
+        icon->setProperty("source-key", source->key);
+        icon->setPixmap(QPixmap::fromImage(channelIcon(source, hub->images, 20)));
+        icon->setAccessibleName(source->name());
+        title->setText(titles.value(i));
+        title->setToolTip(fullTitles.value(i));
     }
-    headerText->setText(titles.join('\n'));
+    mixedMore->setVisible(isMixed && titles.size() > 3);
+    mixedMore->setText(hub->cfg->T("and {count} more", {{"count", QString::number(qMax(0, int(titles.size()) - 3))}}));
+    if (isMixed) header->setMinimumHeight(0);
     headerIcon->setPixmap(
         platformIcon(sources.size() == 1 && sources[0] ? sources[0]->platform : "mixed").pixmap(18, 18));
     int selected = target->currentIndex();
@@ -1652,19 +1868,23 @@ void Pane::send() {
     }
     QString text = input->text();
     sending = true;
+    const auto epoch = ++sendEpoch;
+    input->hideSuggestions();
+    input->setReadOnly(true);
     sendButton->setEnabled(false);
     QPointer<Pane> self(this);
-    hub->send(s, text, reply, [self, text](QJsonObject, QString error) {
-        if (!self) {
+    hub->send(s, text, reply, [self, text, epoch](QJsonObject, QString error) {
+        if (!self || self->sendEpoch != epoch) {
             return;
         }
         self->sending = false;
+        self->input->setReadOnly(false);
         self->sendButton->setEnabled(true);
         if (!error.isEmpty()) {
             QMessageBox::warning(self, self->hub->cfg->T("Send message"), self->hub->cfg->T(error));
             return;
         }
-        self->input->lastSent = text;
+        self->input->recordSent(text);
         if (self->input->text() == text) {
             self->input->clear();
         }
@@ -1702,7 +1922,19 @@ void Pane::showSearch() {
 }
 
 bool Pane::eventFilter(QObject *object, QEvent *event) {
-    if ((object == header || object == headerText) && event->type() == QEvent::MouseButtonDblClick) {
+    if (auto *icon = qobject_cast<QLabel *>(object); view && icon && mixedIcons.contains(icon)) {
+        auto *source = hub->sources.value(icon->property("source-key").toString());
+        if (event->type() == QEvent::MouseMove) {
+            view->showChannelTooltip(source, static_cast<QMouseEvent *>(event)->globalPosition().toPoint());
+        } else if (event->type() == QEvent::ToolTip) {
+            view->showChannelTooltip(source, static_cast<QHelpEvent *>(event)->globalPos());
+            return true;
+        } else if (event->type() == QEvent::Leave || event->type() == QEvent::Hide) {
+            view->hideEmoteTooltip();
+        }
+    }
+    if ((object == header || object == headerText || mixedTitles.contains(qobject_cast<QLabel *>(object))) &&
+        event->type() == QEvent::MouseButtonDblClick) {
         for (QWidget *p = parentWidget(); p; p = p->parentWidget()) {
             if (auto *w = qobject_cast<Workspace *>(p)) {
                 w->toggleZoom(this);
@@ -1721,7 +1953,7 @@ void Pane::resizeEvent(QResizeEvent *event) {
     QWidget::resizeEvent(event);
     if (!detached) {
         QTimer::singleShot(0, this, [this] {
-            if (headerText->width() > 50) {
+            if (sources.size() <= 1 && headerText->width() > 50) {
                 int h = qBound(24, headerText->heightForWidth(headerText->width()) + 6, 130);
                 if (header->minimumHeight() != h) {
                     header->setMinimumHeight(h);
@@ -1955,12 +2187,10 @@ void Pane::openEmotes() {
         populate();
     });
     auto insert = [this, safe](QListWidgetItem *item) {
-        if (!safe || !safe->isVisible()) {
+        if (!safe || !safe->isVisible() || input->isReadOnly()) {
             return;
         }
         input->insert(item->data(Qt::UserRole).toString() + ' ');
-        input->setFocus();
-        safe->close();
     };
     connect(grid, &QListWidget::itemClicked, dialog, insert);
     connect(grid, &QListWidget::itemActivated, dialog, insert);

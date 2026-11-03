@@ -20,6 +20,9 @@ class ChatView : public QAbstractScrollArea {
         QHash<int, QString> imageCodes;
         QHash<int, QPair<QString, QStringList>> emoteImages;
         QHash<int, QPair<QString, QStringList>> badgeImages;
+        QHash<int, QPair<QString, QStringList>> channelImages;
+        struct Mention { int start = 0, end = 0; QString name, uid; };
+        QVector<Mention> mentions;
         QSet<QString> urls;
         QHash<QString, QSize> imageSizes;
         QHash<QString, qint64> imageKeys;
@@ -57,6 +60,10 @@ class ChatView : public QAbstractScrollArea {
     int rowAt(int y) const;
     QPair<int, int> positionAt(QPoint point);
     bool showEmoteTooltip(QPoint point, QPoint global);
+    void showChannelTooltip(Source *source, QPoint global);
+    void showImageTooltip(const QString &name, const QString &kind, const QString &provider,
+                          const QImage &image, QPoint global);
+    Details::Mention mentionAt(int row, QPoint point);
     void hideEmoteTooltip();
     QSharedPointer<QTextDocument> document(int row);
     void jumpLatest();
@@ -102,7 +109,10 @@ class Composer : public QLineEdit {
     QStringList candidates;
     QHash<QString, CandidateVisual> candidateVisuals;
     QStringList completions;
-    QString completionHead, completionTail, completionValue, lastSent;
+    QString completionHead, completionTail, completionValue, historyDraft;
+    QStringList sentHistory;
+    int historyIndex = -1;
+    bool applyingHistory = false;
     int completionIndex = -1;
     QListWidget *suggestionPopup = nullptr;
     Images *images;
@@ -115,6 +125,7 @@ class Composer : public QLineEdit {
     void hideSuggestions();
     void renderSuggestions(int selected = -1);
     void applyCompletion(int index);
+    void recordSent(const QString &text);
     QIcon suggestionIcon(const QString &value, const CandidateVisual &visual);
   signals:
     void completeRequested();
@@ -139,13 +150,17 @@ class Pane : public QWidget {
     bool detached;
     QWidget *header, *replyBar, *searchBar;
     QLabel *headerText, *headerIcon, *replyLabel, *countLabel, *searchCount;
+    QWidget *mixedHeader;
+    QVector<QLabel *> mixedIcons, mixedTitles;
+    QLabel *mixedMore;
     QComboBox *target;
     Composer *input;
     QPushButton *sendButton, *emoteButton;
-    ChatView *view;
+    ChatView *view = nullptr;
     QLineEdit *searchInput;
     Message reply;
     bool sending = false;
+    quint64 sendEpoch = 0;
     QJsonObject filter;
     std::function<bool(const Message &)> extraFilter;
     QString threadId;
