@@ -132,6 +132,8 @@ void NativeTests::youtubeChannelDiscoveryAndChooser() {
     QVERIFY(dialog);
     auto *input = dialog->findChild<QLineEdit *>("add-chat-input");
     dialog->findChild<QComboBox *>("add-chat-platform")->setCurrentIndex(3);
+    auto *hint = dialog->findChild<QLabel *>("add-chat-youtube-hint");
+    QVERIFY(hint && hint->isVisible());
     input->setText("somechannel");
     QTest::keyClick(input, Qt::Key_Return);
     QVERIFY(distinctChoices);

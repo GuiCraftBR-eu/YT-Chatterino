@@ -293,5 +293,7 @@
   "More than one YouTube channel has this name. Use its @handle or channel link.": "Mais de um canal do YouTube tem esse nome. Use o @identificador ou o link do canal.",
   "Could not find that YouTube channel.": "Não foi possível encontrar esse canal do YouTube.",
   "Select a YouTube channel": "Selecione um canal do YouTube",
-  "Matching channels": "Canais encontrados"
+  "Matching channels": "Canais encontrados",
+  "Select saved channels": "Selecione os canais salvos",
+  "Additional channels to notify": "Canais adicionais para notificar"
 }

@@ -841,8 +841,9 @@ void ChatView::showImageTooltip(const QString &name, const QString &kind, const 
         layout->addWidget(emoteTooltipName);
         layout->addWidget(emoteTooltipProvider);
     }
-    emotePreview->setPixmap(QPixmap::fromImage(image).scaled(previewSize, Qt::KeepAspectRatio,
-                                                              Qt::SmoothTransformation));
+    if (image.isNull()) emotePreview->clear();
+    else emotePreview->setPixmap(QPixmap::fromImage(image).scaled(previewSize, Qt::KeepAspectRatio,
+                                                                  Qt::SmoothTransformation));
     emoteTooltipName->setText(name);
     const QString translatedKind = hub->cfg->T(kind);
     emoteTooltipProvider->setText(provider.isEmpty() ? translatedKind : provider + " · " + translatedKind);

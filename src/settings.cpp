@@ -794,6 +794,9 @@ QWidget *SettingsWindow::notificationsPage() {
     l->addLayout(soundRow);
     auto *watch = new QListWidget(w);
     watch->setObjectName("notification-watch-list");
+    watch->setStyleSheet("QListWidget#notification-watch-list{background:#111;border:1px solid #333;outline:0;}"
+                         "QListWidget#notification-watch-list::item{padding:4px;}"
+                         "QListWidget#notification-watch-list::item:selected{background:#25394a;}");
     watch->setMaximumHeight(150);
     for (const auto &v : settings["watch"].toArray()) {
         auto item = v.toObject();
@@ -804,6 +807,7 @@ QWidget *SettingsWindow::notificationsPage() {
         auto *row = new QListWidgetItem(platformName + QString(" · ") + str(item["id"]), watch);
         row->setData(Qt::UserRole, item);
     }
+    l->addWidget(text(cfg, "Additional channels to notify"));
     l->addWidget(watch);
     auto *watchInput = new QLineEdit(w);
     watchInput->setObjectName("notification-watch-input");

@@ -425,10 +425,23 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     input->setClearButtonEnabled(true);
     entry->addWidget(platform); entry->addWidget(input, 1);
     layout->addLayout(entry);
+    auto *youtubeHint = label(cfg, "For YouTube names with spaces, use quotation marks.", true);
+    youtubeHint->setObjectName("add-chat-youtube-hint");
+    youtubeHint->hide();
+    layout->addWidget(youtubeHint);
+    connect(platform, &QComboBox::currentIndexChanged, youtubeHint,
+            [youtubeHint](int index) { youtubeHint->setVisible(index == 3); });
     layout->addWidget(combo);
     auto *saved = new QListWidget(dialog);
     saved->setObjectName("add-chat-saved");
-    saved->setMaximumHeight(150);
+    saved->setStyleSheet("QListWidget#add-chat-saved{background:#111;border:1px solid #333;outline:0;}"
+                         "QListWidget#add-chat-saved::item{min-height:22px;padding:2px 4px;}"
+                         "QListWidget#add-chat-saved::item:hover{background:#222;}"
+                         "QListWidget#add-chat-saved::item:selected{background:#25394a;}"
+                         "QListWidget#add-chat-saved::indicator{width:14px;height:14px;background:#171717;"
+                         "border:1px solid #777;border-radius:2px;}"
+                         "QListWidget#add-chat-saved::indicator:checked{background:#285b7a;border-color:#4a9cdb;"
+                         "image:url(:/settings-check.svg);}");
     for (const auto &value : cfg.data["saved_channels"].toArray()) {
         const auto item = value.toObject();
         const auto platformName = str(item["platform"]);
@@ -440,7 +453,8 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
         row->setData(Qt::UserRole, item);
     }
     if (saved->count()) {
-        layout->addWidget(label(cfg, "Saved channels"));
+        saved->setFixedHeight(qMin(150, 6 + 27 * saved->count()));
+        layout->addWidget(label(cfg, "Select saved channels"));
         layout->addWidget(saved);
     } else {
         saved->hide();
@@ -577,7 +591,7 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     connect(input, &QLineEdit::returnPressed, dialog, open);
     auto *shortcut = new QShortcut(QKeySequence("Ctrl+Return"), dialog);
     connect(shortcut, &QShortcut::activated, dialog, open);
-    dialog->resize(520, saved->count() ? 300 : 165);
+    dialog->resize(520, saved->count() ? 190 + qMin(150, 6 + 27 * saved->count()) : 165);
     dialog->show();
     darkTitlebar(dialog);
     input->setFocus();
