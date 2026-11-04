@@ -7,6 +7,7 @@
 - Foram feitos testes de regressão e melhorias nos limites de requisições.
 
 **Observações:** a descoberta e as miniaturas dependem das informações disponibilizadas por cada plataforma. A Kick nem sempre fornece miniatura. A leitura do YouTube pode ser temporariamente limitada pela plataforma.
+O aplicativo precisa estar aberto para verificar os alertas de canais ao vivo.
 
 ### Como instalar ou atualizar
 
