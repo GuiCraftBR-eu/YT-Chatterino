@@ -13,6 +13,13 @@ class NativeTests : public QObject {
   private slots:
     void init();
     void cleanup();
+    void quickAddSavedAndMultipleNames();
+    void youtubeChannelDiscoveryAndChooser();
+    void kickLiveNotificationsAndCooldown();
+    void notificationWatchListSupportsKickAndTwitch();
+    void streamThumbnailHoverAndStaleImage();
+    void twitchAndYoutubeThumbnailsFromMetadata();
+    void youtubeDisplayNameSearch();
     void videoLinks_data();
     void videoLinks();
     void twitchLinks_data();

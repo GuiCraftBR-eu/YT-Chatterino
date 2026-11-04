@@ -279,5 +279,21 @@
   "Type a category, then choose a result before saving.": "Digite uma categoria e selecione um resultado antes de salvar.",
   "Search and select a category before saving.": "Pesquise e selecione uma categoria antes de salvar.",
   "Enter a title or choose a category.": "Digite um título ou escolha uma categoria.",
-  "Kick does not show the current title while offline. Leave this blank to keep it.": "A Kick não mostra o título atual enquanto o canal está offline. Deixe em branco para mantê-lo."
+  "Kick does not show the current title while offline. Leave this blank to keep it.": "A Kick não mostra o título atual enquanto o canal está offline. Deixe em branco para mantê-lo.",
+  "Link or name · separate chats with space": "Link ou nome · separe os chats com espaço",
+  "Enter a valid channel name or live link.": "Digite um nome de canal ou link de transmissão válido.",
+  "Choose at most 32 chats at a time.": "Selecione no máximo 32 chats por vez.",
+  "Enter a YouTube channel handle or channel URL.": "Digite o identificador ou o link de um canal do YouTube.",
+  "Notify all open Kick channels by default": "Notificar quando canais abertos da Kick entrarem ao vivo",
+  "Default sound: ChatternoPing.wav · Live alerts: Twitch and Kick": "Som padrão: ChatternoPing.wav · Alertas de lives: Twitch e Kick",
+  "Channel name or link": "Nome ou link do canal",
+  "Twitch and Kick checks run once a minute while the app is open. Alerts trigger on offline → live, with no sound on initial detection.": "Twitch e Kick são verificadas a cada minuto enquanto o app está aberto. O alerta toca quando um canal entra ao vivo, sem tocar na detecção inicial.",
+  "Stream preview": "Prévia da transmissão",
+  "For YouTube names with spaces, use quotation marks.": "Para nomes de canais do YouTube com espaços, use aspas.",
+  "More than one YouTube channel has this name. Use its @handle or channel link.": "Mais de um canal do YouTube tem esse nome. Use o @identificador ou o link do canal.",
+  "Could not find that YouTube channel.": "Não foi possível encontrar esse canal do YouTube.",
+  "Select a YouTube channel": "Selecione um canal do YouTube",
+  "Matching channels": "Canais encontrados",
+  "Select saved channels": "Selecione os canais salvos",
+  "Additional channels to notify": "Canais adicionais para notificar"
 }

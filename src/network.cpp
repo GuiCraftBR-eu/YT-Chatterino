@@ -136,7 +136,7 @@ bool Images::allowed(const QUrl &u) {
     const auto h = u.host().toLower();
     for (const auto &suffix :
          QStringList{"7tv.app", "7tv.io", "betterttv.net", "jtvnw.net", "giphy.com", "googleusercontent.com",
-                     "ggpht.com", "gstatic.com", "youtube.com", "files.kick.com", "ext.cdn.kick.com"}) {
+                     "ggpht.com", "gstatic.com", "youtube.com", "ytimg.com", "files.kick.com", "ext.cdn.kick.com", "stream.kick.com", "images.kick.com"}) {
         if (h == suffix || h.endsWith('.' + suffix)) {
             return true;
         }

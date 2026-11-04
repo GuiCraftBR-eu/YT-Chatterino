@@ -390,6 +390,19 @@ void MainWindow::refreshLanguage() {
     }
 }
 
+static QStringList liveStreamChoices(const QJsonArray &streams) {
+    QStringList names;
+    for (const auto &stream : streams) {
+        const auto item = stream.toObject();
+        const auto title = str(item["title"]);
+        names << (title.isEmpty() ? str(item["id"]) : title);
+    }
+    QStringList choices = names;
+    for (int i = 0; i < names.size(); ++i)
+        if (names.count(names[i]) > 1) choices[i] += " · " + str(streams[i].toObject()["id"]);
+    return choices;
+}
+
 void MainWindow::addChats(QString mode, Pane *anchor) {
     auto *dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -407,40 +420,178 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     platform->addItems({cfg.T("Auto"), "Twitch", "Kick", "YouTube"});
     auto *input = new QLineEdit(dialog);
     input->setObjectName("add-chat-input");
-    input->setPlaceholderText(cfg.T("Link or @name · separate multiple chats with commas"));
+    input->setPlaceholderText(cfg.T("Link or name · separate chats with space"));
+    input->setToolTip(cfg.T("For YouTube names with spaces, use quotation marks."));
     input->setClearButtonEnabled(true);
     entry->addWidget(platform); entry->addWidget(input, 1);
     layout->addLayout(entry);
+    auto *youtubeHint = label(cfg, "For YouTube names with spaces, use quotation marks.", true);
+    youtubeHint->setObjectName("add-chat-youtube-hint");
+    youtubeHint->hide();
+    layout->addWidget(youtubeHint);
+    connect(platform, &QComboBox::currentIndexChanged, youtubeHint,
+            [youtubeHint](int index) { youtubeHint->setVisible(index == 3); });
     layout->addWidget(combo);
+    auto *saved = new QListWidget(dialog);
+    saved->setObjectName("add-chat-saved");
+    saved->setStyleSheet("QListWidget#add-chat-saved{background:#111;border:1px solid #333;outline:0;}"
+                         "QListWidget#add-chat-saved::item{min-height:22px;padding:2px 4px;}"
+                         "QListWidget#add-chat-saved::item:hover{background:#222;}"
+                         "QListWidget#add-chat-saved::item:selected{background:#25394a;}"
+                         "QListWidget#add-chat-saved::indicator{width:14px;height:14px;background:#171717;"
+                         "border:1px solid #777;border-radius:2px;}"
+                         "QListWidget#add-chat-saved::indicator:checked{background:#285b7a;border-color:#4a9cdb;"
+                         "image:url(:/settings-check.svg);}");
+    for (const auto &value : cfg.data["saved_channels"].toArray()) {
+        const auto item = value.toObject();
+        const auto platformName = str(item["platform"]);
+        if (platformName != "twitch" && platformName != "kick" && platformName != "youtube") continue;
+        auto *row = new QListWidgetItem((platformName == "twitch" ? "Twitch" : platformName == "kick" ? "Kick" : "YouTube") +
+                                        QString(" · ") + str(item["title"]), saved);
+        row->setFlags(row->flags() | Qt::ItemIsUserCheckable);
+        row->setCheckState(Qt::Unchecked);
+        row->setData(Qt::UserRole, item);
+    }
+    if (saved->count()) {
+        saved->setFixedHeight(qMin(150, 6 + 27 * saved->count()));
+        layout->addWidget(label(cfg, "Select saved channels"));
+        layout->addWidget(saved);
+    } else {
+        saved->hide();
+    }
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Open | QDialogButtonBox::Cancel, dialog);
     buttons->button(QDialogButtonBox::Open)->setText(cfg.T("Open"));
     buttons->button(QDialogButtonBox::Cancel)->setText(cfg.T("Cancel"));
     layout->addWidget(buttons);
     QPointer<Pane> safe(anchor);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-    auto open = [this, input, combo, modes, dialog, safe, platform] {
-        auto links = input->text().split(QRegularExpression("[\\s,]+"), Qt::SkipEmptyParts);
-        if (links.isEmpty()) { input->setFocus(); return; }
-        for (auto &link : links) {
-            if (platform->currentIndex() == 2 && kickLogin(link).isEmpty()) link = "kick:" + link;
-            else if ((platform->currentIndex() == 1 || platform->currentIndex() == 0) &&
-                     twitchLogin(link).isEmpty() && kickLogin(link).isEmpty() &&
-                     QRegularExpression("^[A-Za-z0-9_]{1,25}$").match(link).hasMatch()) link = "@" + link;
+    auto open = [this, input, combo, modes, dialog, safe, platform, saved, buttons] {
+        if (!buttons->button(QDialogButtonBox::Open)->isEnabled()) return;
+        QList<QJsonObject> selections;
+        QStringList entries;
+        auto tokens = QRegularExpression(R"token("([^"]+)"|([^\s,]+))token").globalMatch(input->text());
+        while (tokens.hasNext()) {
+            const auto token = tokens.next();
+            entries << (token.captured(1).isEmpty() ? token.captured(2) : token.captured(1));
         }
-        bool valid = false;
-        for (const auto &link : links) if (!kickLogin(link).isEmpty() || !twitchLogin(link).isEmpty() || !videoId(link).isEmpty()) { valid = true; break; }
-        if (!valid) {
-            QMessageBox::warning(dialog, cfg.T("Add chats"), cfg.T("Enter a YouTube live link, Twitch @channel or Kick link."));
-            input->setFocus(); return;
+        for (const auto &entry : entries) {
+            QString kind, id;
+            const auto choice = platform->currentIndex();
+            if (choice == 3) {
+                const auto video = videoId(entry);
+                if (!video.isEmpty() && entry != video) { kind = "video"; id = video; }
+                else { kind = "youtube"; id = entry; }
+            } else if (choice == 2) {
+                kind = "kick";
+                id = kickLogin(entry);
+                if (id.isEmpty()) id = kickLogin("kick:" + entry);
+            } else if (choice == 1) {
+                kind = "twitch";
+                id = twitchLogin(entry);
+                if (id.isEmpty()) id = twitchLogin("@" + stripAt(entry));
+            } else if (!(id = kickLogin(entry)).isEmpty()) {
+                kind = "kick";
+            } else if (!(id = twitchLogin(entry)).isEmpty()) {
+                kind = "twitch";
+            } else if (!(id = videoId(entry)).isEmpty() && id != entry) {
+                kind = "video";
+            } else {
+                kind = "twitch";
+                id = twitchLogin("@" + stripAt(entry));
+            }
+            if (id.isEmpty()) {
+                QMessageBox::warning(dialog, cfg.T("Add chats"), cfg.T("Enter a valid channel name or live link."));
+                input->setFocus(); return;
+            }
+            selections << QJsonObject{{"platform", kind}, {"channel_id", id}};
         }
-        openChats(links, modes[combo->currentIndex()], safe);
-        dialog->accept();
+        for (int i = 0; i < saved->count(); ++i)
+            if (saved->item(i)->checkState() == Qt::Checked)
+                selections << saved->item(i)->data(Qt::UserRole).toJsonObject();
+        if (selections.isEmpty()) { input->setFocus(); return; }
+        if (selections.size() > 32) {
+            QMessageBox::warning(dialog, cfg.T("Add chats"), cfg.T("Choose at most 32 chats at a time."));
+            return;
+        }
+        buttons->button(QDialogButtonBox::Open)->setEnabled(false);
+        struct SelectionState { QList<QJsonObject> pending; QStringList links; };
+        auto state = QSharedPointer<SelectionState>::create();
+        state->pending = selections;
+        QPointer<QDialog> safeDialog(dialog);
+        const QString selectedMode = modes[combo->currentIndex()];
+        auto step = QSharedPointer<std::function<void()>>::create();
+        QWeakPointer<std::function<void()>> weakStep(step);
+        *step = [this, safeDialog, safe, selectedMode, state, weakStep, buttons] {
+            if (!safeDialog) return;
+            while (!state->pending.isEmpty()) {
+                const auto item = state->pending.takeFirst();
+                const auto kind = str(item["platform"]), id = str(item["channel_id"]);
+                if (kind == "twitch") state->links << "twitch:" + id;
+                else if (kind == "kick") state->links << "kick:" + id;
+                else if (kind == "video") state->links << "https://www.youtube.com/watch?v=" + id;
+                else if (kind == "youtube") {
+                    auto next = weakStep.toStrongRef();
+                    hub.savedStreams(item, [this, safeDialog, state, next, buttons, id](QJsonObject result, QString error) {
+                        if (!safeDialog) return;
+                        if (error.contains("HTTP 404") && id == videoId(id)) {
+                            state->links << "https://www.youtube.com/watch?v=" + id;
+                            if (next) (*next)();
+                            return;
+                        }
+                        const auto channels = result["channels"].toArray();
+                        if (error.isEmpty() && !channels.isEmpty()) {
+                            QStringList choices;
+                            for (const auto &channel : channels) {
+                                const auto row = channel.toObject();
+                                QStringList parts{str(row["title"])};
+                                if (!str(row["handle"]).isEmpty()) parts << str(row["handle"]);
+                                else parts << str(row["id"]);
+                                if (!str(row["details"]).isEmpty()) parts << str(row["details"]);
+                                choices << parts.join(" · ");
+                            }
+                            bool ok = false;
+                            const auto selected = QInputDialog::getItem(safeDialog, cfg.T("Select a YouTube channel"),
+                                cfg.T("Matching channels"), choices, 0, false, &ok);
+                            if (!ok) { buttons->button(QDialogButtonBox::Open)->setEnabled(true); return; }
+                            state->pending.prepend(QJsonObject{{"platform", "youtube"},
+                                {"channel_id", channels[choices.indexOf(selected)].toObject()["id"]}});
+                            if (next) (*next)();
+                            return;
+                        }
+                        const auto streams = result["streams"].toArray();
+                        if (!error.isEmpty() || streams.isEmpty()) {
+                            buttons->button(QDialogButtonBox::Open)->setEnabled(true);
+                            if (!error.isEmpty()) QMessageBox::warning(safeDialog, cfg.T("Add chats"), cfg.T(error));
+                            else QMessageBox::information(safeDialog, cfg.T("Add chats"),
+                                cfg.T("This channel has no current live broadcasts."));
+                            return;
+                        }
+                        int index = 0;
+                        if (streams.size() > 1) {
+                            const auto titles = liveStreamChoices(streams);
+                            bool ok = false;
+                            const auto selected = QInputDialog::getItem(safeDialog, cfg.T("Select a live broadcast"),
+                                cfg.T("Current broadcasts"), titles, 0, false, &ok);
+                            if (!ok) { buttons->button(QDialogButtonBox::Open)->setEnabled(true); return; }
+                            index = titles.indexOf(selected);
+                        }
+                        state->links << "https://www.youtube.com/watch?v=" + str(streams[index].toObject()["id"]);
+                        if (next) (*next)();
+                    });
+                    return;
+                }
+            }
+            state->links.removeDuplicates();
+            openChats(state->links, selectedMode, safe);
+            safeDialog->accept();
+        };
+        (*step)();
     };
     connect(buttons, &QDialogButtonBox::accepted, dialog, open);
     connect(input, &QLineEdit::returnPressed, dialog, open);
     auto *shortcut = new QShortcut(QKeySequence("Ctrl+Return"), dialog);
     connect(shortcut, &QShortcut::activated, dialog, open);
-    dialog->resize(520, 165);
+    dialog->resize(520, saved->count() ? 190 + qMin(150, 6 + 27 * saved->count()) : 165);
     dialog->show();
     darkTitlebar(dialog);
     input->setFocus();
@@ -954,10 +1105,7 @@ void MainWindow::openSaved(QJsonObject item) {
         }
         int index = 0;
         if (streams.size() > 1) {
-            QStringList titles;
-            for (const auto &s : streams) {
-                titles << str(s.toObject()["title"]);
-            }
+            const auto titles = liveStreamChoices(streams);
             bool ok;
             QString selected =
                 QInputDialog::getItem(safe, safe->cfg.T("Select a live broadcast"),

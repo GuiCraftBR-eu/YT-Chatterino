@@ -74,6 +74,7 @@ static QJsonObject metadata(const QString &html, const QString &id, QString *err
     return {{"channel", d["author"]},
             {"channel_id", d["channelId"]},
             {"avatar", avatar},
+            {"thumbnail", imageUrls(d["thumbnail"]).value(0, "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg")},
             {"title", d["title"]},
             {"live", live},
             {"started_at", at(p, {"microformat", "playerMicroformatRenderer", "liveBroadcastDetails", "startTimestamp"})},
@@ -212,6 +213,8 @@ void Source::reconnect() {
         kickSocketRetry.stop(); kickSocketWatchdog.stop(); kickSocketRenew.stop();
         kickSocketStarting = false; kickSocketActive = false; kickSocket.abort();
         kickConnecting = false;
+        kickThumbnailPending = false;
+        kickThumbnailRetryAt = 0;
         kickRetryMs = 5000;
         kickConnect();
     } else {
@@ -491,6 +494,9 @@ void Source::refreshHeader() {
                                                live ? items[0].toObject()["viewer_count"] : QJsonValue(0);
                                            self->header["started_at"] =
                                                live ? items[0].toObject()["started_at"] : QJsonValue();
+                                           QString thumbnail = live ? str(items[0].toObject()["thumbnail_url"]) : QString();
+                                           thumbnail.replace("{width}", "320").replace("{height}", "180");
+                                           self->header["thumbnail"] = thumbnail;
                                            if (live) {
                                                self->header["title"] = items[0].toObject()["title"];
                                                self->header["category"] = items[0].toObject()["game_name"];
@@ -1472,6 +1478,7 @@ Source *Hub::source(QString platform, QString id) {
     auto *s = new Source(this, platform, id);
     sources[key] = s;
     connect(s, &Source::changed, this, [this, s] { emit sourceChanged(s); });
+    connect(s, &Source::headerChanged, this, [this, s] { emit sourceChanged(s); });
     if (!testMode) {
         QTimer::singleShot(0, s, &Source::start);
     }
@@ -2164,17 +2171,86 @@ void Hub::profile(Source *s, Message m, JsonCallback done) {
                       "GET", {{"part", "snippet,statistics"}, {"id", m.uid}});
 }
 
-void Hub::savedStreams(QJsonObject saved, JsonCallback done) {
-    QString cid = str(saved["channel_id"]);
-    if (!cid.startsWith("UC")) {
-        done({}, "This saved YouTube channel has no channel ID. Save it again from an open chat.");
+void Hub::youtubeChannelByName(QString name, JsonCallback done) {
+    name = name.trimmed();
+    if (name.isEmpty() || name.size() > 100 || name.contains('/') || name.contains('\n')) {
+        done({}, "Enter a YouTube channel handle or channel URL.");
         return;
     }
+    const auto url = Network::query("https://www.youtube.com/results", {{"search_query", name}, {"sp", "EgIQAg=="}});
+    QPointer<Hub> self(this);
+    net->bytes(url, [self, name, done](QByteArray bytes, QString error) {
+        if (!self) return;
+        if (!error.isEmpty()) { done({}, error); return; }
+        const auto initial = embeddedJson(QString::fromUtf8(bytes), "ytInitialData");
+        QSet<QString> seen;
+        QJsonArray matches;
+        static const QRegularExpression channelId("^UC[A-Za-z0-9_-]{22}$");
+        walk(initial, [&](const QJsonObject &node) {
+            const auto channel = node["channelRenderer"].toObject();
+            const auto id = str(channel["channelId"]);
+            if (!seen.contains(id) && channelId.match(id).hasMatch() &&
+                textOf(channel["title"]).compare(name, Qt::CaseInsensitive) == 0) {
+                seen.insert(id);
+                QString handle = str(at(channel, {"navigationEndpoint", "browseEndpoint", "canonicalBaseUrl"}));
+                if (handle.startsWith("/@")) handle.remove(0, 1);
+                else handle.clear();
+                matches.append(QJsonObject{{"id", id}, {"title", textOf(channel["title"])},
+                                           {"handle", handle}, {"details", textOf(channel["videoCountText"])}});
+            }
+        });
+        if (matches.size() > 1) {
+            done({{"channels", matches}}, {});
+        } else if (matches.isEmpty()) {
+            done({}, videoId(name) == name ? "HTTP 404: Could not find that YouTube channel." :
+                                            "Could not find that YouTube channel.");
+        } else {
+            self->savedStreams({{"channel_id", str(matches[0].toObject()["id"])}}, done);
+        }
+    }, "GET", {}, {}, 16 * 1024 * 1024);
+}
+
+void Hub::savedStreams(QJsonObject saved, JsonCallback done) {
+    QString value = str(saved["channel_id"]).trimmed();
+    QString path;
+    static const QRegularExpression channelId("^UC[A-Za-z0-9_-]{22}$");
+    static const QRegularExpression handle("^[\\p{L}\\p{N}_.-]{1,100}$", QRegularExpression::UseUnicodePropertiesOption);
+    const bool plainName = !value.contains('/') && !value.startsWith('@') && !channelId.match(value).hasMatch();
+    if (plainName && value.contains(' ')) { youtubeChannelByName(value, done); return; }
+    const QString searchName = value;
+    if (channelId.match(value).hasMatch()) {
+        path = "/channel/" + value;
+    } else if (!value.contains('/')) {
+        if (value.startsWith('@')) value.remove(0, 1);
+        if (handle.match(value).hasMatch()) path = "/@" + value;
+    } else {
+        QUrl url(value.contains("://") ? value : "https://" + value);
+        const auto host = url.host().toLower();
+        const auto parts = url.path().split('/', Qt::SkipEmptyParts);
+        if (url.scheme() == "https" && url.userInfo().isEmpty() && (url.port(-1) == -1 || url.port() == 443) &&
+            (host == "youtube.com" || host == "www.youtube.com" || host == "m.youtube.com")) {
+            if (parts.size() >= 1 && parts[0].startsWith('@') && handle.match(parts[0].mid(1)).hasMatch())
+                path = "/" + parts[0];
+            else if (parts.size() >= 2 && parts[0] == "channel" && channelId.match(parts[1]).hasMatch())
+                path = "/channel/" + parts[1];
+            else if (parts.size() >= 2 && (parts[0] == "c" || parts[0] == "user") && handle.match(parts[1]).hasMatch())
+                path = "/" + parts[0] + "/" + parts[1];
+        }
+    }
+    if (path.isEmpty()) {
+        done({}, "Enter a YouTube channel handle or channel URL.");
+        return;
+    }
+    QUrl base("https://www.youtube.com");
+    base.setPath(path);
+    QUrl streamsUrl(base); streamsUrl.setPath(path + "/streams");
+    QUrl liveUrl(base); liveUrl.setPath(path + "/live");
     net->bytes(
-        QUrl("https://www.youtube.com/channel/" + cid + "/streams"),
+        streamsUrl,
         [=, this](QByteArray bytes, QString error) {
             if (!error.isEmpty()) {
-                done({}, error);
+                if (plainName && error.contains("HTTP 404")) youtubeChannelByName(searchName, done);
+                else done({}, error);
                 return;
             }
             auto initial = embeddedJson(QString::fromUtf8(bytes), "ytInitialData");
@@ -2191,11 +2267,13 @@ void Hub::savedStreams(QJsonObject saved, JsonCallback done) {
                     bool live = false;
                     walk(item, [&](const auto &child) {
                         live |= str(child["style"]) == "LIVE" || str(child["text"]) == "LIVE" ||
-                                str(child["label"]) == "LIVE";
+                                str(child["label"]) == "LIVE" ||
+                                str(child["badgeStyle"]) == "THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE";
                     });
                     if (live && videoId(id) == id && !seen.contains(id)) {
                         seen.insert(id);
                         QString title = textOf(item["title"]);
+                        if (title.isEmpty()) title = textOf(at(item, {"metadata", "lockupMetadataViewModel", "title"}));
                         streams.append(QJsonObject{{"id", id}, {"title", title.isEmpty() ? id : title}});
                     }
                 }
@@ -2205,7 +2283,7 @@ void Hub::savedStreams(QJsonObject saved, JsonCallback done) {
                 return;
             }
             net->bytes(
-                QUrl("https://www.youtube.com/channel/" + cid + "/live"),
+                liveUrl,
                 [done](QByteArray raw, QString e) {
                     auto d = embeddedJson(QString::fromUtf8(raw), "ytInitialPlayerResponse")["videoDetails"]
                                  .toObject();
@@ -2267,29 +2345,35 @@ void Hub::messageAlert(Source *s, const Message &m) {
 }
 
 void Hub::liveChange(Source *s, bool live) {
-    if (s->platform != "twitch") {
+    if (s->platform != "twitch" && s->platform != "kick") {
         return;
     }
-    liveChange(s->id, s->name(), live, true);
+    liveChange(s->platform, s->id, s->name(), live, true);
 }
 
 void Hub::liveChange(QString login, QString name, bool live, bool opened) {
+    liveChange("twitch", login, name, live, opened);
+}
+
+void Hub::liveChange(QString platform, QString login, QString name, bool live, bool opened) {
     login = login.toLower();
-    bool first = !liveState.contains(login), old = liveState.value(login);
-    liveState[login] = live;
+    const QString key = platform + ':' + login;
+    bool first = !liveState.contains(key), old = liveState.value(key);
+    liveState[key] = live;
     if (first || !live || old) {
         return;
     }
     auto a = cfg->feature("alerts");
-    bool watch = opened && a["all_twitch"].toBool(true);
+    bool watch = opened && a[platform == "kick" ? "all_kick" : "all_twitch"].toBool(true);
     for (const auto &v : a["excluded"].toArray()) {
-        if (v.toString().compare(login, Qt::CaseInsensitive) == 0) {
+        if ((platform == "twitch" && v.toString().compare(login, Qt::CaseInsensitive) == 0) ||
+            v.toString().compare(key, Qt::CaseInsensitive) == 0) {
             watch = false;
         }
     }
     for (const auto &v : a["watch"].toArray()) {
         auto item = v.toObject();
-        if (item["platform"].toString("twitch") == "twitch" &&
+        if (item["platform"].toString("twitch") == platform &&
             str(item["id"]).compare(login, Qt::CaseInsensitive) == 0) {
             watch = true;
         }
@@ -2301,6 +2385,7 @@ void Hub::liveChange(QString login, QString name, bool live, bool opened) {
 }
 
 void Hub::pollLive() {
+    pollKickLive();
     if (liveRequest || str(accounts->twitch["access_token"]).isEmpty()) {
         return;
     }
@@ -2349,7 +2434,11 @@ void Hub::pollLive() {
                             source->header["title"] = stream["title"];
                             source->header["category"] = stream["game_name"];
                         }
-                        emit source->changed();
+                        source->header["started_at"] = stream["started_at"];
+                        QString thumbnail = str(stream["thumbnail_url"]);
+                        thumbnail.replace("{width}", "320").replace("{height}", "180");
+                        source->header["thumbnail"] = thumbnail;
+                        emit source->headerChanged();
                     }
                     liveChange(login, source ? source->name() : login, live, source != nullptr);
                 }
@@ -2357,6 +2446,72 @@ void Hub::pollLive() {
             if (--*remaining == 0) {
                 liveRequest = false;
             }
+        });
+    }
+}
+
+void Hub::pollKickLive() {
+    const auto alerts = cfg->feature("alerts");
+    if (!alerts["enabled"].toBool(true) || QDateTime::currentMSecsSinceEpoch() < kickLiveRetryAt) return;
+    QSet<QString> logins;
+    if (alerts["all_kick"].toBool(true)) {
+        for (auto *source : sources)
+            if (source->platform == "kick" && !source->closed && !source->kickConnecting) logins.insert(source->id);
+    }
+    for (const auto &value : alerts["watch"].toArray()) {
+        const auto item = value.toObject();
+        if (str(item["platform"]) != "kick") continue;
+        const auto login = kickLogin("kick:" + str(item["id"]));
+        if (!login.isEmpty()) logins.insert(login);
+    }
+    for (const auto &login : logins)
+        if (!kickLivePending.contains(login) && !kickLiveQueue.contains(login)) kickLiveQueue << login;
+    pumpKickLive();
+}
+
+void Hub::pumpKickLive() {
+    if (QDateTime::currentMSecsSinceEpoch() < kickLiveRetryAt) return;
+    while (kickLiveActive < 3 && !kickLiveQueue.isEmpty()) {
+        const auto login = kickLiveQueue.takeFirst();
+        kickLivePending.insert(login);
+        ++kickLiveActive;
+        QPointer<Hub> safe(this);
+        net->json(QUrl("https://kick.com/api/v2/channels/" + login), [safe, login](QJsonObject data, QString error) {
+            if (!safe) return;
+            safe->kickLivePending.remove(login);
+            --safe->kickLiveActive;
+            if (error.contains("429")) {
+                safe->kickLiveRetryAt = QDateTime::currentMSecsSinceEpoch() + 120000;
+                safe->kickLiveQueue.clear();
+            } else if (error.isEmpty() && !str(data["id"]).isEmpty()) {
+                const auto stream = data["livestream"].toObject();
+                auto *source = safe->sources.value("kick:" + login);
+                if (source && !source->closed) {
+                    source->header["live"] = !stream.isEmpty();
+                    source->header["viewers"] = stream["viewer_count"];
+                    QString started = str(stream["start_time"]);
+                    if (started.isEmpty()) started = str(stream["created_at"]);
+                    if (started.size() == 19 && started[10] == ' ') { started[10] = 'T'; started += 'Z'; }
+                    if (stream.isEmpty() || (!str(source->header["started_at"]).isEmpty() &&
+                                             !started.isEmpty() && str(source->header["started_at"]) != started)) {
+                        source->header["thumbnail"] = QString();
+                        source->kickThumbnailRetryAt = 0;
+                    }
+                    if (!stream.isEmpty() && str(source->header["thumbnail"]).isEmpty()) {
+                        source->header["thumbnail"] = str(at(stream, {"thumbnail", "url"}));
+                    }
+                    if (!stream.isEmpty()) {
+                        source->header["title"] = stream["session_title"];
+                        source->header["started_at"] = started;
+                        const auto categories = stream["categories"].toArray();
+                        if (!categories.isEmpty()) source->header["category"] = categories[0].toObject()["name"];
+                    }
+                    emit source->headerChanged();
+                }
+                const QString name = source ? source->name() : str(at(data, {"user", "username"}));
+                safe->liveChange("kick", login, name.isEmpty() ? login : name, !stream.isEmpty(), source != nullptr);
+            }
+            safe->pumpKickLive();
         });
     }
 }

@@ -760,13 +760,17 @@ QWidget *SettingsWindow::notificationsPage() {
     mentions->setChecked(settings["mention_sound"].toBool(true));
     auto *automatic = new QCheckBox(cfg.T("Notify all open Twitch channels by default"), w);
     automatic->setChecked(settings["all_twitch"].toBool(true));
+    auto *automaticKick = new QCheckBox(cfg.T("Notify all open Kick channels by default"), w);
+    automaticKick->setObjectName("notify-open-kick");
+    automaticKick->setChecked(settings["all_kick"].toBool(true));
     l->addWidget(enabled);
     l->addWidget(mentions);
     l->addWidget(automatic);
+    l->addWidget(automaticKick);
     l->addWidget(text(cfg, "Additional nicknames · separate with commas"));
     auto *names = new QLineEdit(stringList(cfg.features()["nicknames"]).join(", "), w);
     l->addWidget(names);
-    l->addWidget(text(cfg, "Default sound: ChatternoPing.wav · Live alerts: Twitch only", true));
+    l->addWidget(text(cfg, "Default sound: ChatternoPing.wav · Live alerts: Twitch and Kick", true));
     auto *soundRow = new QHBoxLayout;
     for (const auto &pair : QList<QPair<QString, QString>>{{"sound_file", "Mention sound…"},
                                                            {"live_sound_file", "Live sound…"}}) {
@@ -789,41 +793,64 @@ QWidget *SettingsWindow::notificationsPage() {
     }));
     l->addLayout(soundRow);
     auto *watch = new QListWidget(w);
+    watch->setObjectName("notification-watch-list");
+    watch->setStyleSheet("QListWidget#notification-watch-list{background:#111;border:1px solid #333;outline:0;}"
+                         "QListWidget#notification-watch-list::item{padding:4px;}"
+                         "QListWidget#notification-watch-list::item:selected{background:#25394a;}");
     watch->setMaximumHeight(150);
     for (const auto &v : settings["watch"].toArray()) {
         auto item = v.toObject();
         if (str(item["platform"]) == "youtube") {
             continue;
         }
-        auto *row = new QListWidgetItem(str(item["name"]) + " (@" + str(item["id"]) + ')', watch);
+        const auto platformName = item["platform"].toString("twitch") == "kick" ? "Kick" : "Twitch";
+        auto *row = new QListWidgetItem(platformName + QString(" · ") + str(item["id"]), watch);
         row->setData(Qt::UserRole, item);
     }
+    l->addWidget(text(cfg, "Additional channels to notify"));
     l->addWidget(watch);
     auto *watchInput = new QLineEdit(w);
-    watchInput->setPlaceholderText(cfg.T("Additional Twitch @channel"));
+    watchInput->setObjectName("notification-watch-input");
+    watchInput->setPlaceholderText(cfg.T("Channel name or link"));
     auto *watchRow = new QHBoxLayout;
+    auto *watchPlatform = new QComboBox(w);
+    watchPlatform->setObjectName("notification-watch-platform");
+    watchPlatform->addItems({"Twitch", "Kick"});
+    watchRow->addWidget(watchPlatform);
     watchRow->addWidget(watchInput, 1);
-    watchRow->addWidget(action(cfg, "Add", w, [this, watch, watchInput] {
-        QString login =
-            twitchLogin(watchInput->text().startsWith('@') ? watchInput->text() : '@' + watchInput->text());
+    auto *addWatch = action(cfg, "Add", w, [watch, watchInput, watchPlatform] {
+        const bool kick = watchPlatform->currentIndex() == 1;
+        const QString value = watchInput->text().trimmed();
+        QString login = kick ? kickLogin(value) : twitchLogin(value);
+        if (login.isEmpty()) login = kick ? kickLogin("kick:" + value) : twitchLogin("@" + stripAt(value));
         if (login.isEmpty()) {
             return;
         }
-        auto *row = new QListWidgetItem('@' + login, watch);
-        row->setData(Qt::UserRole, QJsonObject{{"platform", "twitch"}, {"id", login}, {"name", login}});
+        const QString platformName = kick ? "kick" : "twitch";
+        for (int i = 0; i < watch->count(); ++i) {
+            const auto item = watch->item(i)->data(Qt::UserRole).toJsonObject();
+            if (item["platform"].toString("twitch") == platformName && str(item["id"]).compare(login, Qt::CaseInsensitive) == 0) {
+                watch->setCurrentRow(i); watchInput->clear(); return;
+            }
+        }
+        auto *row = new QListWidgetItem((kick ? "Kick" : "Twitch") + QString(" · ") + login, watch);
+        row->setData(Qt::UserRole, QJsonObject{{"platform", platformName}, {"id", login}, {"name", login}});
         watchInput->clear();
-    }));
+    });
+    addWatch->setObjectName("notification-watch-add");
+    watchRow->addWidget(addWatch);
     watchRow->addWidget(action(cfg, "Remove", w, [watch] { delete watch->takeItem(watch->currentRow()); }));
     l->addLayout(watchRow);
     l->addWidget(text(cfg,
-                      "Twitch checks run once a minute while the app is open. Alerts trigger on offline → "
+                      "Twitch and Kick checks run once a minute while the app is open. Alerts trigger on offline → "
                       "live, with no sound on initial detection.",
                       true));
-    l->addWidget(action(cfg, "Apply notifications", w, [this, enabled, mentions, automatic, names, watch] {
+    auto *applyNotifications = action(cfg, "Apply notifications", w, [this, enabled, mentions, automatic, automaticKick, names, watch] {
         auto a = main->cfg.feature("alerts");
         a["enabled"] = enabled->isChecked();
         a["mention_sound"] = mentions->isChecked();
         a["all_twitch"] = automatic->isChecked();
+        a["all_kick"] = automaticKick->isChecked();
         QJsonArray list;
         for (int i = 0; i < watch->count(); ++i) {
             list.append(watch->item(i)->data(Qt::UserRole).toJsonObject());
@@ -835,7 +862,9 @@ QWidget *SettingsWindow::notificationsPage() {
         main->cfg.data["features"] = f;
         main->cfg.save();
         emit main->cfg.appearanceChanged();
-    }));
+    });
+    applyNotifications->setObjectName("notification-apply");
+    l->addWidget(applyNotifications);
     l->addStretch();
     return w;
 }
