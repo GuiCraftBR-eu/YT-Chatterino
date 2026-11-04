@@ -44,6 +44,9 @@ class ChatView : public QAbstractScrollArea {
     QFrame *emoteTooltip = nullptr;
     QLabel *emotePreview = nullptr, *emoteTooltipName = nullptr, *emoteTooltipProvider = nullptr;
     QStringList tooltipUrls;
+    QSize tooltipImageSize{112, 112};
+    QPointer<Source> streamPreviewSource;
+    QPoint streamPreviewGlobal;
     qint64 tooltipMessage = 0;
     int tooltipPosition = -1;
     QPair<int, int> selectionStart{-1, 0}, selectionEnd{-1, 0};
@@ -62,8 +65,9 @@ class ChatView : public QAbstractScrollArea {
     QPair<int, int> positionAt(QPoint point);
     bool showEmoteTooltip(QPoint point, QPoint global);
     void showChannelTooltip(Source *source, QPoint global);
+    bool showStreamTooltip(Source *source, QPoint global);
     void showImageTooltip(const QString &name, const QString &kind, const QString &provider,
-                          const QImage &image, QPoint global);
+                          const QImage &image, QPoint global, QSize previewSize = QSize(112, 112));
     Details::Mention mentionAt(int row, QPoint point);
     void hideEmoteTooltip();
     QSharedPointer<QTextDocument> document(int row);

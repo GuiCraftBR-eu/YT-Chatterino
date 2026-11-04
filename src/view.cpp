@@ -33,7 +33,8 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
         if (emoteTooltip && emoteTooltip->isVisible() && tooltipUrls.value(0) == url) {
             const auto image = hub->images->get(tooltipUrls, false);
             if (!image.isNull()) emotePreview->setPixmap(QPixmap::fromImage(image).scaled(
-                112, 112, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                tooltipImageSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            emoteTooltip->adjustSize();
         }
         bool changed = false;
         for (auto i = details.begin(); i != details.end();) {
@@ -56,7 +57,7 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
         if (emoteTooltip && emoteTooltip->isVisible() && tooltipUrls.value(0) == url) {
             const auto preview = hub->images->get(tooltipUrls, true);
             if (!preview.isNull()) {
-                emotePreview->setPixmap(QPixmap::fromImage(preview).scaled(112, 112, Qt::KeepAspectRatio,
+                emotePreview->setPixmap(QPixmap::fromImage(preview).scaled(tooltipImageSize, Qt::KeepAspectRatio,
                                                                            Qt::SmoothTransformation));
             }
         }
@@ -696,6 +697,7 @@ void ChatView::hideEmoteTooltip() {
         emoteTooltip->hide();
     }
     tooltipUrls.clear();
+    streamPreviewSource.clear();
     tooltipMessage = 0;
     tooltipPosition = -1;
 }
@@ -750,6 +752,7 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
         return true;
     }
     auto item = info.value(position);
+    streamPreviewSource.clear();
     tooltipUrls = item.second;
     tooltipMessage = messages[row].seq;
     tooltipPosition = position;
@@ -772,6 +775,7 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
 
 void ChatView::showChannelTooltip(Source *source, QPoint global) {
     if (!source) { hideEmoteTooltip(); return; }
+    streamPreviewSource.clear();
     const QString url = str(source->header["avatar"]);
     tooltipUrls = url.isEmpty() ? QStringList() : QStringList{url};
     tooltipMessage = 0;
@@ -781,8 +785,42 @@ void ChatView::showChannelTooltip(Source *source, QPoint global) {
     showImageTooltip(source->name(), "Channel", source->platform == "twitch" ? "Twitch" : source->platform == "kick" ? "Kick" : "YouTube", preview, global);
 }
 
+bool ChatView::showStreamTooltip(Source *source, QPoint global) {
+    if (!source || !source->header["live"].toBool()) { hideEmoteTooltip(); return false; }
+    streamPreviewSource = source;
+    streamPreviewGlobal = global;
+    QString url = str(source->header["thumbnail"]);
+    if (source->platform == "kick" && (url.isEmpty() || QUrl(url).host() == "stream.kick.com")) {
+        source->kickLoadThumbnail();
+        url = str(source->header["thumbnail"]);
+    }
+    if (url.isEmpty() || !Images::allowed(QUrl(url))) {
+        if (source->platform == "kick" && source->kickThumbnailPending) {
+            tooltipUrls.clear();
+            tooltipMessage = 0;
+            tooltipPosition = -2;
+            showImageTooltip(str(source->header["title"]), "Stream preview", "Kick", {}, global, QSize(320, 180));
+            return true;
+        }
+        hideEmoteTooltip();
+        return false;
+    }
+    if (emoteTooltip && emoteTooltip->isVisible() && tooltipUrls == QStringList{url} && tooltipPosition == -2)
+        return true;
+    tooltipUrls = {url};
+    tooltipMessage = 0;
+    tooltipPosition = -2;
+    QImage preview = hub->images->get(tooltipUrls, false);
+    if (preview.isNull()) preview = hub->images->get(tooltipUrls, false);
+    showImageTooltip(str(source->header["title"]), "Stream preview",
+                     source->platform == "twitch" ? "Twitch" : source->platform == "kick" ? "Kick" : "YouTube",
+                     preview, global, QSize(320, 180));
+    return true;
+}
+
 void ChatView::showImageTooltip(const QString &name, const QString &kind, const QString &provider,
-                                const QImage &image, QPoint global) {
+                                const QImage &image, QPoint global, QSize previewSize) {
+    tooltipImageSize = previewSize;
     if (!emoteTooltip) {
         emoteTooltip = new QFrame(this, Qt::ToolTip);
         emoteTooltip->setAttribute(Qt::WA_ShowWithoutActivating);
@@ -803,7 +841,7 @@ void ChatView::showImageTooltip(const QString &name, const QString &kind, const 
         layout->addWidget(emoteTooltipName);
         layout->addWidget(emoteTooltipProvider);
     }
-    emotePreview->setPixmap(QPixmap::fromImage(image).scaled(112, 112, Qt::KeepAspectRatio,
+    emotePreview->setPixmap(QPixmap::fromImage(image).scaled(previewSize, Qt::KeepAspectRatio,
                                                               Qt::SmoothTransformation));
     emoteTooltipName->setText(name);
     const QString translatedKind = hub->cfg->T(kind);
@@ -1478,6 +1516,9 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     headerIcon->installEventFilter(this);
     hl->addWidget(headerIcon);
     headerText = new QLabel(header);
+    headerText->setObjectName("channel-header-title");
+    headerText->setMouseTracking(true);
+    headerText->installEventFilter(this);
     headerText->setWordWrap(true);
     headerText->setTextFormat(Qt::PlainText);
     headerText->setFont(QFont("Segoe UI", 9, QFont::Bold));
@@ -1503,6 +1544,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         title->setWordWrap(true);
         title->setFont(QFont("Segoe UI", 9, QFont::Bold));
         title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        title->setMouseTracking(true);
         title->installEventFilter(this);
         rowLayout->addWidget(icon);
         rowLayout->addWidget(title, 1);
@@ -1802,6 +1844,11 @@ void Pane::setSources(QList<Source *> list) {
             refresh();
             reload();
         });
+        connect(s, &Source::headerChanged, this, [this, s] {
+            refresh();
+            if (view->streamPreviewSource == s && view->emoteTooltip && view->emoteTooltip->isVisible())
+                view->showStreamTooltip(s, view->streamPreviewGlobal);
+        });
         connect(s, &Source::decorationsChanged, this, &Pane::refreshDecorations);
         connect(s, &Source::redacted, this, [this](QJsonObject target) {
             if (detached || reply.id.isEmpty()) {
@@ -1933,6 +1980,7 @@ void Pane::refresh() {
         title->setWordWrap(true);
         title->setFont(QFont("Segoe UI", 9, QFont::Bold));
         title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        title->setMouseTracking(true);
         title->installEventFilter(this);
         rowLayout->addWidget(icon);
         rowLayout->addWidget(title, 1);
@@ -1950,11 +1998,14 @@ void Pane::refresh() {
         icon->setPixmap(QPixmap::fromImage(channelIcon(source, hub->images, 20)));
         icon->setAccessibleName(source->name());
         title->setText(titles.value(i));
+        title->setProperty("source-key", source->key);
         title->setToolTip(fullTitles.value(i));
     }
     mixedMore->hide();
     if (isMixed) header->setMinimumHeight(0);
     if (sources.size() == 1 && sources[0]) {
+        headerText->setProperty("source-key", sources[0]->key);
+        headerText->setToolTip(fullTitles.value(0));
         headerIcon->setProperty("source-key", sources[0]->key);
         headerIcon->setAccessibleName(sources[0]->name());
         headerIcon->setPixmap(QPixmap::fromImage(channelIcon(sources[0], hub->images, 20)));
@@ -2069,6 +2120,17 @@ bool Pane::eventFilter(QObject *object, QEvent *event) {
         } else if (event->type() == QEvent::ToolTip) {
             view->showChannelTooltip(source, static_cast<QHelpEvent *>(event)->globalPos());
             return true;
+        } else if (event->type() == QEvent::Leave || event->type() == QEvent::Hide) {
+            view->hideEmoteTooltip();
+        }
+    }
+    if (auto *title = qobject_cast<QLabel *>(object);
+        view && title && (title == headerText || mixedTitles.contains(title))) {
+        auto *source = hub->sources.value(title->property("source-key").toString());
+        if (event->type() == QEvent::MouseMove) {
+            view->showStreamTooltip(source, static_cast<QMouseEvent *>(event)->globalPosition().toPoint());
+        } else if (event->type() == QEvent::ToolTip) {
+            if (view->showStreamTooltip(source, static_cast<QHelpEvent *>(event)->globalPos())) return true;
         } else if (event->type() == QEvent::Leave || event->type() == QEvent::Hide) {
             view->hideEmoteTooltip();
         }

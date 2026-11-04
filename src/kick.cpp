@@ -138,13 +138,48 @@ void Source::kickConnect() {
             started[10] = 'T';
             started += 'Z';
         }
+        if (stream.isEmpty() || (!str(self->header["started_at"]).isEmpty() &&
+                                 !started.isEmpty() && str(self->header["started_at"]) != started)) {
+            self->header["thumbnail"] = QString();
+            self->kickThumbnailRetryAt = 0;
+        }
+        if (!stream.isEmpty() && str(self->header["thumbnail"]).isEmpty())
+            self->header["thumbnail"] = str(at(stream, {"thumbnail", "url"}));
         self->header["started_at"] = started;
+        self->hub->liveChange(self, !stream.isEmpty());
         for (auto i = self->hub->globals.cbegin(); i != self->hub->globals.cend(); ++i) {
             if (!self->channelEmotes.contains(i.key())) self->emotes[i.key()] = i.value();
         }
         emit self->changed();
         emit self->hub->sourceChanged(self);
         if (!self->requesting && !self->poll.isActive()) self->poll.start(0);
+    });
+}
+
+void Source::kickLoadThumbnail() {
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (closed || platform != "kick" || !header["live"].toBool() || kickThumbnailPending ||
+        now < kickThumbnailRetryAt) return;
+    kickThumbnailPending = true;
+    kickThumbnailRetryAt = now + 300000;
+    const auto epoch = generation;
+    const auto start = str(header["started_at"]);
+    QPointer<Source> self(this);
+    hub->net->json(QUrl("https://api.kick.com/private/v1/channels/" + id + "/livestream"),
+                   [self, epoch, start](QJsonObject data, QString error) {
+        if (!self || self->closed || self->generation != epoch) return;
+        self->kickThumbnailPending = false;
+        if (!error.isEmpty()) {
+            if (error.contains("429")) self->kickThumbnailRetryAt = QDateTime::currentMSecsSinceEpoch() + 120000;
+            return;
+        }
+        const auto url = str(at(data, {"data", "livestream", "thumbnail_url"}));
+        if (!self->header["live"].toBool() || str(self->header["started_at"]) != start ||
+            !Images::allowed(QUrl(url))) return;
+        if (str(self->header["thumbnail"]) != url) {
+            self->header["thumbnail"] = url;
+            emit self->headerChanged();
+        }
     });
 }
 

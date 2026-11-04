@@ -39,6 +39,8 @@ class Source : public QObject {
     QWebSocket kickSocket;
     QTimer kickSocketRetry, kickSocketWatchdog, kickSocketRenew;
     bool kickSocketActive = false, kickSocketStarting = false;
+    bool kickThumbnailPending = false;
+    qint64 kickThumbnailRetryAt = 0;
     int kickSocketRetryMs = 3000;
     bool kickInitial = true, kickConnecting = false;
     int kickRetryMs = 5000;
@@ -84,6 +86,7 @@ class Source : public QObject {
     void loadBadges();
     void loadHistory();
     void kickConnect();
+    void kickLoadThumbnail();
     void kickPoll();
     void kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Message>> batch, bool historical);
     void kickError(QString error);
@@ -108,6 +111,7 @@ class Source : public QObject {
   signals:
     void message(yc::Message message);
     void changed();
+    void headerChanged();
     void decorationsChanged();
     void permissionsChanged();
     void redacted(QJsonObject target);
@@ -156,6 +160,10 @@ class Hub : public QObject {
     QTimer liveTimer;
     QHash<QString, bool> liveState;
     bool liveRequest = false;
+    QStringList kickLiveQueue;
+    QSet<QString> kickLivePending;
+    int kickLiveActive = 0;
+    qint64 kickLiveRetryAt = 0;
     QTemporaryDir soundFiles;
     bool testMode = false;
     QElapsedTimer youtubeClock;
@@ -182,8 +190,11 @@ class Hub : public QObject {
     void sound(bool live = false, bool force = false);
     void messageAlert(Source *source, const Message &message);
     void pollLive();
+    void pollKickLive();
+    void pumpKickLive();
     void liveChange(Source *source, bool live);
     void liveChange(QString login, QString name, bool live, bool opened);
+    void liveChange(QString platform, QString login, QString name, bool live, bool opened);
   signals:
     void message(Source *source, yc::Message message);
     void sourceChanged(Source *source);
