@@ -67,6 +67,7 @@ void NativeTests::kickChatPollingAndRetry() {
             done(R"({"id":123,"user":{"id":456,"username":"Example","profile_pic":"https://files.kick.com/a.png"},"livestream":{"session_title":"Live title","viewer_count":10,"start_time":"2026-10-30 10:00:00","categories":[{"name":"Games"}]}})", {});
             return;
         }
+        if (url.path() == "/emotes/example") { done("[]", {}); return; }
         if (url.host() == "files.kick.com") { done({}, "Fixture image unavailable"); return; }
         QCOMPARE(url.path(), QString("/api/v2/channels/123/messages"));
         ++requests;

@@ -46,7 +46,7 @@ for name in ('features', 'chat', 'threads', 'window', 'update', 'i18n', 'setting
 (stage / '_internal' / 'legacy-update-marker.txt').write_text(
     'Legacy updater validation marker; no Python runtime is included.\n', encoding='utf-8')
 
-required = ['YT-Chatterino.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll',
+required = ['YT-Chatterino.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll', 'Qt6WebSockets.dll',
             'libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll',
             'platforms/qwindows.dll', 'tls/qschannelbackend.dll', 'imageformats/qwebp.dll',
             'README.txt', 'README-PTBR.txt', 'qt.conf']

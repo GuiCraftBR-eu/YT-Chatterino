@@ -136,4 +136,15 @@ class NativeTests : public QObject {
     void singleAndMixedChatTargetVisibility();
     void kickSessionAndSavedChannel();
     void kickAccountUiProtectsSecret();
+    void kickRealtimeEventsAndAlerts();
+    void kickEmoteCatalogCompletesAndDisplays();
+    void kickLargeBadgeAndLegacyRoles();
+    void kickModerationAndChannelEditing();
+    void kickAddChatByName();
+    void kickIllustratedGuideAndPermissions();
+    void kickEmoteSendingUsesNativeEncoding();
+    void kickCategorySearchIgnoresStaleResults();
+    void incrementalAppendKeepsOffsetsCorrect();
+    void kickDisconnectImmediatelyStartsRecovery();
+    void kickReconnectRespectsRateLimit();
 };

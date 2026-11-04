@@ -333,6 +333,9 @@ QWidget *SettingsWindow::accountsPage() {
     kickStatus->setObjectName("kick-account-status");
     kickLayout->addWidget(kickStatus);
     kickLayout->addWidget(text(main->cfg, "Reading Kick chat needs no sign-in. Sending requires your Kick developer app.", true));
+    auto *kickPermissions = text(main->cfg, "", true);
+    kickPermissions->setObjectName("kick-permissions-status");
+    kickLayout->addWidget(kickPermissions);
     auto *kickButton = action(main->cfg, "Sign in to Kick…", w, [this] {
         auto *dialog = new QDialog(this);
         dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -347,18 +350,23 @@ QWidget *SettingsWindow::accountsPage() {
         secret->setPlaceholderText(main->cfg.T("Client secret"));
         layout->addRow(main->cfg.T("Client ID"), id);
         layout->addRow(main->cfg.T("Client secret"), secret);
+        auto *management = new QCheckBox(main->cfg.T("Enable Kick moderation and channel editing"), dialog);
+        management->setObjectName("kick-management-permissions");
+        management->setChecked(true);
+        layout->addRow(management);
         auto *hint = text(main->cfg, "Register this exact redirect URL in your Kick developer app: http://localhost:37365/callback", true);
         hint->setTextInteractionFlags(Qt::TextSelectableByMouse);
         layout->addRow(hint);
         auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
         layout->addRow(buttons);
         connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-        connect(buttons, &QDialogButtonBox::accepted, dialog, [this, dialog, id, secret] {
+        connect(buttons, &QDialogButtonBox::accepted, dialog, [this, dialog, id, secret, management] {
             const auto clientId = id->text();
             const auto clientSecret = secret->text();
+            const bool manage = management->isChecked();
             secret->clear();
             dialog->accept();
-            main->accounts.signInKick(clientId, clientSecret);
+            main->accounts.signInKick(clientId, clientSecret, manage);
         });
         dialog->show();
         darkTitlebar(dialog);
@@ -453,6 +461,8 @@ QWidget *SettingsWindow::accountsPage() {
         kickStatus->setText(accounts.kickRefreshing ? cfg.T("Refreshing saved sign-in…")
                            : kickConnected ? cfg.T("Signed in as {name}", {{"name", str(accounts.kick["name"])}})
                            : !accounts.kickIssue.isEmpty() ? cfg.T(accounts.kickIssue) : cfg.T("Not connected"));
+        kickPermissions->setText(kickConnected ? cfg.T(accounts.kickAllows({"channel:write", "moderation:ban", "moderation:chat_message:manage"})
+            ? "Kick management permissions enabled" : "Reconnect Kick to enable moderation and channel editing") : QString());
         kickButton->setText(cfg.T(accounts.kickBusy ? "Waiting for Kick…" : kickConnected
                                   ? "Reconnect / change Kick account…" : "Sign in to Kick…"));
         kickButton->setEnabled(!accounts.kickBusy && !accounts.kickRefreshing);
@@ -1191,6 +1201,111 @@ void SettingsWindow::showYoutubeGuide() {
     darkTitlebar(dialog);
 }
 
+void SettingsWindow::showKickGuide() {
+    struct Step { QString title, description, image; };
+    const QList<Step> steps{
+        {"Create a Kick developer app",
+         "Open Kick Settings → Developer and choose Create new. Reading chat does not require an account.",
+         ":/tutorial/kick-01.png"},
+        {"Configure the app and permissions",
+         "Enter a name and description. Set the redirect URL to http://localhost:37365/callback. Enable Read user information, Read channel information, Update channel information, Write to Chat feed, Execute moderation actions for moderators and Execute moderation actions on chat messages. Webhooks and stream key access are not needed.",
+         ":/tutorial/kick-02.png"},
+        {"Sign in to Kick",
+         "In Settings → Accounts choose Sign in to Kick. Enter the client ID and secret from your developer app, then approve access in your browser. Never share your secret. Reconnect after changing permissions.",
+         ":/tutorial/kick-03.png"}};
+    auto *dialog = new QDialog(this);
+    dialog->setObjectName("kick-illustrated-guide");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(main->cfg.T("Kick setup guide"));
+    dialog->resize(880, 680);
+    dialog->setMinimumSize(560, 420);
+    auto *layout = new QVBoxLayout(dialog);
+    layout->setContentsMargins(16, 14, 16, 14);
+    layout->setSpacing(8);
+    auto *counter = new QLabel(dialog);
+    counter->setObjectName("kick-guide-counter");
+    counter->setStyleSheet("color:#81badb;font-weight:600;");
+    auto *heading = new QLabel(dialog);
+    heading->setObjectName("kick-guide-heading");
+    heading->setFont(QFont("Segoe UI", 14, QFont::Bold));
+    heading->setWordWrap(true);
+    auto *body = new QLabel(dialog);
+    body->setObjectName("kick-guide-description");
+    body->setWordWrap(true);
+    body->setTextFormat(Qt::PlainText);
+    body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto *hint = new QLabel(dialog);
+    hint->setWordWrap(true);
+    hint->setStyleSheet("color:#9a9aa4;");
+    auto *preview = new TutorialPreview(dialog);
+    preview->setObjectName("kick-guide-preview");
+    auto *buttons = new QHBoxLayout;
+    auto *console = new QPushButton(dialog);
+    auto *zoom = new QPushButton(dialog);
+    zoom->setObjectName("kick-guide-zoom");
+    auto *previous = new QPushButton(dialog);
+    previous->setObjectName("kick-guide-previous");
+    auto *next = new QPushButton(dialog);
+    next->setObjectName("kick-guide-next");
+    auto *close = new QPushButton(dialog);
+    buttons->addWidget(console);
+    buttons->addWidget(zoom);
+    buttons->addStretch();
+    buttons->addWidget(previous);
+    buttons->addWidget(next);
+    buttons->addWidget(close);
+    layout->addWidget(counter);
+    layout->addWidget(heading);
+    layout->addWidget(body);
+    layout->addWidget(hint);
+    layout->addWidget(preview, 1);
+    layout->addLayout(buttons);
+    auto position = QSharedPointer<int>::create(0);
+    auto update = [=, this] {
+        const auto &step = steps[*position];
+        dialog->setWindowTitle(main->cfg.T("Kick setup guide"));
+        counter->setText(main->cfg.T("Step {current} of {total}",
+                                     {{"current", QString::number(*position + 1)},
+                                      {"total", QString::number(steps.size())}}));
+        heading->setText(main->cfg.T(step.title));
+        body->setText(main->cfg.T(step.description));
+        hint->setText(main->cfg.T("Screenshots show Kick in English; labels may vary by language. Never share your client secret."));
+        preview->setImage(step.image);
+        console->setText(main->cfg.T("Open Kick Developer"));
+        zoom->setText(main->cfg.T("View full image"));
+        previous->setText(main->cfg.T("Previous"));
+        next->setText(main->cfg.T("Next"));
+        close->setText(main->cfg.T("Close"));
+        previous->setEnabled(*position > 0);
+        next->setEnabled(*position + 1 < steps.size());
+    };
+    connect(previous, &QPushButton::clicked, dialog, [=] { if (*position > 0) { --*position; update(); } });
+    connect(next, &QPushButton::clicked, dialog, [=] { if (*position + 1 < steps.size()) { ++*position; update(); } });
+    connect(close, &QPushButton::clicked, dialog, &QDialog::close);
+    connect(console, &QPushButton::clicked, dialog,
+            [] { QDesktopServices::openUrl(QUrl("https://kick.com/settings/developer")); });
+    connect(zoom, &QPushButton::clicked, dialog, [=, this] {
+        auto *viewer = new QDialog(dialog);
+        viewer->setObjectName("kick-guide-full-image");
+        viewer->setAttribute(Qt::WA_DeleteOnClose);
+        viewer->setWindowTitle(main->cfg.T(steps[*position].title));
+        viewer->resize(1000, 700);
+        auto *box = new QVBoxLayout(viewer);
+        auto *scroll = new QScrollArea(viewer);
+        auto *image = new QLabel(scroll);
+        image->setPixmap(QPixmap(steps[*position].image));
+        scroll->setWidget(image);
+        scroll->setAlignment(Qt::AlignCenter);
+        box->addWidget(scroll);
+        viewer->show();
+        darkTitlebar(viewer);
+    });
+    connect(&main->cfg, &Config::languageChanged, dialog, update);
+    update();
+    dialog->show();
+    darkTitlebar(dialog);
+}
+
 QWidget *SettingsWindow::tutorialPage() {
     QVBoxLayout *l;
     auto *w = pageWidget(main->cfg, "Tutorial", &l);
@@ -1222,10 +1337,7 @@ QWidget *SettingsWindow::tutorialPage() {
               "Ctrl+right-click opens moderation actions. Moderation requires the channel's owner/moderator "
               "role; title/category edits require the broadcaster account."},
              {"Kick: connect and send",
-              "Create a Kick developer app with redirect URL http://localhost:37365/callback and choose "
-              "Read user information and Write to Chat feed. In Settings → Accounts, enter its client ID "
-              "and secret, then approve access in your browser. Your secret is saved in system credential "
-              "storage. Kick chat reading uses the public site and may miss messages in very busy chats."},
+              "Create a Kick developer app and enable the permissions shown in the illustrated guide. In Settings → Accounts, enter its client ID and secret, then approve access in your browser. Your secret is saved in system credential storage. Reconnect after changing permissions."},
              {"YouTube: connect, send and moderate",
               "Create a Google Cloud project, enable YouTube Data API v3, configure the consent screen and "
               "create a Desktop OAuth client. Download its JSON. "
@@ -1277,6 +1389,11 @@ QWidget *SettingsWindow::tutorialPage() {
         body->setStyleSheet("color:#c1c1c9;");
         body->setTextInteractionFlags(Qt::TextSelectableByMouse);
         cardLayout->addWidget(body);
+        if (section.first == "Kick: connect and send") {
+            auto *guide = action(main->cfg, "Kick setup guide with screenshots…", card, [this] { showKickGuide(); });
+            guide->setObjectName("kick-tutorial-guide-action");
+            cardLayout->addWidget(guide);
+        }
         if (section.first == "YouTube: connect, send and moderate") {
             auto *requirement = text(main->cfg,
                                      "If the OAuth app is in Testing, adding the exact Google account used "

@@ -155,10 +155,17 @@ void ChatView::append(Message m) {
     if (!rowStripes.contains(m.seq)) {
         rowStripes.insert(m.seq, !messages.isEmpty() && !rowStripes.value(messages.last().seq));
     }
+    const int oldCount = messages.size();
     messages << m;
     heights << estimate(m);
-    trim();
-    rebuildOffsets();
+    if (messages.size() <= messageCap && offsets.size() == oldCount + 1) {
+        offsets << offsets.last() + heights.last();
+        verticalScrollBar()->setRange(0, qMax(0, offsets.last() - viewport()->height()));
+        verticalScrollBar()->setPageStep(viewport()->height());
+    } else {
+        trim();
+        rebuildOffsets();
+    }
     if (follow) {
         verticalScrollBar()->setValue(verticalScrollBar()->maximum());
     }
@@ -198,6 +205,7 @@ int ChatView::estimate(const Message &m) const {
     int lines = qMax(1, (fm.horizontalAdvance(text) + width - 1) / width);
     lines += text.count('\n');
     int height = lines * fm.lineSpacing() + 8;
+    if (!m.system && (m.special == "alert" || m.special == "member" || m.special == "super")) height += fm.lineSpacing();
     if (!m.reply.isEmpty() && !threadMode) {
         height += fm.lineSpacing();
     }
@@ -372,6 +380,11 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         details[m.seq] = detail;
         return doc;
     }
+    if (m.special == "alert" || m.special == "member" || m.special == "super") {
+        const QColor accent = source && source->platform == "kick" ? QColor("#53fc18")
+                            : source && source->platform == "youtube" ? QColor("#ff5252") : QColor("#bf94ff");
+        cursor.insertText(QString::fromUtf8("◆ "), format(username, accent));
+    }
     auto insertImage = [&](QStringList urls, QString code, int size, bool gif, bool isEmote = false,
                            bool isBadge = false) {
         if (urls.isEmpty()) {
@@ -458,7 +471,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
     detail.nameStart = cursor.position();
     cursor.insertText(m.name, format(username, userColor(m)));
     detail.nameEnd = cursor.position();
-    cursor.insertText(": ", normalFormat);
+    cursor.insertText((m.special == "alert" || m.special == "member" || m.special == "super") ? "\n  " : ": ", normalFormat);
     const bool revealDeleted = m.deleted && hub->cfg->data["show_deleted_messages"].toBool(false);
     QString body = visibleMessageText(m, *hub->cfg);
     QVector<Span> spans = m.deleted && !revealDeleted ? QVector<Span>() : m.emotes;
@@ -2242,6 +2255,8 @@ void Pane::openEmotes() {
         QHash<QString, Span> catalog = tabs->currentIndex() == 0   ? unlocked->items
                                        : tabs->currentIndex() == 1 ? source->channelEmotes
                                                                    : hub->globals;
+        if (tabs->currentIndex() == 2 && source->platform == "kick")
+            for (auto i = source->kickGlobalEmotes.cbegin(); i != source->kickGlobalEmotes.cend(); ++i) catalog[i.key()] = i.value();
         grid->clear();
         QStringList codes = catalog.keys();
         codes.sort(Qt::CaseInsensitive);
