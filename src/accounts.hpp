@@ -45,12 +45,13 @@ class Accounts : public QObject {
     QSet<QString> googleScopes() const;
     bool connected(const QString &provider) const;
     bool twitchAllows(const QSet<QString> &scopes) const;
+    bool kickAllows(const QSet<QString> &scopes) const;
     bool googleAllowsWriting() const;
     bool googleCanReadChat() const;
     bool googleClientConfigured() const;
     static QSet<QString> fullTwitchScopes();
     static QString googleSignInHelp();
-    void signInKick(QString clientId, QString clientSecret);
+    void signInKick(QString clientId, QString clientSecret, bool manage = true);
     void kickCallback();
     void finishKick(QString error = {});
     void kickToken(TokenCallback done);

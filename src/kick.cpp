@@ -41,31 +41,35 @@ Message parseKick(const QJsonObject &o, bool historical) {
         if (role == "subscriber" || role == "subscription" || role == "sub") return QString("subscriber");
         return role;
     };
-    const auto modern = identity["badges_v2"].toArray();
-    if (!modern.isEmpty()) {
-        for (const auto &entry : modern) {
-            const auto b = entry.toObject();
-            if (b.contains("selected") && !b["selected"].toBool()) continue;
-            Badge badge;
-            badge.id = str(b["badge_type"]);
-            badge.role = badgeRole(badge.id);
-            badge.label = str(b["name"]);
-            const auto url = str(b["image_url"]);
-            if (!url.isEmpty()) badge.urls << url;
-            if (!badge.id.isEmpty()) message.badges << badge;
-        }
-    } else {
-        for (const auto &entry : identity["badges"].toArray()) {
-            const auto b = entry.toObject();
-            Badge badge;
-            badge.id = str(b["type"]);
-            badge.role = badgeRole(badge.id);
-            badge.label = str(b["text"]);
-            if (!badge.id.isEmpty()) message.badges << badge;
+    QSet<QString> existingRoles;
+    for (const auto &entry : identity["badges_v2"].toArray()) {
+        const auto b = entry.toObject();
+        if (b.contains("selected") && !b["selected"].toBool()) continue;
+        Badge badge;
+        badge.id = str(b["name"]);
+        if (badge.id.isEmpty()) badge.id = str(b["badge_type"]);
+        badge.role = badgeRole(badge.id);
+        badge.label = str(b["name"]);
+        const auto url = str(b["image_url"]);
+        if (!url.isEmpty()) badge.urls << url;
+        if (!badge.id.isEmpty()) { message.badges << badge; existingRoles.insert(badge.role); }
+    }
+    // Kick's new global badges and its legacy channel roles are separate lists.
+    for (const auto &entry : identity["badges"].toArray()) {
+        const auto b = entry.toObject();
+        Badge badge;
+        badge.id = str(b["type"]);
+        badge.role = badgeRole(badge.id);
+        badge.label = str(b["text"]);
+        badge.version = str(b["count"]);
+        if (!badge.id.isEmpty() && !existingRoles.contains(badge.role)) {
+            message.badges << badge; existingRoles.insert(badge.role);
         }
     }
     auto metadata = o["metadata"].toObject();
     if (o["metadata"].isString()) metadata = QJsonDocument::fromJson(str(o["metadata"]).toUtf8()).object();
+    if (str(o["type"]) == "celebration" && !metadata["celebration"].toObject().isEmpty())
+        message.special = "alert";
     const auto original = metadata["original_message"].toObject();
     const auto originalSender = metadata["original_sender"].toObject();
     if (!str(original["id"]).isEmpty()) {
@@ -100,11 +104,24 @@ void Source::kickConnect() {
             if (self->kickChannelId.isEmpty()) self->kickError(error);
             return;
         }
+        const bool firstConnection = self->kickChannelId.isEmpty();
         self->kickChannelId = channelId;
+        self->kickRoomId = str(at(data, {"chatroom", "id"}));
+        if (firstConnection) self->kickLoadEmotes();
+        if (!self->kickRoomId.isEmpty() && !self->kickSocketActive && !self->kickSocketStarting &&
+            !self->kickSocketRetry.isActive()) self->kickStartSocket();
+        self->kickCheckRole();
         const auto stream = data["livestream"].toObject();
         const auto categories = stream["categories"].toArray();
         const auto recent = data["recent_categories"].toArray();
         const auto category = !categories.isEmpty() ? categories.first().toObject() : firstItem(recent).toObject();
+        self->kickSubscriberBadges.clear();
+        for (const auto &item : data["subscriber_badges"].toArray()) {
+            const auto badge = item.toObject();
+            const auto url = str(at(badge, {"badge_image", "src"}));
+            const int months = badge["months"].toInt();
+            if (months > 0 && !url.isEmpty()) self->kickSubscriberBadges[months] = url;
+        }
         self->header["channel_id"] = user["id"];
         self->header["channel"] = user["username"];
         self->header["avatar"] = user["profile_pic"];
@@ -178,12 +195,174 @@ void Source::kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Mess
         for (auto &message : *batch) self->publish(message);
         if (!self->kickPollHead.isEmpty()) self->kickLastPollId = self->kickPollHead;
         if (!historical && !seen && !next.isEmpty() && page >= 4)
-            self->connectionStatus(self->hub->cfg->T("Kick chat is busy; some messages may be missing."));
+            if (!self->kickSocketActive) self->connectionStatus(self->hub->cfg->T("Kick chat is busy; some messages may be missing."));
         self->kickInitial = false;
         self->requesting = false;
         self->kickRetryMs = 5000;
         if (historical) self->connectionStatus(self->hub->cfg->T("Connected to Kick"));
-        self->poll.start(5000);
+        self->poll.start(self->kickSocketActive ? 30000 : 5000);
     });
+}
+
+void Source::kickLoadEmotes() {
+    if (closed || kickChannelId.isEmpty()) return;
+    QPointer<Source> self(this);
+    const auto epoch = generation;
+    hub->net->json(QUrl("https://kick.com/emotes/" + id), [self, epoch](QJsonObject data, QString error) {
+        if (!self || self->closed || self->generation != epoch || !error.isEmpty()) return;
+        QHash<QString, Span> channel, global;
+        for (const auto &setValue : data["items"].toArray()) {
+            const auto set = setValue.toObject();
+            const bool isChannel = str(set["id"]) == self->kickChannelId;
+            for (const auto &item : set["emotes"].toArray()) {
+                const auto e = item.toObject();
+                const QString emoteId = str(e["id"]), code = str(e["name"]);
+                if (emoteId.isEmpty() || code.isEmpty() || code.size() > 100) continue;
+                Span span; span.code = code; span.urls = {"https://files.kick.com/emotes/" + emoteId + "/fullsize"};
+                (isChannel ? channel : global)[code] = span;
+            }
+        }
+        self->kickGlobalEmotes = global;
+        for (auto i = global.cbegin(); i != global.cend(); ++i)
+            if (!self->channelEmotes.contains(i.key())) self->emotes[i.key()] = i.value();
+        for (auto i = channel.cbegin(); i != channel.cend(); ++i) {
+            self->channelEmotes[i.key()] = i.value(); self->emotes[i.key()] = i.value();
+        }
+        emit self->changed();
+    });
+}
+
+void Source::kickCheckRole() {
+    const auto username = str(hub->accounts->kick["name"]);
+    const auto uid = str(hub->accounts->kick["user_id"]);
+    if (username.isEmpty() || uid.isEmpty() || kickChannelId.isEmpty() || closed) return;
+    if (uid == room()) { header["kick_moderator"] = true; header["kick_role_uid"] = uid; emit permissionsChanged(); return; }
+    QPointer<Source> self(this); const auto epoch = generation;
+    const auto url = QUrl("https://kick.com/api/v2/channels/" + id + "/users/" + QString::fromLatin1(QUrl::toPercentEncoding(username)));
+    hub->net->json(url, [self, epoch, uid](QJsonObject data, QString error) {
+        if (!self || self->closed || self->generation != epoch || uid != str(self->hub->accounts->kick["user_id"])) return;
+        const bool allowed = error.isEmpty() && str(data["id"]) == uid &&
+            (data["is_moderator"].toBool() || data["is_channel_owner"].toBool());
+        self->header["kick_moderator"] = allowed; self->header["kick_role_uid"] = uid; emit self->permissionsChanged();
+    });
+}
+
+void Source::kickStartSocket() {
+    if (closed || hub->testMode || kickSocketStarting || kickSocketActive || kickRoomId.isEmpty()) return;
+    kickSocketStarting = true;
+    const auto epoch = generation;
+    const auto client = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QPointer<Source> self(this);
+    QJsonObject body{{"client", QJsonObject{{"id", client}, {"type", "web"}}},
+                     {"capabilities", QJsonObject{{"accepted_providers", QJsonArray{QJsonObject{{"provider", "centrifugo"}}}}}}};
+    hub->net->json(QUrl("https://web.kick.com/api/v1/realtime/channels/" + kickChannelId + "/chat/connection"),
+        [self, epoch, client](QJsonObject data, QString error) {
+        if (!self || self->closed || self->generation != epoch) return;
+        QUrl url;
+        for (const auto &value : at(data, {"data", "connections"}).toArray()) {
+            auto o = value.toObject();
+            if (str(o["provider"]) == "centrifugo") url = QUrl(str(at(o, {"credentials", "url"})));
+        }
+        if (!error.isEmpty() || url.scheme() != "wss" || !url.host().endsWith(".platform.kick.com") ||
+            !url.userInfo().isEmpty() || (url.port(-1) != -1 && url.port() != 443)) { self->kickSocketFailed(); return; }
+        self->hub->net->json(QUrl("https://web.kick.com/api/v1/realtime/auth/connection"),
+            [self, epoch, url](QJsonObject auth, QString e) {
+                if (!self || self->closed || self->generation != epoch) return;
+                self->kickSocketToken = str(at(auth, {"data", "token"}));
+                if (!e.isEmpty() || self->kickSocketToken.isEmpty()) { self->kickSocketFailed(); return; }
+                self->kickSocket.open(url);
+                self->kickSocketWatchdog.start(20000);
+            }, "POST", {{"client_id", client}});
+    }, "POST", body);
+}
+
+void Source::kickSocketFailed() {
+    kickSocketStarting = false; kickSocketActive = false; kickSocketToken.clear();
+    kickSocketWatchdog.stop(); kickSocketRenew.stop();
+    if (closed || hub->testMode || platform != "kick") return;
+    if (!requesting && (!poll.isActive() || poll.remainingTime() > 1000)) poll.start(0);
+    if (!kickSocketRetry.isActive()) {
+        kickSocketRetry.start(kickSocketRetryMs);
+        kickSocketRetryMs = qMin(120000, kickSocketRetryMs * 2);
+    }
+}
+
+void Source::kickSocketMessage(const QString &text) {
+    if (closed) return;
+    kickSocketWatchdog.start(65000);
+    for (const auto &line : text.split('\n', Qt::SkipEmptyParts)) {
+        const auto frame = QJsonDocument::fromJson(line.toUtf8()).object();
+        if (frame.isEmpty()) { kickSocket.sendTextMessage("{}"); continue; }
+        if (frame.contains("error")) {
+            if (frame["id"].toInt() <= 2) { kickSocket.abort(); return; }
+            continue; // An optional alert feed failing must not stop live chat.
+        }
+        if (frame.contains("connect")) {
+            int command = 2;
+            for (const auto &channel : QStringList{"chatrooms." + kickRoomId + ".v2", "chatroom_" + kickRoomId, "channel_" + kickChannelId}) {
+                const QJsonObject request{{"id", command++}, {"subscribe", QJsonObject{{"channel", channel}}}};
+                kickSocket.sendTextMessage(QString::fromUtf8(QJsonDocument(request).toJson(QJsonDocument::Compact)));
+            }
+            kickSocketRenew.start(40 * 60 * 1000);
+        } else if (frame["id"].toInt() == 2 && frame.contains("subscribe")) {
+            kickSocketStarting = false; kickSocketActive = true; kickSocketRetryMs = 3000;
+            if (!requesting) poll.start(0);
+        }
+        const auto push = frame["push"].toObject();
+        if (push.contains("disconnect") || push.contains("unsubscribe")) { kickSocket.abort(); return; }
+        const auto envelope = at(push, {"pub", "data"}).toObject();
+        const auto event = str(envelope["event"]);
+        QJsonObject payload = envelope["data"].toObject();
+        if (envelope["data"].isString()) payload = QJsonDocument::fromJson(str(envelope["data"]).toUtf8()).object();
+        if (!event.isEmpty()) kickEvent(event, payload);
+    }
+}
+
+void Source::kickEvent(QString event, QJsonObject data) {
+    if (event.endsWith("ChatMessageEvent")) {
+        auto message = parseKick(data);
+        if (!message.id.isEmpty()) publish(message);
+        return;
+    }
+    if (event.endsWith("UserBannedEvent")) {
+        const auto uid = str(at(data, {"user", "id"}));
+        if (!uid.isEmpty()) redact({{"user_id", uid}});
+        return;
+    }
+    if (event.endsWith("ChatroomClearEvent")) { redact({{"all", true}}); return; }
+    if (event.endsWith("MessageDeletedEvent")) {
+        const auto id = str(at(data, {"message", "id"}));
+        if (!id.isEmpty()) redact({{"message_id", id}});
+        return;
+    }
+    if (event.endsWith("PinnedMessageCreatedEvent")) {
+        const auto m = parseKick(data["message"].toObject());
+        setDecorations({{"name", m.name}, {"text", m.text}}, activePoll); return;
+    }
+    if (event.endsWith("PinnedMessageDeletedEvent")) { setDecorations({}, activePoll); return; }
+    Message m; m.special = "alert"; m.stamp = QDateTime::currentDateTime();
+    m.id = str(data["id"]);
+    if (event.endsWith("SubscriptionEvent")) {
+        m.name = str(data["username"]);
+        const int months = data["months"].toInt(1);
+        m.text = hub->cfg->T("Subscribed for {months} months!", {{"months", QString::number(months)}});
+    } else if (event.endsWith("GiftedSubscriptionsEvent")) {
+        m.name = str(data["gifter_username"]);
+        m.text = hub->cfg->T("Gifted {count} subscriptions!", {{"count", QString::number(data["gifted_usernames"].toArray().size())}});
+    } else if (event.endsWith("RewardRedeemedEvent")) {
+        m.name = str(at(data, {"user", "username"}));
+        if (m.name.isEmpty()) m.name = str(data["username"]);
+        m.text = str(data["reward_title"]);
+        if (m.text.isEmpty()) m.text = str(at(data, {"reward", "title"}));
+        const auto input = str(data["user_input"]);
+        if (!input.isEmpty()) m.text += " — " + input;
+    } else if (event.endsWith("KicksGifted")) {
+        m.id = str(data["gift_transaction_id"]); m.name = str(at(data, {"sender", "username"}));
+        m.text = str(at(data, {"gift", "name"}));
+        const auto body = str(data["message"]); if (!body.isEmpty()) m.text += " — " + body;
+    } else return;
+    m.name = m.name.left(100); m.text = m.text.left(2000);
+    if (m.name.isEmpty()) m.name = "Kick";
+    if (!m.text.isEmpty()) publish(m);
 }
 } // namespace yc

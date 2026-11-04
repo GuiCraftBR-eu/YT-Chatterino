@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.2.6 — WINDOWS 11 x64
+YT-CHATTERINO 2.3.0 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.2.6.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.3.0.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -14,17 +14,20 @@ por hora por chat no intervalo padrão de 18,25 segundos; vários chats consomem
 Twitch: Configurações > Contas > Conectar Twitch. Autorize o código no navegador uma vez.
 A tela informa a conta conectada e as permissões ativadas; não é preciso autorizar novamente para atualizar emotes.
 
-KICK: CONECTAR E ENVIAR
-Para ler, abra o link do canal; não é preciso entrar. Para enviar mensagens:
-1. Crie seu aplicativo em https://kick.com/settings/developer e cadastre exatamente
+KICK: CONECTAR, ENVIAR E MODERAR
+Para ler, abra o link ou selecione Kick e digite o canal; não é preciso entrar.
+1. Abra o guia ilustrado em Configurações > Tutorial > Contas > Kick.
+2. Crie seu aplicativo em https://kick.com/settings/developer e cadastre exatamente
    http://localhost:37365/callback como endereço de redirecionamento.
-2. Selecione Read user information e Write to Chat feed.
-3. Em Configurações > Contas > Kick, informe o ID e o segredo do cliente e autorize no navegador.
-O segredo e o acesso são salvos no armazenamento protegido de credenciais do sistema.
-Não compartilhe seu segredo. Em chats mistos, escolha o canal no campo de mensagem.
-A leitura usa dados públicos não oficiais da Kick; pode falhar se o site mudar e
-perder mensagens em chats muito movimentados. Moderação e edição de título da Kick
-ainda não estão disponíveis.
+3. Selecione Read user information e Write to Chat feed. Para moderação e edição,
+   selecione também Read channel information, Update channel information, Execute
+   moderation actions for moderators e Execute moderation actions on chat messages.
+4. Em Configurações > Contas > Kick, informe o ID e o segredo e autorize no navegador.
+   Reconecte depois de alterar permissões; desmarque gerenciamento se quiser só enviar.
+O segredo é salvo no armazenamento protegido do sistema; nunca o compartilhe.
+O chat ao vivo usa conexão pública não oficial da Kick e recupera histórico recente
+após desconexões. Mudanças no site ou falhas prolongadas ainda podem causar perdas.
+Ações exigem o cargo no canal; editar título/categoria exige a conta do dono.
 
 ENVIAR / MODERAR
 Digite abaixo do chat e pressione Enter. Clique direito na mensagem da Twitch para preparar uma resposta. Ctrl + clique direito abre o menu de ações/moderação.

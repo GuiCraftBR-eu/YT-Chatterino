@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.2.6 — WINDOWS 11 x64
+YT-CHATTERINO 2.3.0 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.2.6.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.3.0.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -14,14 +14,19 @@ at the default 18.25-second interval; multiple chats use more.
 Twitch: Settings > Accounts > Connect Twitch. Approve the browser code once.
 Accounts shows your connected identity and enabled permissions. Refreshing subscriber emotes reuses your saved sign-in.
 
-KICK: CONNECT AND SEND
-Open a Kick channel link to read without signing in. To send, create an application at
-https://kick.com/settings/developer with the exact redirect http://localhost:37365/callback
-and select Read user information and Write to Chat feed. Enter its client ID and secret
-under Settings > Accounts > Kick, then approve in your browser. Credentials use the OS
-credential store; do not share your secret. Choose a target only in mixed chats.
-Reading uses unofficial public Kick website data, may break when the site changes and
-can miss messages in busy chats. Kick moderation and title editing are not yet available.
+KICK: CONNECT, SEND AND MODERATE
+Read by opening a channel link or selecting Kick and entering the channel name.
+For sending and moderation, follow the illustrated Kick guide in Settings > Tutorial > Accounts.
+Create a developer app at https://kick.com/settings/developer with the exact redirect
+http://localhost:37365/callback. Select Read user information and Write to Chat feed.
+For moderation and editing also select Read channel information, Update channel
+information, Execute moderation actions for moderators, and Execute moderation actions
+on chat messages. Sign in under Settings > Accounts > Kick and approve in your browser.
+Reconnect after changing permissions; uncheck management if you only need to send.
+The OS credential store protects the secret; never share it. Moderation requires a channel
+role, and editing the title/category requires the broadcaster account. Kick live reading
+uses an unofficial public connection and recent-history recovery; changes or prolonged
+disconnections can still cause missed messages.
 
 SEND / MODERATE
 Type below a chat and press Enter. Right-click a Twitch message to prepare a reply. Ctrl+right-click opens actions/moderation.

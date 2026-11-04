@@ -107,6 +107,7 @@ Source::Source(Hub *h, QString p, QString value)
             emit permissionsChanged();
         }
         if (platform == "twitch" && !hub->testMode && !closed) refreshDecorations();
+        if (platform == "kick" && !hub->testMode && !closed) kickCheckRole();
     });
     connect(&poll, &QTimer::timeout, this, [this] {
         if (platform == "kick") {
@@ -120,6 +121,23 @@ Source::Source(Hub *h, QString p, QString value)
         }
     });
     connect(&metadataTimer, &QTimer::timeout, this, &Source::refreshHeader);
+    kickSocket.setMaxAllowedIncomingFrameSize(2 * 1024 * 1024);
+    kickSocket.setMaxAllowedIncomingMessageSize(2 * 1024 * 1024);
+    kickSocketRetry.setSingleShot(true);
+    kickSocketWatchdog.setSingleShot(true);
+    kickSocketRenew.setSingleShot(true);
+    connect(&kickSocketRetry, &QTimer::timeout, this, &Source::kickStartSocket);
+    connect(&kickSocketWatchdog, &QTimer::timeout, &kickSocket, &QWebSocket::abort);
+    connect(&kickSocketRenew, &QTimer::timeout, &kickSocket, &QWebSocket::abort);
+    connect(&kickSocket, &QWebSocket::connected, this, [this] {
+        QJsonObject command{{"id", 1}, {"connect", QJsonObject{{"token", kickSocketToken}, {"name", "yt-chatterino"}}}};
+        kickSocketToken.clear();
+        kickSocket.sendTextMessage(QString::fromUtf8(QJsonDocument(command).toJson(QJsonDocument::Compact)));
+        kickSocketWatchdog.start(65000);
+    });
+    connect(&kickSocket, &QWebSocket::textMessageReceived, this, &Source::kickSocketMessage);
+    connect(&kickSocket, &QWebSocket::disconnected, this, &Source::kickSocketFailed);
+    connect(&kickSocket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) { kickSocketFailed(); });
 }
 
 QString Source::name() const {
@@ -162,6 +180,8 @@ void Source::stop() {
     badgeRetry.stop();
     historyRetry.stop();
     decorationTimer.stop();
+    kickSocketRetry.stop(); kickSocketWatchdog.stop(); kickSocketRenew.stop();
+    kickSocket.abort();
     if (platform == "twitch") {
         hub->twitch.part(this);
     }
@@ -189,6 +209,8 @@ void Source::reconnect() {
         if (!historyLoaded) loadHistory();
     } else if (platform == "kick") {
         poll.stop();
+        kickSocketRetry.stop(); kickSocketWatchdog.stop(); kickSocketRenew.stop();
+        kickSocketStarting = false; kickSocketActive = false; kickSocket.abort();
         kickConnecting = false;
         kickRetryMs = 5000;
         kickConnect();
@@ -239,6 +261,14 @@ void Source::publish(Message m) {
         return;
     }
     m.source = key;
+    if (platform == "kick" && !kickSubscriberBadges.isEmpty()) {
+        for (auto &badge : m.badges) {
+            if (badge.role != "subscriber" || !badge.urls.isEmpty()) continue;
+            const int months = badge.version.toInt();
+            auto tier = kickSubscriberBadges.upperBound(months);
+            if (tier != kickSubscriberBadges.cbegin()) { --tier; badge.urls << tier.value(); }
+        }
+    }
     const auto googleId = str(hub->accounts->google["channel_id"]);
     if (platform == "youtube" && !googleId.isEmpty() && m.uid == googleId && !m.system &&
         (!m.own || !m.badges.isEmpty()) &&
@@ -1665,7 +1695,24 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
         bool ok = false;
         const auto uid = s->room().toLongLong(&ok);
         if (!ok || uid <= 0) { done({}, "Invalid Kick channel information."); return; }
-        QJsonObject body{{"broadcaster_user_id", double(uid)}, {"content", text}, {"type", "user"}};
+        QString kickText = text;
+        const auto matches = QRegularExpression("\\S+").globalMatch(text);
+        QVector<QRegularExpressionMatch> tokens;
+        auto iter = matches;
+        while (iter.hasNext()) tokens << iter.next();
+        static const QRegularExpression nativeUrl(R"(^https://files\.kick\.com/emotes/([A-Za-z0-9_-]{1,80})/fullsize$)");
+        for (auto i = tokens.crbegin(); i != tokens.crend(); ++i) {
+            const QString code = i->captured();
+            const auto span = s->emotes.value(code);
+            const auto native = nativeUrl.match(span.urls.value(0));
+            if (native.hasMatch() && !code.contains(']') && !code.contains('\n'))
+                kickText.replace(i->capturedStart(), i->capturedLength(),
+                                 "[emote:" + native.captured(1) + ':' + code + ']');
+        }
+        if (platformCharacterCount(kickText, "kick") > 500 || kickText.toUtf8().size() > 2048) {
+            done({}, "This message exceeds the channel's character limit."); return;
+        }
+        QJsonObject body{{"broadcaster_user_id", double(uid)}, {"content", kickText}, {"type", "user"}};
         if (!reply.id.isEmpty()) body["reply_to_message_id"] = reply.id;
         accounts->kickApi("chat", [this, self, text, reply, done](QJsonObject data, QString error) {
             if (!self) return;
@@ -1790,7 +1837,11 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
 }
 
 bool Hub::canEditChannel(const Source *s) const {
-    if (!s || s->platform == "kick") return false;
+    if (!s) return false;
+    if (s->platform == "kick") {
+        const auto uid = str(accounts->kick["user_id"]);
+        return !uid.isEmpty() && uid == s->room() && accounts->kickAllows({"channel:write"});
+    }
     if (s->platform == "twitch") {
         const auto uid = str(accounts->twitch["user_id"]), login = str(accounts->twitch["login"]);
         return !str(accounts->twitch["access_token"]).isEmpty() &&
@@ -1804,7 +1855,14 @@ bool Hub::canEditChannel(const Source *s) const {
 }
 
 bool Hub::hasModerationRole(const Source *s) const {
-    if (!s || s->platform == "kick") return false;
+    if (!s) return false;
+    if (s->platform == "kick") {
+        const auto uid = str(accounts->kick["user_id"]);
+        const bool role = !uid.isEmpty() && (uid == s->room() ||
+            (uid == str(s->header["kick_role_uid"]) && s->header["kick_moderator"].toBool()));
+        return role && (accounts->kickAllows({"moderation:ban"}) ||
+                        accounts->kickAllows({"moderation:chat_message:manage"}));
+    }
     if (canEditChannel(s)) return true;
     if (s->platform == "twitch") {
         const auto uid = str(accounts->twitch["user_id"]);
@@ -1911,7 +1969,35 @@ void Hub::youtubeMessageId(Source *s, Message m, std::function<void(QString, QSt
 }
 
 void Hub::moderate(Source *s, const Message &m, QString action, int duration, JsonCallback done) {
-    if (s->platform == "kick") { done({}, "Kick moderation is not available yet."); return; }
+    if (s->platform == "kick") {
+        if (!hasModerationRole(s)) { done({}, "Kick moderation requires the channel owner or moderator role and permissions."); return; }
+        const auto scope = action == "delete" ? QString("moderation:chat_message:manage") : QString("moderation:ban");
+        if (!accounts->kickAllows({scope})) { done({}, "Enable the required Kick permissions and reconnect in Settings → Accounts."); return; }
+        if (action == "delete") {
+            if (m.id.isEmpty()) { done({}, "This message has no moderation ID."); return; }
+            QPointer<Source> safe(s);
+            accounts->kickApi("chat/" + QString::fromLatin1(QUrl::toPercentEncoding(m.id)),
+                [safe, m, done](QJsonObject d, QString e) {
+                    if (safe && e.isEmpty()) safe->redact({{"message_id", m.id}});
+                    done(d, e);
+                }, "DELETE");
+            return;
+        }
+        bool validUser = false, validRoom = false;
+        const qint64 userId = m.uid.toLongLong(&validUser), broadcaster = s->room().toLongLong(&validRoom);
+        if (!validUser || !validRoom || userId <= 0 || broadcaster <= 0 || userId == broadcaster) {
+            done({}, "Invalid Kick moderation target."); return;
+        }
+        QJsonObject body{{"broadcaster_user_id", double(broadcaster)}, {"user_id", double(userId)}};
+        if (action == "timeout") body["duration"] = qBound(1, (duration + 59) / 60, 10080);
+        if (action != "timeout" && action != "ban" && action != "unban") { done({}, "Unknown moderation action."); return; }
+        QPointer<Source> safe(s);
+        accounts->kickApi("moderation/bans", [safe, m, action, done](QJsonObject d, QString e) {
+            if (safe && e.isEmpty() && action != "unban") safe->redact({{"user_id", m.uid}});
+            done(d, e);
+        }, action == "unban" ? "DELETE" : "POST", body);
+        return;
+    }
     QPointer<Source> self(s);
     auto complete = [self, m, action, done](QJsonObject d, QString e) {
         if (self && e.isEmpty() && action != "unban") {
@@ -1996,7 +2082,18 @@ void Hub::moderate(Source *s, const Message &m, QString action, int duration, Js
 }
 
 void Hub::editChannel(Source *s, QString title, QString categoryId, JsonCallback done) {
-    if (s->platform == "kick") { done({}, "Kick channel editing is not available yet."); return; }
+    if (s->platform == "kick") {
+        if (!canEditChannel(s)) { done({}, "Kick requires the broadcaster account and channel editing permission."); return; }
+        QJsonObject body;
+        if (!title.trimmed().isEmpty()) body["stream_title"] = title.trimmed();
+        if (!categoryId.isEmpty()) {
+            bool ok = false; const auto id = categoryId.toLongLong(&ok);
+            if (!ok || id <= 0) { done({}, "Choose a valid Kick category."); return; }
+            body["category_id"] = double(id);
+        }
+        if (body.isEmpty()) { done({}, "Enter a title or choose a category."); return; }
+        accounts->kickApi("channels", done, "PATCH", body); return;
+    }
     if (s->platform == "twitch") {
         accounts->requireTwitch({"channel:manage:broadcast"}, [=, this](QString, QString e) {
             if (!e.isEmpty()) {

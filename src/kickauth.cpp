@@ -3,7 +3,7 @@
 namespace yc {
 static const QString KickRedirect = QStringLiteral("http://localhost:37365/callback");
 
-void Accounts::signInKick(QString clientId, QString clientSecret) {
+void Accounts::signInKick(QString clientId, QString clientSecret, bool manage) {
     if (kickBusy) return;
     clientId = clientId.trimmed();
     if (clientSecret.isEmpty() && clientId == str(kick["client_id"])) clientSecret = str(kick["client_secret"]);
@@ -27,7 +27,7 @@ void Accounts::signInKick(QString clientId, QString clientSecret) {
                                                    .toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
     const auto url = Network::query("https://id.kick.com/oauth/authorize",
         {{"client_id", clientId}, {"redirect_uri", KickRedirect}, {"response_type", "code"},
-         {"scope", "user:read chat:write"}, {"state", kickState}, {"code_challenge", challenge},
+         {"scope", manage ? "user:read channel:read channel:write chat:write moderation:ban moderation:chat_message:manage" : "user:read chat:write"}, {"state", kickState}, {"code_challenge", challenge},
          {"code_challenge_method", "S256"}});
     kickTimeout.start(180000);
     emit changed();

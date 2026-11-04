@@ -111,5 +111,6 @@ class SettingsWindow : public QDialog {
     QWidget *shortcutsPage();
     QWidget *tutorialPage();
     void showYoutubeGuide();
+    void showKickGuide();
 };
 } // namespace yc

@@ -194,7 +194,7 @@ void Images::request(const QStringList &urls, int alternative) {
             probe.open(QIODevice::ReadOnly);
             QImageReader reader(&probe);
             QSize size = reader.size();
-            if (size.width() <= 0 || size.height() <= 0 || size.width() > 2048 || size.height() > 2048) {
+            if (size.width() <= 0 || size.height() <= 0 || size.width() > 4096 || size.height() > 4096) {
                 error = "Invalid image dimensions.";
             } else {
                 auto e = QSharedPointer<Entry>::create();
@@ -218,6 +218,10 @@ void Images::request(const QStringList &urls, int alternative) {
                                 [this, key](int) { emit frame(key); });
                     }
                 } else {
+                    if (size.width() > 512 || size.height() > 512) {
+                        QSize scaled = size; scaled.scale(256, 256, Qt::KeepAspectRatio);
+                        reader.setScaledSize(scaled);
+                    }
                     e->image = reader.read();
                 }
                 if (error.isEmpty() && (!e->image.isNull() || e->movie)) {

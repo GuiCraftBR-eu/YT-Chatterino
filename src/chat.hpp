@@ -1,5 +1,6 @@
 #pragma once
 #include "accounts.hpp"
+#include <QtWebSockets/QWebSocket>
 
 namespace yc {
 class Hub;
@@ -18,6 +19,8 @@ class Source : public QObject {
     QQueue<QString> seenOrder;
     QHash<QString, Span> emotes;
     QHash<QString, Span> channelEmotes;
+    QHash<QString, Span> kickGlobalEmotes;
+    QMap<int, QString> kickSubscriberBadges;
     QHash<QString, Badge> badges;
     QHash<QString, Badge> globalBadges, channelBadges;
     bool paused = false, closed = false, historyLoaded = false, historyLoading = false;
@@ -32,7 +35,11 @@ class Source : public QObject {
     QJsonObject context;
     QTimer poll, metadataTimer, badgeRetry, decorationTimer, historyRetry;
     int historyRetryMs = 30000;
-    QString kickChannelId, kickLastPollId, kickPollHead;
+    QString kickChannelId, kickRoomId, kickLastPollId, kickPollHead, kickSocketToken;
+    QWebSocket kickSocket;
+    QTimer kickSocketRetry, kickSocketWatchdog, kickSocketRenew;
+    bool kickSocketActive = false, kickSocketStarting = false;
+    int kickSocketRetryMs = 3000;
     bool kickInitial = true, kickConnecting = false;
     int kickRetryMs = 5000;
     bool decorationPending = false, pollDecorationPending = false;
@@ -79,6 +86,12 @@ class Source : public QObject {
     void kickPoll();
     void kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Message>> batch, bool historical);
     void kickError(QString error);
+    void kickLoadEmotes();
+    void kickStartSocket();
+    void kickSocketMessage(const QString &text);
+    void kickSocketFailed();
+    void kickEvent(QString event, QJsonObject data);
+    void kickCheckRole();
     void youtubeConnect();
     void youtubePopout(QJsonObject chat, QJsonObject config);
     void youtubePoll();

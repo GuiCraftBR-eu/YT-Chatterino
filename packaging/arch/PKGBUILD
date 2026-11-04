@@ -1,11 +1,11 @@
 pkgname=yt-chatterino
-pkgver=2.2.6
+pkgver=2.3.0
 pkgrel=1
 pkgdesc='Native C++ YouTube and Twitch chat client inspired by Chatterino'
 arch=('x86_64')
 url='https://github.com/GuiCraftBR-eu/YT-Chatterino'
 license=('LicenseRef-proprietary')
-depends=('qt6-base' 'qt6-svg' 'qt6-imageformats' 'libsecret' 'ttf-dejavu')
+depends=('qt6-base' 'qt6-svg' 'qt6-imageformats' 'qt6-websockets' 'libsecret' 'ttf-dejavu')
 makedepends=('cmake' 'ninja' 'gcc')
 checkdepends=('xorg-server-xvfb' 'xorg-xauth')
 optdepends=('polkit: in-app package updates'

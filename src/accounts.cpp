@@ -137,6 +137,10 @@ void Accounts::load() {
     vault.read("kick", [this](QByteArray bytes, QString) {
         kick = QJsonDocument::fromJson(bytes).object();
         emit changed();
+        if (!str(kick["refresh_token"]).isEmpty() &&
+            kick["expires_at"].toDouble() <= QDateTime::currentSecsSinceEpoch() + 60) {
+            kickToken([](QString, QString) {});
+        }
     });
     vault.read("twitch", [this](QByteArray b, QString) {
         twitch = QJsonDocument::fromJson(b).object();
@@ -242,6 +246,10 @@ bool Accounts::connected(const QString &provider) const {
 
 bool Accounts::twitchAllows(const QSet<QString> &scopes) const {
     return connected("twitch") && (scopes - twitchScopes()).isEmpty();
+}
+
+bool Accounts::kickAllows(const QSet<QString> &scopes) const {
+    return connected("kick") && (scopes - grantedScopes(kick)).isEmpty();
 }
 
 bool Accounts::googleAllowsWriting() const {

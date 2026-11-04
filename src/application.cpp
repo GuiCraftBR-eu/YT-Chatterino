@@ -395,16 +395,22 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setWindowTitle(cfg.T("Add chats"));
     auto *layout = new QVBoxLayout(dialog);
-    layout->addWidget(label(cfg, "YouTube links, Twitch @channels or Kick links · one per line"));
-    auto *input = new QPlainTextEdit(dialog);
-    input->setMinimumHeight(90);
-    layout->addWidget(input);
+    layout->addWidget(label(cfg, "Paste a link or enter a channel name"));
     auto *combo = new QComboBox(dialog);
-    for (const auto &name : QStringList{"Separate tabs", "Side by side", "Stacked", "Mixed feed"}) {
-        combo->addItem(cfg.T(name));
-    }
+    combo->setObjectName("add-chat-layout");
+    for (const auto &name : QStringList{"Separate tabs", "Side by side", "Stacked", "Mixed feed"}) combo->addItem(cfg.T(name));
     QStringList modes{"tabs", "horizontal", "vertical", "mix"};
     combo->setCurrentIndex(qMax(0, modes.indexOf(mode)));
+    auto *entry = new QHBoxLayout;
+    auto *platform = new QComboBox(dialog);
+    platform->setObjectName("add-chat-platform");
+    platform->addItems({cfg.T("Auto"), "Twitch", "Kick", "YouTube"});
+    auto *input = new QLineEdit(dialog);
+    input->setObjectName("add-chat-input");
+    input->setPlaceholderText(cfg.T("Link or @name · separate multiple chats with commas"));
+    input->setClearButtonEnabled(true);
+    entry->addWidget(platform); entry->addWidget(input, 1);
+    layout->addLayout(entry);
     layout->addWidget(combo);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Open | QDialogButtonBox::Cancel, dialog);
     buttons->button(QDialogButtonBox::Open)->setText(cfg.T("Open"));
@@ -412,15 +418,29 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     layout->addWidget(buttons);
     QPointer<Pane> safe(anchor);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-    auto open = [this, input, combo, modes, dialog, safe] {
-        openChats(input->toPlainText().split(QRegularExpression("[\\s,]+"), Qt::SkipEmptyParts),
-                  modes[combo->currentIndex()], safe);
+    auto open = [this, input, combo, modes, dialog, safe, platform] {
+        auto links = input->text().split(QRegularExpression("[\\s,]+"), Qt::SkipEmptyParts);
+        if (links.isEmpty()) { input->setFocus(); return; }
+        for (auto &link : links) {
+            if (platform->currentIndex() == 2 && kickLogin(link).isEmpty()) link = "kick:" + link;
+            else if ((platform->currentIndex() == 1 || platform->currentIndex() == 0) &&
+                     twitchLogin(link).isEmpty() && kickLogin(link).isEmpty() &&
+                     QRegularExpression("^[A-Za-z0-9_]{1,25}$").match(link).hasMatch()) link = "@" + link;
+        }
+        bool valid = false;
+        for (const auto &link : links) if (!kickLogin(link).isEmpty() || !twitchLogin(link).isEmpty() || !videoId(link).isEmpty()) { valid = true; break; }
+        if (!valid) {
+            QMessageBox::warning(dialog, cfg.T("Add chats"), cfg.T("Enter a YouTube live link, Twitch @channel or Kick link."));
+            input->setFocus(); return;
+        }
+        openChats(links, modes[combo->currentIndex()], safe);
         dialog->accept();
     };
     connect(buttons, &QDialogButtonBox::accepted, dialog, open);
+    connect(input, &QLineEdit::returnPressed, dialog, open);
     auto *shortcut = new QShortcut(QKeySequence("Ctrl+Return"), dialog);
     connect(shortcut, &QShortcut::activated, dialog, open);
-    dialog->resize(480, 260);
+    dialog->resize(520, 165);
     dialog->show();
     darkTitlebar(dialog);
     input->setFocus();
@@ -786,7 +806,9 @@ void MainWindow::populateMessageMenu(QMenu &m, Pane *pane, Message message) {
                                                                      {"timeout3600", "Timeout · 1 hour"},
                                                                      {"ban", "Ban user…"},
                                                                      {"unban", "Unban user"}}) {
-                if (action.first == "unban" && source->platform != "twitch") {
+                if (source->platform == "kick" && !accounts.kickAllows({action.first == "delete"
+                        ? "moderation:chat_message:manage" : "moderation:ban"})) continue;
+                if (action.first == "unban" && source->platform != "twitch" && source->platform != "kick") {
                     continue;
                 }
                 auto *a = moderation->addAction(cfg.T(action.second), this, [=, this] {
@@ -956,31 +978,45 @@ void MainWindow::editChannel(Source *source) {
     auto *layout = new QFormLayout(dialog);
     auto *title = new QLineEdit(str(source->header["title"]), dialog);
     layout->addRow(cfg.T("Title"), title);
+    if (source->platform == "kick" && !source->header["live"].toBool()) {
+        auto *offlineHint = label(cfg, "Kick does not show the current title while offline. Leave this blank to keep it.", true);
+        layout->addRow(offlineHint);
+    }
     auto *category = new QLineEdit(str(source->header["category"]), dialog);
     auto *categories = new QComboBox(dialog);
-    categories->setVisible(source->platform == "twitch");
-    category->setVisible(source->platform == "twitch");
-    if (source->platform == "twitch") {
+    categories->setVisible(source->platform != "youtube");
+    category->setVisible(source->platform != "youtube");
+    if (source->platform != "youtube") {
         layout->addRow(cfg.T("Category"), category);
         layout->addRow(categories);
-        connect(category, &QLineEdit::editingFinished, dialog, [this, category, categories] {
-            if (category->text().trimmed().isEmpty()) {
-                return;
-            }
+        auto *hint = label(cfg, "Type a category, then choose a result before saving.", true);
+        layout->addRow(hint);
+        auto *timer = new QTimer(dialog);
+        timer->setSingleShot(true); timer->setInterval(450);
+        auto lookup = [this, category, categories, source = QPointer<Source>(source)] {
+            const QString queryText = category->text().trimmed();
+            if (queryText.isEmpty()) { categories->clear(); return; }
             QPointer<QComboBox> safe(categories);
-            accounts.helix("search/categories",
-                           [safe](QJsonObject d, QString e) {
-                               if (!safe || !e.isEmpty()) {
-                                   return;
-                               }
-                               safe->clear();
-                               for (const auto &v : d["data"].toArray()) {
-                                   auto o = v.toObject();
-                                   safe->addItem(str(o["name"]), str(o["id"]));
-                               }
-                           },
-                           "GET", {{"query", category->text()}, {"first", "20"}});
-        });
+            QPointer<QLineEdit> safeInput(category);
+            auto received = [safe, safeInput, queryText](QJsonObject d, QString e) {
+                if (!safe || !safeInput || !e.isEmpty() || safeInput->text().trimmed() != queryText) return;
+                safe->clear();
+                for (const auto &value : d["data"].toArray()) {
+                    const auto item = value.toObject();
+                    const auto name = str(item["name"]), id = str(item["id"]);
+                    if (!name.isEmpty() && !id.isEmpty()) safe->addItem(name, id);
+                }
+            };
+            if (source && source->platform == "kick") {
+                const auto query = Network::query("https://api.kick.com/public/v1/categories", {{"q", queryText}}).query(QUrl::FullyEncoded);
+                accounts.kickApi("categories?" + query, received);
+            } else {
+                accounts.helix("search/categories", received, "GET", {{"query", queryText}, {"first", "20"}});
+            }
+        };
+        connect(category, &QLineEdit::textEdited, dialog, [timer, categories] { categories->clear(); timer->start(); });
+        connect(timer, &QTimer::timeout, dialog, lookup);
+        connect(category, &QLineEdit::editingFinished, dialog, [timer, lookup] { if (timer->isActive()) { timer->stop(); lookup(); } });
     }
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, dialog);
     layout->addRow(buttons);
@@ -989,6 +1025,12 @@ void MainWindow::editChannel(Source *source) {
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
     connect(buttons, &QDialogButtonBox::accepted, dialog, [=, this] {
         if (!safeSource) {
+            return;
+        }
+        if (safeSource->platform != "youtube" &&
+            category->text().trimmed().compare(str(safeSource->header["category"]), Qt::CaseInsensitive) != 0 &&
+            categories->currentData().toString().isEmpty()) {
+            QMessageBox::warning(safe, cfg.T("Edit channel"), cfg.T("Search and select a category before saving."));
             return;
         }
         buttons->setEnabled(false);
@@ -1573,7 +1615,8 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
     mods->setContentsMargins(0, 0, 0, 0);
     for (const auto &pair :
          QList<QPair<QString, int>>{{"Unban", -1}, {"1m", 60}, {"10m", 600}, {"1h", 3600}, {"Ban", 0}}) {
-        if (pair.second == -1 && source->platform != "twitch") {
+        if (source->platform == "kick" && !accounts.kickAllows({"moderation:ban"})) continue;
+        if (pair.second == -1 && source->platform != "twitch" && source->platform != "kick") {
             continue;
         }
         auto *b = button(cfg, pair.first, d, [this, s = QPointer<Source>(source), message, pair] {
@@ -1601,7 +1644,8 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
     layout->addWidget(moderationRow);
     QPointer<Source> permissionSource(source);
     auto updateModeration = [this, permissionSource, moderationRow] {
-        moderationRow->setVisible(permissionSource && hub.hasModerationRole(permissionSource));
+        moderationRow->setVisible(permissionSource && hub.hasModerationRole(permissionSource) &&
+            (permissionSource->platform != "kick" || accounts.kickAllows({"moderation:ban"})));
     };
     updateModeration();
     connect(source, &Source::permissionsChanged, d, updateModeration);
