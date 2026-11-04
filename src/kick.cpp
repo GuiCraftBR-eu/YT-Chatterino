@@ -84,7 +84,10 @@ Message parseKick(const QJsonObject &o, bool historical) {
 void Source::kickError(QString error) {
     requesting = false;
     if (closed) return;
-    if (error.contains("429")) kickRetryMs = qMax(kickRetryMs, 120000);
+    if (error.contains("429")) {
+        kickRetryMs = qMax(kickRetryMs, 120000);
+        kickPollCooldownUntil = QDateTime::currentMSecsSinceEpoch() + kickRetryMs;
+    }
     connectionStatus(hub->cfg->T("Kick chat is temporarily unavailable. Retrying…"));
     poll.start(kickRetryMs);
     kickRetryMs = qMin(300000, kickRetryMs * 2);
@@ -147,6 +150,8 @@ void Source::kickConnect() {
 
 void Source::kickPoll() {
     if (closed || hub->testMode || requesting) return;
+    const auto remaining = kickPollCooldownUntil - QDateTime::currentMSecsSinceEpoch();
+    if (remaining > 0) { poll.start(int(qMin<qint64>(remaining, 300000))); return; }
     if (kickChannelId.isEmpty()) { kickConnect(); return; }
     requesting = true;
     kickPollHead.clear();
@@ -199,6 +204,7 @@ void Source::kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Mess
         self->kickInitial = false;
         self->requesting = false;
         self->kickRetryMs = 5000;
+        self->kickPollCooldownUntil = 0;
         if (historical) self->connectionStatus(self->hub->cfg->T("Connected to Kick"));
         self->poll.start(self->kickSocketActive ? 30000 : 5000);
     });
@@ -280,7 +286,8 @@ void Source::kickSocketFailed() {
     kickSocketStarting = false; kickSocketActive = false; kickSocketToken.clear();
     kickSocketWatchdog.stop(); kickSocketRenew.stop();
     if (closed || hub->testMode || platform != "kick") return;
-    if (!requesting && (!poll.isActive() || poll.remainingTime() > 1000)) poll.start(0);
+    if (!requesting && kickPollCooldownUntil <= QDateTime::currentMSecsSinceEpoch() &&
+        (!poll.isActive() || poll.remainingTime() > 1000)) poll.start(0);
     if (!kickSocketRetry.isActive()) {
         kickSocketRetry.start(kickSocketRetryMs);
         kickSocketRetryMs = qMin(120000, kickSocketRetryMs * 2);
@@ -306,7 +313,7 @@ void Source::kickSocketMessage(const QString &text) {
             kickSocketRenew.start(40 * 60 * 1000);
         } else if (frame["id"].toInt() == 2 && frame.contains("subscribe")) {
             kickSocketStarting = false; kickSocketActive = true; kickSocketRetryMs = 3000;
-            if (!requesting) poll.start(0);
+            if (!requesting && kickPollCooldownUntil <= QDateTime::currentMSecsSinceEpoch()) poll.start(0);
         }
         const auto push = frame["push"].toObject();
         if (push.contains("disconnect") || push.contains("unsubscribe")) { kickSocket.abort(); return; }

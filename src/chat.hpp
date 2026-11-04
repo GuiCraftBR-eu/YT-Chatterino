@@ -42,6 +42,7 @@ class Source : public QObject {
     int kickSocketRetryMs = 3000;
     bool kickInitial = true, kickConnecting = false;
     int kickRetryMs = 5000;
+    qint64 kickPollCooldownUntil = 0;
     bool decorationPending = false, pollDecorationPending = false;
     qint64 pinRetryAfter = 0;
     quint64 decorationGeneration = 0;

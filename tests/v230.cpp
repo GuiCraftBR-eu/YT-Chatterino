@@ -251,3 +251,21 @@ void NativeTests::kickDisconnectImmediatelyStartsRecovery() {
     source->stop();
     app->hub.testMode = true;
 }
+
+void NativeTests::kickReconnectRespectsRateLimit() {
+    auto *source = app->hub.source("kick", "rate-limited");
+    app->hub.testMode = false;
+    source->kickError("HTTP 429: limited");
+    QVERIFY(source->poll.remainingTime() > 110000);
+    source->kickSocketActive = true;
+    source->kickSocketFailed();
+    QVERIFY(source->poll.remainingTime() > 110000);
+    source->kickSocketMessage(R"({"id":2,"subscribe":{}})");
+    QVERIFY(source->poll.remainingTime() > 110000);
+    int calls = 0;
+    app->net.transport = [&](QUrl, QByteArray, QByteArray, QMap<QByteArray, QByteArray>, BytesCallback) { ++calls; };
+    source->kickPoll();
+    QCOMPARE(calls, 0);
+    QVERIFY(source->poll.remainingTime() > 110000);
+    source->stop(); app->hub.testMode = true;
+}

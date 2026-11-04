@@ -146,4 +146,5 @@ class NativeTests : public QObject {
     void kickCategorySearchIgnoresStaleResults();
     void incrementalAppendKeepsOffsetsCorrect();
     void kickDisconnectImmediatelyStartsRecovery();
+    void kickReconnectRespectsRateLimit();
 };
