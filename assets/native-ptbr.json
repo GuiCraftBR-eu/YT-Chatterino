@@ -288,5 +288,10 @@
   "Default sound: ChatternoPing.wav · Live alerts: Twitch and Kick": "Som padrão: ChatternoPing.wav · Alertas de lives: Twitch e Kick",
   "Channel name or link": "Nome ou link do canal",
   "Twitch and Kick checks run once a minute while the app is open. Alerts trigger on offline → live, with no sound on initial detection.": "Twitch e Kick são verificadas a cada minuto enquanto o app está aberto. O alerta toca quando um canal entra ao vivo, sem tocar na detecção inicial.",
-  "Stream preview": "Prévia da transmissão"
+  "Stream preview": "Prévia da transmissão",
+  "For YouTube names with spaces, use quotation marks.": "Para nomes de canais do YouTube com espaços, use aspas.",
+  "More than one YouTube channel has this name. Use its @handle or channel link.": "Mais de um canal do YouTube tem esse nome. Use o @identificador ou o link do canal.",
+  "Could not find that YouTube channel.": "Não foi possível encontrar esse canal do YouTube.",
+  "Select a YouTube channel": "Selecione um canal do YouTube",
+  "Matching channels": "Canais encontrados"
 }

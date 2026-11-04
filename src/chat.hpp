@@ -187,6 +187,7 @@ class Hub : public QObject {
     void editChannel(Source *source, QString title, QString categoryId, JsonCallback done);
     void profile(Source *source, Message message, JsonCallback done);
     void savedStreams(QJsonObject saved, JsonCallback done);
+    void youtubeChannelByName(QString name, JsonCallback done);
     void sound(bool live = false, bool force = false);
     void messageAlert(Source *source, const Message &message);
     void pollLive();

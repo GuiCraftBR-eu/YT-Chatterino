@@ -1,12 +1,12 @@
 #include "native_tests.hpp"
 
-static QByteArray livePage(int count = 1) {
+static QByteArray livePage(int count = 1, bool duplicateTitles = false) {
     QJsonArray entries;
     for (int i = 0; i < count; ++i) {
         const QString id = i == 0 ? "0sfDth4lMLc" : "4t4AQ15yj1M";
         QJsonObject lockup{{"contentId", id},
             {"metadata", QJsonObject{{"lockupMetadataViewModel", QJsonObject{
-                {"title", QJsonObject{{"content", QString("Live %1").arg(i + 1)}}}}}}},
+                {"title", QJsonObject{{"content", duplicateTitles ? QString("Same title") : QString("Live %1").arg(i + 1)}}}}}}},
             {"contentImage", QJsonObject{{"badgeStyle", "THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE"}}}};
         entries.append(QJsonObject{{"lockupViewModel", lockup}});
     }
@@ -92,10 +92,11 @@ void NativeTests::twitchAndYoutubeThumbnailsFromMetadata() {
 void NativeTests::youtubeChannelDiscoveryAndChooser() {
     QStringList paths;
     bool offline = false;
+    bool duplicateTitles = false;
     app->net.transport = [&](QUrl url, QByteArray, QByteArray, QMap<QByteArray, QByteArray>, BytesCallback done) {
         if (url.host() != "www.youtube.com") { done({}, "fixture image"); return; }
         paths << url.path();
-        if (url.path().endsWith("/streams")) done(livePage(offline ? 0 : 2), {});
+        if (url.path().endsWith("/streams")) done(livePage(offline ? 0 : 2, duplicateTitles), {});
         else done(R"(var ytInitialPlayerResponse = {"videoDetails":{"isLive":false}};)", {});
     };
     QJsonObject result;
@@ -107,12 +108,16 @@ void NativeTests::youtubeChannelDiscoveryAndChooser() {
     QCOMPARE(str(result["streams"].toArray().first().toObject()["title"]), QString("Live 1"));
 
     QString notice;
+    bool distinctChoices = false;
     QTimer modalCloser;
     connect(&modalCloser, &QTimer::timeout, this, [&] {
         for (auto *widget : QApplication::topLevelWidgets()) {
             if (!widget->isVisible()) continue;
             if (auto *choice = qobject_cast<QInputDialog *>(widget)) {
-                if (auto *combo = choice->findChild<QComboBox *>()) combo->setCurrentIndex(1);
+                if (auto *combo = choice->findChild<QComboBox *>()) {
+                    distinctChoices = combo->count() > 1 && combo->itemText(0) != combo->itemText(1);
+                    combo->setCurrentIndex(1);
+                }
                 choice->accept();
             } else if (auto *message = qobject_cast<QMessageBox *>(widget)) {
                 notice = message->text();
@@ -121,6 +126,7 @@ void NativeTests::youtubeChannelDiscoveryAndChooser() {
         }
     });
     modalCloser.start(10);
+    duplicateTitles = true;
     app->addChats();
     auto *dialog = addDialog(app.get());
     QVERIFY(dialog);
@@ -128,6 +134,7 @@ void NativeTests::youtubeChannelDiscoveryAndChooser() {
     dialog->findChild<QComboBox *>("add-chat-platform")->setCurrentIndex(3);
     input->setText("somechannel");
     QTest::keyClick(input, Qt::Key_Return);
+    QVERIFY(distinctChoices);
     QVERIFY(app->hub.sources.contains("4t4AQ15yj1M"));
 
     offline = true;
@@ -141,6 +148,63 @@ void NativeTests::youtubeChannelDiscoveryAndChooser() {
     QVERIFY(notice.contains("no current live broadcasts"));
     QVERIFY(dialog->isVisible());
     QVERIFY(paths.contains("/@offlinechannel/live"));
+}
+
+void NativeTests::youtubeDisplayNameSearch() {
+    QStringList paths;
+    app->net.transport = [&](QUrl url, QByteArray, QByteArray, QMap<QByteArray, QByteArray>, BytesCallback done) {
+        paths << url.path();
+        if (url.path() == "/@Alias/streams" || url.path() == "/@Duplicate/streams") {
+            done({}, "HTTP 404: Not found"); return;
+        }
+        if (url.path() == "/results") {
+            const auto name = QUrlQuery(url).queryItemValue("search_query");
+            QJsonArray rows;
+            const auto item = [&](const QString &id) {
+                return QJsonObject{{"channelRenderer", QJsonObject{{"channelId", id},
+                    {"title", QJsonObject{{"simpleText", name}}}}}};
+            };
+            rows.append(item("UCabcdefghijklmnopqrstuv"));
+            if (name == "Duplicate") rows.append(item("UCabcdefghijklmnopqrstuX"));
+            done("var ytInitialData = " + QJsonDocument(QJsonObject{{"contents", rows}}).toJson(QJsonDocument::Compact) + ";", {});
+        } else if (url.path().endsWith("/streams")) done(livePage(), {});
+        else done({}, "Unexpected fixture request");
+    };
+    QJsonObject result;
+    QString error;
+    app->hub.savedStreams({{"channel_id", "Alias"}}, [&](QJsonObject d, QString e) { result=d; error=e; });
+    QVERIFY(error.isEmpty());
+    QCOMPARE(result["streams"].toArray().size(), 1);
+    QVERIFY(paths.contains("/@Alias/streams"));
+    QVERIFY(paths.contains("/results"));
+    QVERIFY(paths.contains("/channel/UCabcdefghijklmnopqrstuv/streams"));
+    app->hub.savedStreams({{"channel_id", "Duplicate"}}, [&](QJsonObject d, QString e) { result=d; error=e; });
+    QVERIFY(error.isEmpty());
+    QCOMPARE(result["channels"].toArray().size(), 2);
+    app->addChats();
+    auto *dialog = addDialog(app.get()); QVERIFY(dialog);
+    dialog->findChild<QComboBox *>("add-chat-platform")->setCurrentIndex(3);
+    auto *input = dialog->findChild<QLineEdit *>("add-chat-input");
+    input->setText("\"Display Name\"");
+    QTest::keyClick(input, Qt::Key_Return);
+    QVERIFY(app->hub.sources.contains("0sfDth4lMLc"));
+    QTimer modalCloser;
+    connect(&modalCloser, &QTimer::timeout, this, [&] {
+        for (auto *widget : QApplication::topLevelWidgets()) {
+            auto *choice = qobject_cast<QInputDialog *>(widget);
+            if (!choice || !choice->isVisible() || choice->windowTitle() != "Select a YouTube channel") continue;
+            if (auto *combo = choice->findChild<QComboBox *>()) combo->setCurrentIndex(1);
+            choice->accept();
+        }
+    });
+    modalCloser.start(10);
+    app->addChats();
+    dialog = addDialog(app.get()); QVERIFY(dialog);
+    dialog->findChild<QComboBox *>("add-chat-platform")->setCurrentIndex(3);
+    input = dialog->findChild<QLineEdit *>("add-chat-input");
+    input->setText("Duplicate");
+    QTest::keyClick(input, Qt::Key_Return);
+    QVERIFY(paths.contains("/channel/UCabcdefghijklmnopqrstuX/streams"));
 }
 
 void NativeTests::kickLiveNotificationsAndCooldown() {

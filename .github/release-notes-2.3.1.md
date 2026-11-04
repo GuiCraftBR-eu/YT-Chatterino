@@ -1,7 +1,7 @@
 ## YT-Chatterino 2.3.1
 
 - Abra canais salvos diretamente pelo botão **+** e digite vários nomes ou links separados por espaço.
-- No YouTube, informe o identificador do canal para procurar suas lives atuais e escolha a transmissão quando houver mais de uma.
+- No YouTube, informe o nome ou identificador do canal para procurar suas lives atuais e escolha a transmissão quando houver mais de uma. Escreva nomes com espaços entre aspas.
 - Receba avisos quando canais abertos da Kick entrarem ao vivo e adicione canais da Kick ou da Twitch à lista de notificações sem precisar digitar `@`.
 - Passe o mouse sobre o título para ver a miniatura quando a plataforma disponibilizá-la.
 - Foram feitos testes de regressão e melhorias nos limites de requisições.

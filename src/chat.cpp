@@ -2171,11 +2171,53 @@ void Hub::profile(Source *s, Message m, JsonCallback done) {
                       "GET", {{"part", "snippet,statistics"}, {"id", m.uid}});
 }
 
+void Hub::youtubeChannelByName(QString name, JsonCallback done) {
+    name = name.trimmed();
+    if (name.isEmpty() || name.size() > 100 || name.contains('/') || name.contains('\n')) {
+        done({}, "Enter a YouTube channel handle or channel URL.");
+        return;
+    }
+    const auto url = Network::query("https://www.youtube.com/results", {{"search_query", name}, {"sp", "EgIQAg=="}});
+    QPointer<Hub> self(this);
+    net->bytes(url, [self, name, done](QByteArray bytes, QString error) {
+        if (!self) return;
+        if (!error.isEmpty()) { done({}, error); return; }
+        const auto initial = embeddedJson(QString::fromUtf8(bytes), "ytInitialData");
+        QSet<QString> seen;
+        QJsonArray matches;
+        static const QRegularExpression channelId("^UC[A-Za-z0-9_-]{22}$");
+        walk(initial, [&](const QJsonObject &node) {
+            const auto channel = node["channelRenderer"].toObject();
+            const auto id = str(channel["channelId"]);
+            if (!seen.contains(id) && channelId.match(id).hasMatch() &&
+                textOf(channel["title"]).compare(name, Qt::CaseInsensitive) == 0) {
+                seen.insert(id);
+                QString handle = str(at(channel, {"navigationEndpoint", "browseEndpoint", "canonicalBaseUrl"}));
+                if (handle.startsWith("/@")) handle.remove(0, 1);
+                else handle.clear();
+                matches.append(QJsonObject{{"id", id}, {"title", textOf(channel["title"])},
+                                           {"handle", handle}, {"details", textOf(channel["videoCountText"])}});
+            }
+        });
+        if (matches.size() > 1) {
+            done({{"channels", matches}}, {});
+        } else if (matches.isEmpty()) {
+            done({}, videoId(name) == name ? "HTTP 404: Could not find that YouTube channel." :
+                                            "Could not find that YouTube channel.");
+        } else {
+            self->savedStreams({{"channel_id", str(matches[0].toObject()["id"])}}, done);
+        }
+    }, "GET", {}, {}, 16 * 1024 * 1024);
+}
+
 void Hub::savedStreams(QJsonObject saved, JsonCallback done) {
     QString value = str(saved["channel_id"]).trimmed();
     QString path;
     static const QRegularExpression channelId("^UC[A-Za-z0-9_-]{22}$");
     static const QRegularExpression handle("^[\\p{L}\\p{N}_.-]{1,100}$", QRegularExpression::UseUnicodePropertiesOption);
+    const bool plainName = !value.contains('/') && !value.startsWith('@') && !channelId.match(value).hasMatch();
+    if (plainName && value.contains(' ')) { youtubeChannelByName(value, done); return; }
+    const QString searchName = value;
     if (channelId.match(value).hasMatch()) {
         path = "/channel/" + value;
     } else if (!value.contains('/')) {
@@ -2207,7 +2249,8 @@ void Hub::savedStreams(QJsonObject saved, JsonCallback done) {
         streamsUrl,
         [=, this](QByteArray bytes, QString error) {
             if (!error.isEmpty()) {
-                done({}, error);
+                if (plainName && error.contains("HTTP 404")) youtubeChannelByName(searchName, done);
+                else done({}, error);
                 return;
             }
             auto initial = embeddedJson(QString::fromUtf8(bytes), "ytInitialData");

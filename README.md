@@ -30,7 +30,7 @@ Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os ar
 
 ## Primeiros passos
 
-1. Clique em **+** ou pressione **Ctrl+T**. Escolha a plataforma e digite nomes ou links separados por espaço. Na lista, selecione também canais salvos; no YouTube, o app procura as transmissões ao vivo do canal.
+1. Clique em **+** ou pressione **Ctrl+T**. Escolha a plataforma e digite nomes ou links separados por espaço. Na lista, selecione também canais salvos; no YouTube, o app procura as transmissões ao vivo do canal. Coloque nomes com espaços entre aspas, por exemplo, `"Lofi Girl"`.
 2. Para conectar a Twitch, abra **Configurações → Contas** e autorize o acesso no navegador.
 3. Para abrir um chat da Kick, cole o link ou selecione Kick e digite o nome do canal. Para enviar ou moderar, crie seu aplicativo em [Kick Developer](https://kick.com/settings/developer) e siga o **guia ilustrado da Kick** em Configurações → Tutorial. O endereço de redirecionamento é `http://localhost:37365/callback`. Em **Configurações → Contas**, conecte sua conta e autorize as permissões desejadas.
 4. Para enviar mensagens, moderar ou editar títulos no YouTube, ative a **YouTube Data API v3** no Google Cloud, crie um cliente **OAuth para computador** e selecione o JSON em **Contas**. Depois, conecte sua conta.

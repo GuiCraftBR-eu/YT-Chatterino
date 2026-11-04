@@ -19,6 +19,7 @@ class NativeTests : public QObject {
     void notificationWatchListSupportsKickAndTwitch();
     void streamThumbnailHoverAndStaleImage();
     void twitchAndYoutubeThumbnailsFromMetadata();
+    void youtubeDisplayNameSearch();
     void videoLinks_data();
     void videoLinks();
     void twitchLinks_data();

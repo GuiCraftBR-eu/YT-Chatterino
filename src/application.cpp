@@ -390,6 +390,19 @@ void MainWindow::refreshLanguage() {
     }
 }
 
+static QStringList liveStreamChoices(const QJsonArray &streams) {
+    QStringList names;
+    for (const auto &stream : streams) {
+        const auto item = stream.toObject();
+        const auto title = str(item["title"]);
+        names << (title.isEmpty() ? str(item["id"]) : title);
+    }
+    QStringList choices = names;
+    for (int i = 0; i < names.size(); ++i)
+        if (names.count(names[i]) > 1) choices[i] += " · " + str(streams[i].toObject()["id"]);
+    return choices;
+}
+
 void MainWindow::addChats(QString mode, Pane *anchor) {
     auto *dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -408,6 +421,7 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     auto *input = new QLineEdit(dialog);
     input->setObjectName("add-chat-input");
     input->setPlaceholderText(cfg.T("Link or name · separate chats with space"));
+    input->setToolTip(cfg.T("For YouTube names with spaces, use quotation marks."));
     input->setClearButtonEnabled(true);
     entry->addWidget(platform); entry->addWidget(input, 1);
     layout->addLayout(entry);
@@ -440,7 +454,12 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     auto open = [this, input, combo, modes, dialog, safe, platform, saved, buttons] {
         if (!buttons->button(QDialogButtonBox::Open)->isEnabled()) return;
         QList<QJsonObject> selections;
-        const auto entries = input->text().split(QRegularExpression("[\\s,]+"), Qt::SkipEmptyParts);
+        QStringList entries;
+        auto tokens = QRegularExpression(R"token("([^"]+)"|([^\s,]+))token").globalMatch(input->text());
+        while (tokens.hasNext()) {
+            const auto token = tokens.next();
+            entries << (token.captured(1).isEmpty() ? token.captured(2) : token.captured(1));
+        }
         for (const auto &entry : entries) {
             QString kind, id;
             const auto choice = platform->currentIndex();
@@ -505,6 +524,26 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
                             if (next) (*next)();
                             return;
                         }
+                        const auto channels = result["channels"].toArray();
+                        if (error.isEmpty() && !channels.isEmpty()) {
+                            QStringList choices;
+                            for (const auto &channel : channels) {
+                                const auto row = channel.toObject();
+                                QStringList parts{str(row["title"])};
+                                if (!str(row["handle"]).isEmpty()) parts << str(row["handle"]);
+                                else parts << str(row["id"]);
+                                if (!str(row["details"]).isEmpty()) parts << str(row["details"]);
+                                choices << parts.join(" · ");
+                            }
+                            bool ok = false;
+                            const auto selected = QInputDialog::getItem(safeDialog, cfg.T("Select a YouTube channel"),
+                                cfg.T("Matching channels"), choices, 0, false, &ok);
+                            if (!ok) { buttons->button(QDialogButtonBox::Open)->setEnabled(true); return; }
+                            state->pending.prepend(QJsonObject{{"platform", "youtube"},
+                                {"channel_id", channels[choices.indexOf(selected)].toObject()["id"]}});
+                            if (next) (*next)();
+                            return;
+                        }
                         const auto streams = result["streams"].toArray();
                         if (!error.isEmpty() || streams.isEmpty()) {
                             buttons->button(QDialogButtonBox::Open)->setEnabled(true);
@@ -515,8 +554,7 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
                         }
                         int index = 0;
                         if (streams.size() > 1) {
-                            QStringList titles;
-                            for (const auto &stream : streams) titles << str(stream.toObject()["title"]);
+                            const auto titles = liveStreamChoices(streams);
                             bool ok = false;
                             const auto selected = QInputDialog::getItem(safeDialog, cfg.T("Select a live broadcast"),
                                 cfg.T("Current broadcasts"), titles, 0, false, &ok);
@@ -1053,10 +1091,7 @@ void MainWindow::openSaved(QJsonObject item) {
         }
         int index = 0;
         if (streams.size() > 1) {
-            QStringList titles;
-            for (const auto &s : streams) {
-                titles << str(s.toObject()["title"]);
-            }
+            const auto titles = liveStreamChoices(streams);
             bool ok;
             QString selected =
                 QInputDialog::getItem(safe, safe->cfg.T("Select a live broadcast"),
