@@ -1,12 +1,12 @@
-YT-CHATTERINO 2.3.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.3.2 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.3.1.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.3.2.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
 
 ADD A CHAT
-Press Ctrl+T (or click +). Paste a YouTube LIVE VIDEO link, Twitch @channel/link, or Kick channel link.
+Press Ctrl+T (or click +). Enter a channel or link. For YouTube, use the handle from its URL: for example, LofiGirl for youtube.com/@LofiGirl. The @ is optional when opening and saving channels.
 Normal YouTube web reading needs no API key, Google account or quota.
 If Google returns HTTP 429, sign in and optionally enable the official API fallback per chat
 in the channel menu. It costs 5 units per request, about 986 units per hour per chat
@@ -37,6 +37,15 @@ create an OAuth client of type Desktop app; download its JSON. In Accounts choos
 JSON, then Sign in to YouTube. The illustrated guide is in Settings > Accounts. If the OAuth app is in Testing, add the exact Google account used to sign in under Audience > Test users; this is required.
 You must have the channel's actual moderation/owner permission. More steps are in Tutorial.
 Do not share your JSON, account tokens or profile with friends. Share only this clean ZIP.
+
+OPEN ON PHONE (BETA)
+Right-click the tab, select the pane and Open on phone (beta). Choose the local network,
+start access, and scan the QR code on your phone or enter the displayed address and code.
+Use the same network on phone and computer. Keep the app and access window open; closing
+the window stops access. If Windows asks for network access, allow private networks
+only; the firewall can block the connection until configured. The connection uses local
+HTTP, so use a trusted network. The beta supports
+reading, sending, replies, emotes and permitted moderation, but not every desktop feature.
 
 USEFUL CONTROLS
 Ctrl+Shift+T: add a split. Ctrl+W: close focused pane. Ctrl+Shift+W: close tab.

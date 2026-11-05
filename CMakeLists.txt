@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(YTChatterino VERSION 2.3.1 LANGUAGES CXX)
+project(YTChatterino VERSION 2.3.2 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -10,6 +10,7 @@ add_library(chatterino_core STATIC
     src/kick.cpp src/kickauth.cpp
     src/accounts.cpp src/accounts.hpp src/chat.cpp src/chat.hpp
     src/view.cpp src/view.hpp src/application.cpp src/application.hpp src/settings.cpp
+    src/phone.cpp src/phone.hpp src/vendor/qrcodegen.cpp src/vendor/qrcodegen.hpp
     src/updater.cpp src/updater.hpp)
 target_link_libraries(chatterino_core PUBLIC Qt6::Widgets Qt6::Network Qt6::Svg Qt6::WebSockets)
 target_include_directories(chatterino_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -39,7 +40,7 @@ if(BUILD_BENCHMARKS)
 endif()
 if(BUILD_TESTING)
   find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
-  qt_add_executable(chatterino_tests tests/tests.cpp tests/extra.cpp tests/v210.cpp tests/v211.cpp tests/v212.cpp tests/v213.cpp tests/v214.cpp tests/v220.cpp tests/v221.cpp tests/v222.cpp tests/v223.cpp tests/v224.cpp tests/v225.cpp tests/v226.cpp tests/v230.cpp tests/v231.cpp tests/native_tests.hpp assets/resources.qrc)
+  qt_add_executable(chatterino_tests tests/tests.cpp tests/extra.cpp tests/v210.cpp tests/v211.cpp tests/v212.cpp tests/v213.cpp tests/v214.cpp tests/v220.cpp tests/v221.cpp tests/v222.cpp tests/v223.cpp tests/v224.cpp tests/v225.cpp tests/v226.cpp tests/v230.cpp tests/v231.cpp tests/v232.cpp tests/native_tests.hpp assets/resources.qrc)
   target_link_libraries(chatterino_tests PRIVATE chatterino_core Qt6::Test)
   add_test(NAME native_features COMMAND chatterino_tests)
   set_tests_properties(native_features PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

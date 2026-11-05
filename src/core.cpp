@@ -514,6 +514,8 @@ QJsonObject Message::json() const {
             {"color", color},
             {"avatar", avatar},
             {"special", special},
+            {"alert_text", alertText},
+            {"alert_body_start", alertBodyStart},
             {"reply", reply},
             {"badge_info", badgeInfo},
             {"native_emotes", es},
@@ -540,6 +542,8 @@ Message Message::fromJson(const QJsonObject &o) {
     m.color = str(o["color"]);
     m.avatar = str(o["avatar"]);
     m.special = str(o["special"]);
+    m.alertText = str(o["alert_text"]);
+    m.alertBodyStart = qMax(0, o["alert_body_start"].toInt());
     m.reply = o["reply"].toObject();
     m.badgeInfo = str(o["badge_info"]);
     m.seq = o["_seq"].toInteger();
@@ -729,6 +733,11 @@ ParsedIrc parseIrc(QString line) {
         const QString notice = str(p.tags["system-msg"]);
         if (!notice.isEmpty()) {
             const QString prefix = notice + (m.text.isEmpty() ? QString() : " — ");
+            m.alertText = notice;
+            if (!m.name.isEmpty() && m.alertText.startsWith(m.name + ' ', Qt::CaseInsensitive))
+                m.alertText.remove(0, m.name.size() + 1);
+            if (!m.alertText.isEmpty()) m.alertText[0] = m.alertText[0].toUpper();
+            m.alertBodyStart = prefix.size();
             m.text.prepend(prefix);
             for (auto &span : m.emotes) { span.start += prefix.size(); span.end += prefix.size(); }
         }
@@ -737,6 +746,11 @@ ParsedIrc parseIrc(QString line) {
     } else if (!str(p.tags["custom-reward-id"]).isEmpty() ||
                !str(p.tags["bits"]).isEmpty() || str(p.tags["msg-id"]) == "highlighted-message") {
         m.special = "alert";
+        if (!str(p.tags["bits"]).isEmpty())
+            m.alertText = "Cheered " + str(p.tags["bits"]) + " Bits";
+        else if (!str(p.tags["custom-reward-id"]).isEmpty())
+            m.alertText = "Redeemed a channel reward";
+        else m.alertText = "Highlighted a message";
     }
     return p;
 }
@@ -801,6 +815,8 @@ Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical)
         QString amount = textOf(o["purchaseAmountText"]);
         if (!amount.isEmpty()) {
             QString prefix = amount + ' ';
+            m.alertText = amount;
+            m.alertBodyStart = prefix.size();
             m.text.prepend(prefix);
             for (auto &e : m.emotes) {
                 e.start += prefix.size();
@@ -813,10 +829,18 @@ Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical)
         }
     } else if (kind.contains("Membership") || kind.contains("Sponsorship")) {
         m.special = "member";
+        m.alertText = textOf(o["headerPrimaryText"]);
+        if (m.alertText.isEmpty()) m.alertText = textOf(header["primaryText"]);
         if (m.text.isEmpty()) {
-            m.text = textOf(o["headerPrimaryText"]);
-            if (m.text.isEmpty()) m.text = textOf(header["primaryText"]);
+            m.text = m.alertText;
+            m.alertBodyStart = m.text.size();
         }
+    } else if (kind.contains("Gift", Qt::CaseInsensitive)) {
+        m.special = "alert";
+        m.alertText = textOf(o["headerPrimaryText"]);
+        if (m.alertText.isEmpty()) m.alertText = textOf(o["headerSubtext"]);
+        if (m.alertText.isEmpty()) m.alertText = m.text;
+        if (m.text == m.alertText) m.alertBodyStart = m.text.size();
     }
     for (const auto &v : author["authorBadges"].toArray()) {
         auto b = v.toObject()["liveChatAuthorBadgeRenderer"].toObject();
@@ -873,6 +897,12 @@ QColor userColor(const Message &m) {
 QString visibleMessageText(const Message &m, const Config &cfg) {
     return m.deleted && !cfg.data["show_deleted_messages"].toBool(false)
                ? cfg.T("[message deleted]") : m.text;
+}
+
+QString visibleAlertText(const Message &m, const Config &cfg) {
+    const auto match = QRegularExpression("^Cheered ([0-9]+) Bits$").match(m.alertText);
+    if (match.hasMatch()) return cfg.T("Cheered {count} Bits", {{"count", match.captured(1)}});
+    return cfg.T(m.alertText);
 }
 
 QColor highlight(const Message &m, const Config &cfg, const QStringList &ownNames, bool *mentioned) {

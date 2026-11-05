@@ -360,6 +360,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
     QColor fg("#efeff1"), dim("#8b8b94");
     auto normalFormat = format(normal, fg);
     auto source = hub->sources.value(m.source);
+    const bool isAlert = !m.system && (m.special == "alert" || m.special == "member" || m.special == "super");
+    const int bodyOffset = isAlert && !m.alertText.isEmpty() ? qBound(0, m.alertBodyStart, int(m.text.size())) : 0;
     if (!m.reply.isEmpty() && !threadMode) {
         auto rf = format(QFont(normal.family(), qMax(8, normal.pointSize() - 2)), dim);
         QString name = str(m.reply["name"]);
@@ -372,6 +374,24 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
                           rf);
         detail.replyEnd = cursor.position();
     }
+    if (isAlert) {
+        const QColor accent = source && source->platform == "kick" ? QColor("#53fc18")
+                            : source && source->platform == "youtube" ? QColor("#ff7777") : QColor("#bf94ff");
+        cursor.insertText(QString::fromUtf8("♛ "), format(username, accent));
+        detail.nameStart = cursor.position();
+        cursor.insertText(m.name, format(username, accent));
+        detail.nameEnd = cursor.position();
+        const QString description = m.alertText.isEmpty() ? visibleMessageText(m, *hub->cfg) : visibleAlertText(m, *hub->cfg);
+        cursor.insertText("\n    " + description, normalFormat);
+        const bool hasBody = !m.alertText.isEmpty() && bodyOffset < m.text.size() &&
+                             (!m.deleted || hub->cfg->data["show_deleted_messages"].toBool(false));
+        if (!hasBody) {
+            documents[m.seq] = doc;
+            details[m.seq] = detail;
+            return doc;
+        }
+        cursor.insertText("\n", normalFormat);
+    }
     if (a["show_timestamps"].toBool(true) && m.stamp.isValid()) {
         cursor.insertText(hub->cfg->time(m.stamp) + ' ', format(normal, dim));
     }
@@ -380,11 +400,6 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         documents[m.seq] = doc;
         details[m.seq] = detail;
         return doc;
-    }
-    if (m.special == "alert" || m.special == "member" || m.special == "super") {
-        const QColor accent = source && source->platform == "kick" ? QColor("#53fc18")
-                            : source && source->platform == "youtube" ? QColor("#ff5252") : QColor("#bf94ff");
-        cursor.insertText(QString::fromUtf8("◆ "), format(username, accent));
     }
     auto insertImage = [&](QStringList urls, QString code, int size, bool gif, bool isEmote = false,
                            bool isBadge = false) {
@@ -472,10 +487,14 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
     detail.nameStart = cursor.position();
     cursor.insertText(m.name, format(username, userColor(m)));
     detail.nameEnd = cursor.position();
-    cursor.insertText((m.special == "alert" || m.special == "member" || m.special == "super") ? "\n  " : ": ", normalFormat);
+    cursor.insertText(": ", normalFormat);
     const bool revealDeleted = m.deleted && hub->cfg->data["show_deleted_messages"].toBool(false);
     QString body = visibleMessageText(m, *hub->cfg);
     QVector<Span> spans = m.deleted && !revealDeleted ? QVector<Span>() : m.emotes;
+    if (isAlert && bodyOffset > 0 && (!m.deleted || revealDeleted)) {
+        body.remove(0, bodyOffset);
+        for (auto &span : spans) { span.start -= bodyOffset; span.end -= bodyOffset; }
+    }
     if (source && (!m.deleted || revealDeleted)) {
         auto matches = QRegularExpression("\\S+").globalMatch(body);
         while (matches.hasNext()) {
@@ -499,8 +518,10 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
             "(?<![\\p{L}\\p{N}_@])@[\\p{L}\\p{N}_][\\p{L}\\p{N}_.-]{0,63}");
         QVector<MentionSpan> candidates;
         if (!m.deleted || revealDeleted) for (const auto &mention : m.mentions) {
-            if (mention.start >= bodyStart && mention.end <= bodyStart + text.size() && mention.end > mention.start)
-                candidates.append({mention.start - bodyStart, mention.end - bodyStart, mention.name, mention.uid});
+            const int start = mention.start - (isAlert ? bodyOffset : 0);
+            const int end = mention.end - (isAlert ? bodyOffset : 0);
+            if (start >= bodyStart && end <= bodyStart + text.size() && end > start)
+                candidates.append({start - bodyStart, end - bodyStart, mention.name, mention.uid});
         }
         auto matches = mentions.globalMatch(text);
         while (matches.hasNext()) {
@@ -613,10 +634,19 @@ void ChatView::paintEvent(QPaintEvent *) {
         QRect rect(0, y, viewport()->width(), height);
         QColor background = highlight(messages[i], *hub->cfg, hub->accounts->names());
         if (!background.isValid()) {
-            background = a["alternate_rows"].toBool(true) && rowStripes.value(messages[i].seq)
+            const bool alert = !messages[i].system && (messages[i].special == "alert" ||
+                               messages[i].special == "member" || messages[i].special == "super");
+            background = alert ? QColor("#24242b") :
+                         a["alternate_rows"].toBool(true) && rowStripes.value(messages[i].seq)
                              ? QColor("#0e0e0e") : QColor(Qt::black);
         }
         painter.fillRect(rect, background);
+        if (!messages[i].system && (messages[i].special == "alert" || messages[i].special == "member" ||
+                                    messages[i].special == "super")) {
+            auto *origin = hub->sources.value(messages[i].source);
+            painter.fillRect(QRect(0, y, 4, height), origin && origin->platform == "youtube" ? QColor("#ff7777")
+                             : origin && origin->platform == "kick" ? QColor("#53fc18") : QColor("#bf94ff"));
+        }
         painter.save();
         painter.translate(6, y + 3);
         if (messages[i].deleted && hub->cfg->data["show_deleted_messages"].toBool(false)) {

@@ -1204,6 +1204,12 @@ void Source::youtubeApiPoll() {
                     .contains(type)) {
                 m.special = "alert";
                 if (m.name.isEmpty()) m.name = "YouTube";
+                if (type == "giftEvent" && m.text.isEmpty()) {
+                    auto gift = str(at(snippet, {"giftDetails", "giftName"}));
+                    if (gift.isEmpty()) gift = str(at(snippet, {"giftDetails", "altText"}));
+                    if (!gift.isEmpty()) m.text = self->hub->cfg->T("Sent a gift: {gift}", {{"gift", gift}});
+                }
+                if (!m.text.isEmpty()) { m.alertText = m.text; m.alertBodyStart = m.text.size(); }
             }
             for (const auto &role : QList<QPair<QString, QString>>{{"isChatOwner", "owner"},
                        {"isChatModerator", "moderator"}, {"isChatSponsor", "subscriber"}}) {

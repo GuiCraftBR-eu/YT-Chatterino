@@ -5,6 +5,7 @@
 namespace yc {
 class SettingsWindow;
 class ThreadWindow;
+class PhoneServer;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -22,6 +23,9 @@ class MainWindow : public QMainWindow {
     QLabel *quotaLabel;
     QToolButton *updateArrow, *gear, *addButton;
     QPointer<SettingsWindow> settings;
+    QPointer<PhoneServer> phoneServer;
+    QPointer<QDialog> phoneDialog;
+    QPointer<Pane> phoneTarget;
     QTranslator *standardTranslator = nullptr;
     QHash<QString, QPointer<QDialog>> userCards;
     QHash<QString, QPointer<ThreadWindow>> threads;
@@ -38,6 +42,7 @@ class MainWindow : public QMainWindow {
     void showSettings(QString page = "Accounts");
     void gearMenu();
     void paneMenu(Pane *pane, QPoint position);
+    void showPhone(Pane *pane);
     void populatePaneMenu(QMenu &menu, Pane *pane);
     void tabMenu(int index, QPoint position);
     void messageMenu(Pane *pane, Message message, QPoint position);
