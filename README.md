@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.4.1](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.1) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.4.2](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.2) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.4.1 | Instalação |
+| Sistema | Download da versão 2.4.2 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.1/YT-Chatterino-Windows11-2.4.1.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.1/yt-chatterino-2.4.1-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.2/YT-Chatterino-Windows11-2.4.2.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.2/yt-chatterino-2.4.2-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.4.1-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.4.2-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.1).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.2).
 
 ## Primeiros passos
 
@@ -50,7 +50,7 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 - **Modos do chat:** a barra abaixo do canal mostra os modos da Twitch e do Kick quando disponíveis, incluindo o tempo mínimo para seguidores e o intervalo do modo lento. No YouTube, mostra o último aviso de modo recebido; a plataforma nem sempre fornece o estado atual.
 - **No celular:** toque no nome de uma pessoa para ver seu histórico armazenado e toque na prévia de uma resposta para abrir a conversa e em emotes ou emblemas para ampliá-los. Usuários autorizados podem moderar e editar o título ou categoria pelo celular. A atualização é enviada assim que o computador recebe mensagens.
 - **Horário:** em Configurações → Aparência, ajuste separadamente o tamanho da fonte do horário.
-- **Acompanhar mensagens:** pesquisa, filtros, destaques e sons; histórico padrão de 2.000 mensagens por painel. Um botão aparece no cabeçalho quando há filtros ativos; clique nele para revisá-los.
+- **Acompanhar mensagens:** pesquisa, filtros, destaques e sons; escolha cores separadas para alertas e menções nas configurações; histórico padrão de 2.000 mensagens por painel. Um botão aparece no cabeçalho quando há filtros ativos; clique nele para revisá-los.
 - **Personalizar:** fontes, emotes, emblemas, cores, horários e janela sempre no topo.
 - **Acompanhar a transmissão:** cabeçalho com duração e campos configuráveis; arraste o título para ajustar sua altura; avisos de inscritos, membros e recompensas reconhecidos pelo chat.
 - **Mensagens excluídas:** opção para manter visíveis, esmaecidas, as mensagens que o app recebeu antes da exclusão.

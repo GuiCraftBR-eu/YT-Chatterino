@@ -937,7 +937,7 @@ QColor highlight(const Message &m, const Config &cfg, const QStringList &ownName
                rs = settings["roles"].toObject();
     QColor c;
     if (!m.special.isEmpty() && settings["alerts"].toBool(false)) {
-        c = QColor(settings["mention_color"].toString("#227400"));
+        c = QColor(settings["alert_color"].toString(settings["mention_color"].toString("#227400")));
     }
     for (auto i = users.begin(); i != users.end(); ++i) {
         if (stripAt(i.key()) == stripAt(m.login) || stripAt(i.key()) == stripAt(m.name)) {
