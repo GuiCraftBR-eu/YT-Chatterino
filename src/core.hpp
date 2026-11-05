@@ -88,6 +88,7 @@ struct MentionSpan {
 
 struct Message {
     QString id, source, name, login, uid, text, color, avatar, special, apiId, webId;
+    QString deletionReason;
     QString alertText;
     int alertBodyStart = 0;
     QDateTime stamp;
@@ -96,7 +97,7 @@ struct Message {
     QVector<MentionSpan> mentions;
     QJsonObject reply;
     QString badgeInfo;
-    qint64 seq = 0;
+    qint64 seq = 0, deletionDuration = 0;
     bool history = false, deleted = false, own = false, system = false;
     QJsonObject json() const;
     static Message fromJson(const QJsonObject &o);
@@ -118,6 +119,7 @@ QColor userColor(const Message &m);
 QColor highlight(const Message &m, const Config &cfg, const QStringList &ownNames = {},
                  bool *mention = nullptr);
 QString visibleMessageText(const Message &message, const Config &config);
+QString deletionReasonText(const Message &message, const Config &config);
 QString visibleAlertText(const Message &message, const Config &config);
 QImage primeCrown();
 bool accepts(const Message &m, const QJsonObject &filter, const Config *config = nullptr);

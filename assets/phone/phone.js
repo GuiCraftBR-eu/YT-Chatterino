@@ -125,12 +125,13 @@ function messageRow(m, inThread = false, stripe = false) {
     name.style.color = m.color || '#efeff1';
     if (m.seq) { name.type = 'button'; name.addEventListener('click', () => showDetail('user-history', m)); }
     body.append(name); content(body, m, offset);
+    if (m.deletionLabel) body.append(node('span', ' · ' + m.deletionLabel, 'deletion-reason'));
     if (m.seq && source && (source.platform === 'twitch' || source.platform === 'kick') && !m.deleted) {
       const reply = node('button', '↩', 'action'); reply.type = 'button'; reply.title = t('Reply');
       reply.addEventListener('click', () => { closeDetail(); selectChannel(m.source); replySeq = m.seq; $('reply-text').textContent = t('Replying to ') + m.name + ': ' + m.text.slice(offset, 120); $('reply').hidden = false; $('message').focus(); }); body.append(reply);
     }
     row.append(body);
-  }
+  } else if (m.deletionLabel) row.append(node('span', ' · ' + m.deletionLabel, 'deletion-reason'));
   if (m.seq && source && source.canDelete && !m.deleted) {
     const mod = node('button', t('Moderate'), 'action'); mod.type = 'button';
     mod.addEventListener('click', () => {

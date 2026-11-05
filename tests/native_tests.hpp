@@ -26,6 +26,8 @@ class NativeTests : public QObject {
     void independentAlertAndMentionColors();
     void headerDragUsesVisibleHeight();
     void compactChatStatusPresentation();
+    void deletionReasonsFromPlatforms();
+    void deletionReasonsOnPhone();
     void phonePairingSecurityAndMessaging();
     void alertCardsAndEventParsing();
     void savedChannelNamesWithoutAt();
