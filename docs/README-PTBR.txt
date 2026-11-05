@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.3.3 — WINDOWS 11 x64
+YT-CHATTERINO 2.4.0 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.3.3.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.4.0.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -39,14 +39,14 @@ o JSON e clique em Entrar no YouTube. O guia com imagens fica em Configurações
 Você precisa ter permissão real de moderador/dono no canal. Há mais instruções no Tutorial.
 Não compartilhe seu JSON, tokens nem perfil com amigos. Compartilhe somente este ZIP limpo.
 
-ABRIR NO CELULAR (BETA)
-Clique com o direito na aba, escolha o painel e Abrir no celular (beta). Selecione
+ABRIR NO CELULAR
+Clique com o direito na aba, escolha o painel e Abrir no celular. Selecione
 a rede local, inicie e leia o QR code no celular ou digite o endereço e código exibidos.
 Use a mesma rede local no celular e no computador (o PC pode usar cabo). Deixe o
 aplicativo aberto. A janela do QR code pode ser fechada; clique em Celular no painel
 para reabri-la e em Parar para encerrar o acesso. Se o Windows
 solicitar acesso pela rede, permita apenas redes privadas; o firewall pode bloquear
-a conexão até ser configurado. A conexão usa HTTP local: use uma rede confiável. O beta permite ler, enviar, responder, usar emotes e moderar conforme
+a conexão até ser configurado. A conexão usa HTTP local: use uma rede confiável. A versão para celular permite ler, enviar, responder, usar emotes e moderar conforme
 suas permissões, mas ainda não inclui todos os recursos do aplicativo.
 
 CONTROLES ÚTEIS

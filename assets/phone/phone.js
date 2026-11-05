@@ -1,6 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let cursor = 0, revision = 0, sources = [], replySeq = 0, polling = false, timer = null, catalog = [];
+let detail = null, detailTimer = null, detailRequest = 0;
 let language = 'en';
 const pt = {
   'Enter the six-digit code shown on your computer.':'Digite o código de seis dígitos mostrado no computador.',
@@ -18,7 +19,10 @@ const pt = {
   'Pair again on your PC.':'Faça o pareamento novamente no computador.',
   'Invalid channel.':'Canal inválido.', 'Invalid message or reply.':'Mensagem ou resposta inválida.',
   'Moderation is unavailable.':'Moderação indisponível.', 'Please wait.':'Aguarde.',
-  'Search emotes':'Buscar emotes', 'Channel':'Canal', 'Message':'Mensagem', 'Choose emote':'Escolher emote'
+  'Search emotes':'Buscar emotes', 'Channel':'Canal', 'Message':'Mensagem', 'Choose emote':'Escolher emote',
+  'PHONE':'CELULAR', 'Reply thread':'Conversa', 'Message history':'Histórico de mensagens',
+  'Only messages retained in this app are available.':'Somente mensagens mantidas neste aplicativo estão disponíveis.',
+  'Message is no longer available.':'A mensagem não está mais disponível.', 'No reply thread.':'Não há conversa de resposta.'
 };
 function t(text) { return language === 'pt-BR' ? (pt[text] || text) : text; }
 function translate() {
@@ -36,7 +40,7 @@ async function request(path, options = {}) {
   return data;
 }
 function pairView(message = '') {
-  clearTimeout(timer); $('chat').hidden = true; $('pairing').hidden = false; $('pair-error').textContent = message;
+  clearTimeout(timer); closeDetail(); $('chat').hidden = true; $('pairing').hidden = false; $('pair-error').textContent = message;
 }
 async function pair(code) {
   $('pair-error').textContent = '';
@@ -71,14 +75,20 @@ function channelIcon(source) {
   icon.title = source.name; icon.setAttribute('aria-label', source.name); icon.dataset.channelIcon = source.key;
   return icon;
 }
-function messageRow(m) {
+function messageRow(m, inThread = false) {
   const source = sources.find(s => s.key === m.source);
   const row = node('div', undefined, 'row' + (m.special ? ' alert' : '') + (source ? ' ' + source.platform : '') + (m.deleted ? ' deleted' : ''));
   if (m.system) { row.append(node('span', m.time + ' ' + m.text, 'system')); return row; }
+  if (!inThread && m.seq && (m.reply?.name || m.reply?.login || m.reply?.text)) {
+    const preview = node('button', '↪ ' + t('Replying to ') + '@' + (m.reply.name || m.reply.login || '?') + ': ' + (m.reply.text || ''), 'reply-preview');
+    preview.type = 'button'; preview.addEventListener('click', () => showDetail('thread', m)); row.append(preview);
+  }
   if (m.special) {
     const event = node('div', undefined, 'event'); const eventName = node('div', undefined, 'event-name');
     const crown = node('img', undefined, 'event-icon'); crown.src = '/prime-crown.png'; crown.alt = '';
-    eventName.append(crown, document.createTextNode(m.name)); event.append(eventName);
+    const alertName = node(m.seq ? 'button' : 'span', m.name, m.seq ? 'user-link' : '');
+    if (m.seq) { alertName.type = 'button'; alertName.addEventListener('click', () => showDetail('user-history', m)); }
+    eventName.append(crown, alertName); event.append(eventName);
     event.append(node('div', m.alert || m.text, 'event-desc')); row.append(event);
   }
   const offset = m.special && m.alert ? Math.max(0, Math.min(m.alertBodyStart || 0, m.text.length)) : (m.special ? m.text.length : 0);
@@ -87,14 +97,17 @@ function messageRow(m) {
     if (sources.length > 1 && source) body.append(channelIcon(source));
     body.append(node('span', m.time + ' ', 'time'));
     for (const badge of m.badges || []) if (badge.url) { const img = node('img', undefined, 'badge'); img.src = badge.url; img.alt = badge.name || 'badge'; img.title = badge.name || 'badge'; img.loading = 'lazy'; body.append(img); }
-    const name = node('span', m.name + ': ', 'name'); name.style.color = m.color || '#efeff1'; body.append(name); content(body, m, offset);
-    if (source && (source.platform === 'twitch' || source.platform === 'kick') && !m.deleted) {
+    const name = node(m.seq ? 'button' : 'span', m.name + ': ', m.seq ? 'name user-link' : 'name');
+    name.style.color = m.color || '#efeff1';
+    if (m.seq) { name.type = 'button'; name.addEventListener('click', () => showDetail('user-history', m)); }
+    body.append(name); content(body, m, offset);
+    if (m.seq && source && (source.platform === 'twitch' || source.platform === 'kick') && !m.deleted) {
       const reply = node('button', '↩', 'action'); reply.type = 'button'; reply.title = t('Reply');
-      reply.addEventListener('click', () => { selectChannel(m.source); replySeq = m.seq; $('reply-text').textContent = t('Replying to ') + m.name + ': ' + m.text.slice(offset, 120); $('reply').hidden = false; $('message').focus(); }); body.append(reply);
+      reply.addEventListener('click', () => { closeDetail(); selectChannel(m.source); replySeq = m.seq; $('reply-text').textContent = t('Replying to ') + m.name + ': ' + m.text.slice(offset, 120); $('reply').hidden = false; $('message').focus(); }); body.append(reply);
     }
     row.append(body);
   }
-  if (source && source.moderate && !m.deleted) {
+  if (m.seq && source && source.moderate && !m.deleted) {
     const mod = node('button', t('Moderate'), 'action'); mod.type = 'button';
     mod.addEventListener('click', () => {
       $('mod-target').textContent = m.name; $('mod-dialog').dataset.source = m.source;
@@ -107,8 +120,8 @@ function messageRow(m) {
 }
 function updateSources(next) {
   const select = $('channel'), old = select.value;
-  const signature = JSON.stringify(next.map(s => [s.key,s.name,s.platform,s.avatar,s.moderate]));
-  if (signature === JSON.stringify(sources.map(s => [s.key,s.name,s.platform,s.avatar,s.moderate]))) return;
+  const signature = JSON.stringify(next.map(s => [s.key,s.name,s.platform,s.avatar,s.moderate,s.modes]));
+  if (signature === JSON.stringify(sources.map(s => [s.key,s.name,s.platform,s.avatar,s.moderate,s.modes]))) return;
   sources = next; select.replaceChildren();
   for (const source of sources) { const option = node('option', source.name); option.value = source.key; select.append(option); }
   select.hidden = sources.length <= 1; selectChannel(old);
@@ -116,21 +129,53 @@ function updateSources(next) {
 async function poll() {
   if (polling || $('chat').hidden) return;
   polling = true;
+  let failed = false;
   try {
-    const data = await request('/api/state?after=' + cursor + '&revision=' + revision);
+    const data = await request('/api/state?after=' + cursor + '&revision=' + revision + '&wait=1');
     updateSources(data.sources || []);
     const box = $('messages'), following = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     if (data.reset) box.replaceChildren();
     for (const message of data.messages || []) box.append(messageRow(message));
     while (box.childElementCount > 250) box.firstElementChild.remove();
-    cursor = data.after || 0; revision = data.revision || 0; $('status').textContent = sources.map(s => s.name).join(' · ') || t('No open channels');
+    cursor = data.after || 0; revision = data.revision || 0; $('status').textContent = sources.map(s => s.name + ': ' + (s.modes || '')).join(' · ') || t('No open channels');
+    if (detail && (data.reset || (data.messages || []).some(m => m.source === detail.source))) {
+      if (!detailTimer) detailTimer = setTimeout(() => { detailTimer = null; refreshDetail(); }, 150);
+    }
     if (following || data.reset) box.scrollTop = box.scrollHeight;
   } catch (error) {
     if (error.status === 401) { pairView(error.message); polling = false; return; }
+    failed = true;
     $('status').textContent = t('Disconnected. Retrying…');
   }
-  polling = false; timer = setTimeout(poll, 2000);
+  polling = false; timer = setTimeout(poll, failed ? 2000 : cursor ? 0 : 500);
 }
+function closeDetail() {
+  detail = null; ++detailRequest; clearTimeout(detailTimer); detailTimer = null;
+  if ($('detail-dialog').open) $('detail-dialog').close();
+}
+async function refreshDetail() {
+  if (!detail) return;
+  const current = detail, requestId = ++detailRequest;
+  try {
+    const data = await request('/api/' + current.kind + '?source=' + encodeURIComponent(current.source) + '&seq=' + current.seq);
+    if (detail !== current || requestId !== detailRequest) return;
+    $('detail-title').textContent = t(current.kind === 'thread' ? 'Reply thread' : 'Message history') + ' · ' + data.name + ' · ' + data.channel;
+    const box = $('detail-messages'); box.replaceChildren();
+    for (const message of data.messages || []) box.append(messageRow(message, current.kind === 'thread'));
+  } catch (error) {
+    if (detail === current && requestId === detailRequest) $('detail-messages').textContent = error.message;
+  }
+}
+function showDetail(kind, message) {
+  if (!message.seq) return;
+  detail = {kind, source:message.source, seq:message.seq};
+  $('detail-title').textContent = t(kind === 'thread' ? 'Reply thread' : 'Message history');
+  $('detail-messages').replaceChildren();
+  if (!$('detail-dialog').open) $('detail-dialog').showModal();
+  refreshDetail();
+}
+$('detail-close').addEventListener('click', closeDetail);
+$('detail-dialog').addEventListener('close', () => { detail = null; ++detailRequest; clearTimeout(detailTimer); detailTimer = null; });
 $('cancel-reply').addEventListener('click', () => { replySeq = 0; $('reply').hidden = true; });
 $('channel').addEventListener('change', () => { replySeq = 0; $('reply').hidden = true; $('picker').hidden = true; });
 $('send-form').addEventListener('submit', async event => {

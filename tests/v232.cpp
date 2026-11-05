@@ -46,7 +46,8 @@ void NativeTests::phonePairingSecurityAndMessaging() {
     auto result = phoneRequest(server, "GET", "/");
     QVERIFY(result.startsWith("HTTP/1.1 200"));
     QVERIFY(result.contains("Content-Security-Policy"));
-    QVERIFY(result.contains("Phone beta"));
+    QVERIFY(result.contains("YT-Chatterino"));
+    QVERIFY(!result.contains("PHONE BETA"));
     QVERIFY(phoneRequest(server, "GET", "/api/state?after=0").startsWith("HTTP/1.1 401"));
     QVERIFY(phoneRequest(server, "GET", "/", {}, {}, {}, "attacker.test").startsWith("HTTP/1.1 403"));
     const auto payload = QJsonDocument(QJsonObject{{"code", server.pairingCode()}}).toJson(QJsonDocument::Compact);

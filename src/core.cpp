@@ -375,6 +375,9 @@ Config::Config(QString dir, QObject *parent) : QObject(parent) {
     if (!a.contains("username_font_size")) {
         a["username_font_size"] = legacy;
     }
+    if (!a.contains("timestamp_font_size")) {
+        a["timestamp_font_size"] = a["message_font_size"];
+    }
     if (!a.contains("emote_size")) {
         a["emote_size"] = 36;
     }
@@ -452,6 +455,10 @@ QFont Config::usernameFont() const {
     QFont f("Segoe UI", qBound(7, appearance()["username_font_size"].toInt(12), 48));
     f.setBold(true);
     return f;
+}
+
+QFont Config::timestampFont() const {
+    return QFont("Segoe UI", qBound(7, appearance()["timestamp_font_size"].toInt(12), 48));
 }
 
 QString Config::time(const QDateTime &stamp) const {

@@ -55,6 +55,7 @@ class Config : public QObject {
     int cap(const QString &key = {}) const;
     QFont messageFont() const;
     QFont usernameFont() const;
+    QFont timestampFont() const;
     QString time(const QDateTime &stamp) const;
     QString date(const QDateTime &stamp) const;
     QString date(const QString &iso) const;

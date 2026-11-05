@@ -166,6 +166,7 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
         }
     }
     searchItems["Display"] << "Message font size (pt)\tmessage font size username fonte nome mensagem"
+                           << "Timestamp font size (pt)\ttimestamp clock time size horario tamanho fonte"
                            << "Date format\tdates time seconds formato data am pm";
     searchItems["Updates"]
         << "Check for updates automatically\tupdates native automatic download atualizar atualizacoes";
@@ -551,6 +552,7 @@ QWidget *SettingsWindow::appearancePage() {
     for (const auto &item :
          QList<QStringList>{{"message_font_size", "Message font size (pt)", "7", "48", "12"},
                             {"username_font_size", "Username font size (pt)", "7", "48", "12"},
+                            {"timestamp_font_size", "Timestamp font size (pt)", "7", "48", "12"},
                             {"badge_size", "Badge height (px)", "10", "64", "18"},
                             {"emote_size", "Emote height (px)", "16", "128", "36"}}) {
         auto *spin = new QSpinBox(w);
@@ -1404,11 +1406,11 @@ QWidget *SettingsWindow::tutorialPage() {
               "Left-click a Twitch reply to open its retained thread. Ctrl+F5 reconnects. Pause YouTube "
               "manually from the header menu or pause all from the gear menu. Middle-click the chat for "
               "autoscroll; move the mouse to choose speed, then click or press Esc to stop."},
-             {"Open on phone (beta)",
-              "Right-click the tab and choose Open on phone (beta). Select your local network and start. "
+             {"Open on phone",
+              "Right-click the tab and choose Open on phone. Select your local network and start. "
               "Scan the QR code or enter the address and code in your phone browser. Keep the app open "
               "and use the same trusted network. You may close this window; click Phone in the pane to "
-              "reopen it or stop access. The beta uses local HTTP and supports "
+              "reopen it or stop access. The phone connection uses local HTTP and supports "
               "reading, sending, replies, emotes and permitted moderation, but not every desktop feature."},
              {"Appearance, highlights and sounds",
               "Appearance has separate text/name fonts, badge/emote sizes, timestamps and date formats. "
@@ -1419,7 +1421,7 @@ QWidget *SettingsWindow::tutorialPage() {
         const int group = section.first == "Read chats" ? 0
                           : section.first == "Tabs, splits and saved channels" ||
                                     section.first == "Messages, emotes and reply threads" ||
-                                    section.first == "Open on phone (beta)" ? 2
+                                    section.first == "Open on phone" ? 2
                           : section.first == "Appearance, highlights and sounds" ? 3 : 1;
         auto *card = new QFrame(w);
         card->setObjectName("tutorial-card");

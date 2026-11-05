@@ -17,6 +17,9 @@ class NativeTests : public QObject {
     void youtubeVideoLinksSkipChannelSearch();
     void phoneWindowCanCloseAndReopen();
     void pollAndPredictionResults();
+    void chatModeIndicators();
+    void timestampFontSetting();
+    void phoneThreadsHistoryAndLongPoll();
     void phonePairingSecurityAndMessaging();
     void alertCardsAndEventParsing();
     void savedChannelNamesWithoutAt();

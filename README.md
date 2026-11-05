@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.3.3](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.3) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.4.0](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.0) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.3.3 | Instalação |
+| Sistema | Download da versão 2.4.0 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.3/YT-Chatterino-Windows11-2.3.3.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.3/yt-chatterino-2.3.3-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.0/YT-Chatterino-Windows11-2.4.0.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.0/yt-chatterino-2.4.0-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.3.3-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.4.0-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.3).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.0).
 
 ## Primeiros passos
 
@@ -46,7 +46,10 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 - **Organizar os chats:** abas, painéis lado a lado ou empilhados e painel misto com ícones de canais.
 - **Alertas:** canais abertos da Twitch e Kick podem avisar quando entram ao vivo; é possível adicionar outros canais nas configurações.
 - **Conversar:** respostas na Twitch, preenchimento de nomes de exibição, histórico de mensagens enviadas e seletor de emotes nativos, BTTV e 7TV.
-- **Abrir no celular (beta):** clique com o botão direito na aba, escolha o painel e **Abrir no celular (beta)**. Inicie na rede local e leia o QR code ou informe o endereço e código no navegador do celular. Computador e celular precisam estar na mesma rede, com o app aberto. A janela do QR code pode ser fechada; clique em **Celular** no painel para reabri-la ou encerrar o acesso. O beta oferece leitura, envio, respostas, emotes e moderação disponível no painel; não inclui todos os recursos do aplicativo. A conexão usa HTTP local: use uma rede confiável e pressione **Parar** para encerrar o acesso. Se o Windows solicitar acesso pela rede, permita-o apenas em redes privadas; o firewall pode bloquear a conexão até ser configurado.
+- **Abrir no celular:** clique com o botão direito na aba, escolha o painel e **Abrir no celular**. Inicie na rede local e leia o QR code ou informe o endereço e código no navegador do celular. Computador e celular precisam estar na mesma rede, com o app aberto. A janela do QR code pode ser fechada; clique em **Celular** no painel para reabri-la ou encerrar o acesso. A versão para celular oferece leitura, envio, respostas, emotes e moderação disponível no painel; não inclui todos os recursos do aplicativo. A conexão usa HTTP local: use uma rede confiável e pressione **Parar** para encerrar o acesso. Se o Windows solicitar acesso pela rede, permita-o apenas em redes privadas; o firewall pode bloquear a conexão até ser configurado.
+- **Modos do chat:** a barra abaixo do canal mostra os modos da Twitch e do Kick quando disponíveis, incluindo o tempo mínimo para seguidores e o intervalo do modo lento. No YouTube, mostra o último aviso de modo recebido; a plataforma nem sempre fornece o estado atual.
+- **No celular:** toque no nome de uma pessoa para ver seu histórico armazenado e toque na prévia de uma resposta para abrir a conversa. A atualização é enviada assim que o computador recebe mensagens.
+- **Horário:** em Configurações → Aparência, ajuste separadamente o tamanho da fonte do horário.
 - **Acompanhar mensagens:** pesquisa, filtros, destaques e sons; histórico padrão de 2.000 mensagens por painel. Um botão aparece no cabeçalho quando há filtros ativos; clique nele para revisá-los.
 - **Personalizar:** fontes, emotes, emblemas, cores, horários e janela sempre no topo.
 - **Acompanhar a transmissão:** cabeçalho com duração e campos configuráveis; avisos de inscritos, membros e recompensas reconhecidos pelo chat.

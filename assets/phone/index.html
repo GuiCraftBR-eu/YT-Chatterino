@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <title>YT-Chatterino · Phone beta</title>
+  <title>YT-Chatterino · Phone</title>
   <link rel="stylesheet" href="/phone.css">
   <script src="/phone.js" defer></script>
 </head>
@@ -21,7 +21,7 @@
     <p id="pair-error" class="error" role="alert"></p>
   </main>
   <main id="chat" class="app" hidden>
-    <header><strong>YT-Chatterino <small>PHONE BETA</small></strong><button id="disconnect" data-i18n="Disconnect">Disconnect</button></header>
+    <header><strong>YT-Chatterino <small data-i18n="PHONE">PHONE</small></strong><button id="disconnect" data-i18n="Disconnect">Disconnect</button></header>
     <div id="status" role="status">Connecting…</div>
     <div id="messages" class="messages" aria-live="off"></div>
     <div id="reply" class="reply" hidden><span id="reply-text"></span><button id="cancel-reply">×</button></div>
@@ -33,6 +33,10 @@
       <button type="button" data-mod="unban" data-i18n="Unban user">Unban user</button>
       <button type="button" id="mod-cancel" data-i18n="Cancel">Cancel</button>
     </div></dialog>
+    <dialog id="detail-dialog" class="detail-dialog"><div class="detail-heading"><h2 id="detail-title"></h2><button id="detail-close" type="button" aria-label="Close">×</button></div>
+      <p class="detail-note" data-i18n="Only messages retained in this app are available.">Only messages retained in this app are available.</p>
+      <div id="detail-messages" class="detail-messages"></div>
+    </dialog>
     <form id="send-form" class="composer">
       <select id="channel" aria-label="Channel"></select>
       <input id="message" placeholder="Send a message…" maxlength="2000" autocomplete="off" aria-label="Message">

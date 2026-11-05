@@ -4,3 +4,10 @@ dialog{background:#1d1d22;color:#efeff1;border:1px solid #555;border-radius:6px;
 .channel-icon,.channel-fallback{display:inline-flex;width:18px;height:18px;vertical-align:middle;margin-right:4px;border-radius:50%;object-fit:cover;background:#303038;color:#fff;align-items:center;justify-content:center;font-size:11px;font-weight:bold}
 
 .event-icon{height:14px;width:auto;margin-right:5px;vertical-align:middle}
+.user-link,.reply-preview{background:transparent;border:0;border-radius:0;padding:0;text-align:left;color:inherit;font:inherit}
+.user-link{font-weight:700;cursor:pointer}.user-link:focus-visible,.reply-preview:focus-visible{outline:2px solid #60a5fa}
+.reply-preview{display:block;color:#aaa;font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px}
+.detail-dialog{width:min(95vw,560px);height:min(75dvh,650px);max-height:85dvh;padding:0;overflow:hidden}
+.detail-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#17171a}
+.detail-heading h2{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.detail-heading button{padding:2px 9px}
+.detail-note{font-size:11px;color:#aaa;margin:5px 10px}.detail-messages{overflow:auto;max-height:calc(100% - 75px)}
