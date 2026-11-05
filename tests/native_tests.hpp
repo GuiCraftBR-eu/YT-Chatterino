@@ -24,6 +24,8 @@ class NativeTests : public QObject {
     void phoneMentionModerationAndChannelEditing();
     void phoneKickAndYouTubeChannelActions();
     void independentAlertAndMentionColors();
+    void headerDragUsesVisibleHeight();
+    void compactChatStatusPresentation();
     void phonePairingSecurityAndMessaging();
     void alertCardsAndEventParsing();
     void savedChannelNamesWithoutAt();
