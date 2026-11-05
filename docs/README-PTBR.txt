@@ -42,9 +42,10 @@ Não compartilhe seu JSON, tokens nem perfil com amigos. Compartilhe somente est
 ABRIR NO CELULAR (BETA)
 Clique com o direito na aba, escolha o painel e Abrir no celular (beta). Selecione
 a rede local, inicie e leia o QR code no celular ou digite o endereço e código exibidos.
-Use a mesma rede Wi-Fi no celular e no computador. Deixe o aplicativo e a janela de
-acesso abertos; ao fechá-la, o acesso termina. A conexão usa HTTP local: use uma
-rede confiável. O beta permite ler, enviar, responder, usar emotes e moderar conforme
+Use a mesma rede local no celular e no computador (o PC pode usar cabo). Deixe o
+aplicativo e a janela de acesso abertos; ao fechá-la, o acesso termina. Se o Windows
+solicitar acesso pela rede, permita apenas redes privadas; o firewall pode bloquear
+a conexão até ser configurado. A conexão usa HTTP local: use uma rede confiável. O beta permite ler, enviar, responder, usar emotes e moderar conforme
 suas permissões, mas ainda não inclui todos os recursos do aplicativo.
 
 CONTROLES ÚTEIS

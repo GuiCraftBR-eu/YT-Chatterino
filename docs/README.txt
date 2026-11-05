@@ -42,7 +42,9 @@ OPEN ON PHONE (BETA)
 Right-click the tab, select the pane and Open on phone (beta). Choose the local network,
 start access, and scan the QR code on your phone or enter the displayed address and code.
 Use the same network on phone and computer. Keep the app and access window open; closing
-the window stops access. This uses local HTTP, so use a trusted network. The beta supports
+the window stops access. If Windows asks for network access, allow private networks
+only; the firewall can block the connection until configured. The connection uses local
+HTTP, so use a trusted network. The beta supports
 reading, sending, replies, emotes and permitted moderation, but not every desktop feature.
 
 USEFUL CONTROLS
