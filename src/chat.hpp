@@ -12,7 +12,7 @@ class Source : public QObject {
     Hub *hub;
     QString platform, id, key;
     QJsonObject header;
-    QJsonObject pinned, activePoll;
+    QJsonObject pinned, activePoll, activePrediction;
     QVector<Message> history;
     QHash<quintptr, int> viewCaps;
     QSet<QString> seen;
@@ -33,7 +33,7 @@ class Source : public QObject {
     QHash<QString, qint64> connectionNotices;
     QString continuation, visitor;
     QJsonObject context;
-    QTimer poll, metadataTimer, badgeRetry, decorationTimer, historyRetry;
+    QTimer poll, metadataTimer, badgeRetry, decorationTimer, historyRetry, pollResultTimer;
     int historyRetryMs = 30000;
     QString kickChannelId, kickRoomId, kickLastPollId, kickPollHead, kickSocketToken;
     QWebSocket kickSocket;
@@ -45,7 +45,7 @@ class Source : public QObject {
     bool kickInitial = true, kickConnecting = false;
     int kickRetryMs = 5000;
     qint64 kickPollCooldownUntil = 0;
-    bool decorationPending = false, pollDecorationPending = false;
+    bool decorationPending = false, pollDecorationPending = false, predictionDecorationPending = false;
     qint64 pinRetryAfter = 0;
     quint64 decorationGeneration = 0;
     QString decorationSignature;
@@ -79,6 +79,7 @@ class Source : public QObject {
     void refreshHeader();
     void refreshDecorations();
     void setDecorations(QJsonObject pin, QJsonObject poll);
+    void setPrediction(QJsonObject prediction);
     void youtubeBannerActions(const QJsonArray &actions);
     void youtubeWebPollState(const QJsonObject &response);
     void youtubeApiPollState(const QJsonObject &data);

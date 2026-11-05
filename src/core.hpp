@@ -118,6 +118,7 @@ QColor highlight(const Message &m, const Config &cfg, const QStringList &ownName
                  bool *mention = nullptr);
 QString visibleMessageText(const Message &message, const Config &config);
 QString visibleAlertText(const Message &message, const Config &config);
+QImage primeCrown();
 bool accepts(const Message &m, const QJsonObject &filter, const Config *config = nullptr);
 QString threadRoot(const Message &m, const QHash<QString, Message> &messages);
 QVector<Message> collectThread(const QVector<Message> &history, const Message &selected, QString *root);

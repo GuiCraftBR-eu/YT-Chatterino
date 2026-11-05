@@ -282,6 +282,7 @@ QSet<QString> Accounts::fullTwitchScopes() {
             "moderator:manage:chat_messages",
             "moderator:manage:banned_users",
             "channel:read:polls",
+            "channel:read:predictions",
             "channel:manage:broadcast"};
 }
 

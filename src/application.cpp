@@ -325,6 +325,7 @@ void MainWindow::attachPane(Pane *p) {
     });
     connect(p, &Pane::menuRequested, this, &MainWindow::paneMenu);
     connect(p, &Pane::filtersRequested, this, &MainWindow::filters);
+    connect(p, &Pane::phoneRequested, this, &MainWindow::showPhone);
     connect(p, &Pane::messageMenu, this, &MainWindow::messageMenu);
     connect(p, &Pane::userRequested, this, &MainWindow::showUser);
     connect(p, &Pane::threadRequested, this, &MainWindow::showThread);
@@ -461,13 +462,16 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     } else {
         saved->hide();
     }
+    auto *lookupStatus = new QLabel(cfg.T("Looking for live broadcasts…"), dialog);
+    lookupStatus->setObjectName("add-chat-status"); lookupStatus->hide();
+    layout->addWidget(lookupStatus);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Open | QDialogButtonBox::Cancel, dialog);
     buttons->button(QDialogButtonBox::Open)->setText(cfg.T("Open"));
     buttons->button(QDialogButtonBox::Cancel)->setText(cfg.T("Cancel"));
     layout->addWidget(buttons);
     QPointer<Pane> safe(anchor);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-    auto open = [this, input, combo, modes, dialog, safe, platform, saved, buttons] {
+    auto open = [this, input, combo, modes, dialog, safe, platform, saved, buttons, lookupStatus] {
         if (!buttons->button(QDialogButtonBox::Open)->isEnabled()) return;
         QList<QJsonObject> selections;
         QStringList entries;
@@ -479,10 +483,12 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
         for (const auto &entry : entries) {
             QString kind, id;
             const auto choice = platform->currentIndex();
-            if (choice == 3) {
-                const auto video = videoId(entry);
-                if (!video.isEmpty() && entry != video) { kind = "video"; id = video; }
-                else { kind = "youtube"; id = entry; }
+            const auto video = videoId(entry);
+            // An explicit live/video URL always wins over the selected platform and never
+            // goes through channel search. Bare 11-character names remain ambiguous.
+            if (!video.isEmpty() && entry != video) { kind = "video"; id = video; }
+            else if (choice == 3) {
+                kind = "youtube"; id = entry;
             } else if (choice == 2) {
                 kind = "kick";
                 id = kickLogin(entry);
@@ -495,8 +501,6 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
                 kind = "kick";
             } else if (!(id = twitchLogin(entry)).isEmpty()) {
                 kind = "twitch";
-            } else if (!(id = videoId(entry)).isEmpty() && id != entry) {
-                kind = "video";
             } else {
                 kind = "twitch";
                 id = twitchLogin("@" + stripAt(entry));
@@ -523,7 +527,7 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
         const QString selectedMode = modes[combo->currentIndex()];
         auto step = QSharedPointer<std::function<void()>>::create();
         QWeakPointer<std::function<void()>> weakStep(step);
-        *step = [this, safeDialog, safe, selectedMode, state, weakStep, buttons] {
+        *step = [this, safeDialog, safe, selectedMode, state, weakStep, buttons, lookupStatus] {
             if (!safeDialog) return;
             while (!state->pending.isEmpty()) {
                 const auto item = state->pending.takeFirst();
@@ -532,9 +536,11 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
                 else if (kind == "kick") state->links << "kick:" + id;
                 else if (kind == "video") state->links << "https://www.youtube.com/watch?v=" + id;
                 else if (kind == "youtube") {
+                    lookupStatus->show();
                     auto next = weakStep.toStrongRef();
-                    hub.savedStreams(item, [this, safeDialog, state, next, buttons, id](QJsonObject result, QString error) {
-                        if (!safeDialog) return;
+                    hub.savedStreams(item, [this, safeDialog, state, next, buttons, id, lookupStatus](QJsonObject result, QString error) {
+                        if (!safeDialog || safeDialog->isHidden()) return;
+                        lookupStatus->hide();
                         if (error.contains("HTTP 404") && id == videoId(id)) {
                             state->links << "https://www.youtube.com/watch?v=" + id;
                             if (next) (*next)();
@@ -902,6 +908,11 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
 
 void MainWindow::showPhone(Pane *target) {
     if (!target) return;
+    if (phoneServer && phoneServer->isActive() && phoneServer->pane != target) {
+        QMessageBox::information(this, cfg.T("Open on phone (beta)"),
+                                 cfg.T("Phone access is active in another pane. Stop it there first."));
+        return;
+    }
     if (phoneDialog && phoneTarget == target) {
         phoneDialog->show(); phoneDialog->raise(); phoneDialog->activateWindow(); return;
     }
@@ -932,7 +943,7 @@ void MainWindow::showPhone(Pane *target) {
         }
     }
     layout->addWidget(interfaces);
-    auto *hint = label(cfg, "Keep this window and the app open. Use a trusted local network; this connection uses local HTTP.", true);
+    auto *hint = label(cfg, "Keep the app open. Use a trusted local network; this connection uses local HTTP.", true);
     hint->setWordWrap(true); layout->addWidget(hint);
     auto *qr = new QLabel(dialog);
     qr->setObjectName("phone-qr"); qr->setAlignment(Qt::AlignCenter); qr->setMinimumHeight(220);
@@ -949,14 +960,14 @@ void MainWindow::showPhone(Pane *target) {
     auto *close = new QPushButton(cfg.T("Close"), dialog);
     row->addWidget(start); row->addWidget(stop); row->addStretch(); row->addWidget(close);
     layout->addLayout(row);
-    if (!phoneServer) phoneServer = new PhoneServer(&hub, this);
+    if (!phoneServer) {
+        phoneServer = new PhoneServer(&hub, this);
+        connect(phoneServer, &PhoneServer::stopped, this, [this] {
+            if (phoneTarget && phoneTarget->phoneButton) phoneTarget->phoneButton->hide();
+        });
+    }
     QPointer<Pane> safe(target);
-    connect(start, &QPushButton::clicked, dialog, [this, safe, interfaces, qr, info, start, stop, dialog] {
-        if (!safe || interfaces->currentIndex() < 0 ||
-            !phoneServer->start(safe, QHostAddress(interfaces->currentData().toString()))) {
-            QMessageBox::warning(dialog, cfg.T("Open on phone (beta)"),
-                                 cfg.T("Could not start phone access on that network.")); return;
-        }
+    const auto renderPairing = [this, interfaces, qr, info, start, stop] {
         const auto url = phoneServer->address();
         const auto code = phoneServer->pairingCode();
         const auto qrText = (url + "/#pair=" + code).toUtf8();
@@ -972,15 +983,29 @@ void MainWindow::showPhone(Pane *target) {
         qr->setPixmap(QPixmap::fromImage(image));
         info->setText(url + "\n" + cfg.T("Code: {code} · expires in 5 minutes", {{"code", code}}));
         interfaces->setEnabled(false); start->setEnabled(false); stop->setEnabled(true);
+    };
+    connect(start, &QPushButton::clicked, dialog, [this, safe, interfaces, dialog, renderPairing] {
+        if (!safe || interfaces->currentIndex() < 0 ||
+            !phoneServer->start(safe, QHostAddress(interfaces->currentData().toString()))) {
+            QMessageBox::warning(dialog, cfg.T("Open on phone (beta)"),
+                                 cfg.T("Could not start phone access on that network.")); return;
+        }
+        safe->phoneButton->show();
+        renderPairing();
     });
     connect(stop, &QPushButton::clicked, dialog, [this] { if (phoneServer) phoneServer->stop(); });
     connect(phoneServer, &PhoneServer::stopped, dialog, [interfaces, qr, info, start, stop] {
         interfaces->setEnabled(true); start->setEnabled(true); stop->setEnabled(false); qr->clear(); info->clear();
     });
-    connect(dialog, &QDialog::finished, this, [this] { if (phoneServer) phoneServer->stop(); });
+    connect(dialog, &QDialog::finished, this, [this, dialog] {
+        if (phoneDialog == dialog) phoneDialog = nullptr;
+    });
     connect(close, &QPushButton::clicked, dialog, &QDialog::close);
     start->setEnabled(interfaces->count() > 0);
-    if (!interfaces->count()) info->setText(cfg.T("No private IPv4 network was found."));
+    if (phoneServer->isActive() && phoneServer->pane == target) {
+        phoneServer->renewPairingCode();
+        renderPairing();
+    } else if (!interfaces->count()) info->setText(cfg.T("No private IPv4 network was found."));
     dialog->resize(450, 430); dialog->show(); darkTitlebar(dialog);
 }
 

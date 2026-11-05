@@ -159,7 +159,7 @@ class Pane : public QWidget {
     QVector<QLabel *> mixedIcons, mixedTitles;
     QLabel *mixedMore;
     QTimer headerClock, historyReload;
-    QToolButton *filterButton;
+    QToolButton *filterButton, *phoneButton;
     QComboBox *target;
     Composer *input;
     QPushButton *sendButton, *emoteButton;
@@ -188,6 +188,7 @@ class Pane : public QWidget {
     void focused(Pane *pane);
     void menuRequested(Pane *pane, QPoint point);
     void filtersRequested(Pane *pane);
+    void phoneRequested(Pane *pane);
     void userRequested(Pane *pane, Source *source, yc::Message message);
     void threadRequested(Source *source, yc::Message message);
     void messageMenu(Pane *pane, yc::Message message, QPoint point);

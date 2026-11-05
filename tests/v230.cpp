@@ -28,7 +28,7 @@ void NativeTests::kickRealtimeEventsAndAlerts() {
     const auto rendered = view.document(0)->toPlainText();
     QVERIFY(rendered.contains("Alice"));
     QVERIFY(rendered.contains("\n"));
-    QVERIFY(rendered.contains(QString::fromUtf8("♛")));
+    QVERIFY(rendered.contains(QChar::ObjectReplacementCharacter));
     QJsonObject celebration{{"id", "celebration-1"}, {"type", "celebration"}, {"content", "Thank you!"},
         {"metadata", QJsonObject{{"celebration", QJsonObject{{"type", "subscription_renewed"}, {"total_months", 20}}}}},
         {"sender", QJsonObject{{"id", 55}, {"username", "Subscriber"}}}};

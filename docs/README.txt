@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.3.2 — WINDOWS 11 x64
+YT-CHATTERINO 2.3.3 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.3.2.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.3.3.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -41,8 +41,8 @@ Do not share your JSON, account tokens or profile with friends. Share only this 
 OPEN ON PHONE (BETA)
 Right-click the tab, select the pane and Open on phone (beta). Choose the local network,
 start access, and scan the QR code on your phone or enter the displayed address and code.
-Use the same network on phone and computer. Keep the app and access window open; closing
-the window stops access. If Windows asks for network access, allow private networks
+Use the same network on phone and computer and keep the app open. The QR window can be
+closed; click Phone in the pane to reopen it and Stop to end access. If Windows asks for network access, allow private networks
 only; the firewall can block the connection until configured. The connection uses local
 HTTP, so use a trusted network. The beta supports
 reading, sending, replies, emotes and permitted moderation, but not every desktop feature.

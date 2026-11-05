@@ -25,8 +25,7 @@ bool PhoneServer::start(Pane *p, QHostAddress ip, quint16 port) {
         return false;
     if (!listener.listen(ip, port)) return false;
     pane = p; bindAddress = ip;
-    code = QString("%1").arg(QRandomGenerator::system()->bounded(1000000), 6, 10, QChar('0'));
-    codeAge.start();
+    renewPairingCode();
     paneDestroyed = connect(p, &QObject::destroyed, this, &PhoneServer::stop);
     return true;
 }
@@ -45,6 +44,10 @@ QString PhoneServer::address() const {
     return isActive() ? QString("http://%1:%2").arg(bindAddress.toString()).arg(listener.serverPort()) : QString();
 }
 QString PhoneServer::pairingCode() const { return code; }
+void PhoneServer::renewPairingCode() {
+    code = QString("%1").arg(QRandomGenerator::system()->bounded(1000000), 6, 10, QChar('0'));
+    codeAge.start();
+}
 
 void PhoneServer::acceptConnections() {
     while (listener.hasPendingConnections()) {
@@ -170,13 +173,19 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
 QJsonObject PhoneServer::state(qint64 after, quint32 clientRevision) const {
     QJsonArray sources, messages;
     if (!pane) return {};
+    quint32 sourceRevision = 2166136261u;
     for (auto source : pane->sources) if (source && !source->closed) {
+        const auto avatar = safeImage({str(source->header.value("avatar"))});
+        const bool moderate = hub->hasModerationRole(source);
         sources.append(QJsonObject{{"key", source->key}, {"name", source->name()}, {"platform", source->platform},
-                                   {"moderate", hub->hasModerationRole(source)}});
+                                   {"avatar", avatar}, {"moderate", moderate}});
+        sourceRevision = (sourceRevision ^ quint32(qHash(source->key, 0))) * 16777619u;
+        sourceRevision = (sourceRevision ^ quint32(qHash(source->name(), 0))) * 16777619u;
+        sourceRevision = (sourceRevision ^ quint32(qHash(avatar, 0)) ^ quint32(moderate)) * 16777619u;
     }
     const auto &all = pane->view->messages;
     const int first = qMax(0, int(all.size()) - 250);
-    quint32 revision = hub->cfg->data["show_deleted_messages"].toBool(false) ? 2166136262u : 2166136261u;
+    quint32 revision = sourceRevision ^ (hub->cfg->data["show_deleted_messages"].toBool(false) ? 1u : 0u);
     for (int i = first; i < all.size(); ++i)
         if (all[i].deleted) revision = (revision ^ quint32(all[i].seq)) * 16777619u;
     qint64 highest = after;
@@ -199,6 +208,11 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
         respond(socket, 403, "text/plain", "Forbidden"); return;
     }
     const auto path = target.path();
+    if (method == "GET" && path == "/prime-crown.png") {
+        QByteArray bytes; QBuffer buffer(&bytes); buffer.open(QIODevice::WriteOnly);
+        primeCrown().save(&buffer, "PNG");
+        respond(socket, 200, "image/png", bytes); return;
+    }
     if (method == "GET" && (path == "/" || path == "/phone.js" || path == "/phone.css")) {
         QFile file(path == "/" ? ":/phone/index.html" : ":/phone" + path);
         if (!file.open(QIODevice::ReadOnly)) { respond(socket, 404, "text/plain", "Not found"); return; }

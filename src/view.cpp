@@ -206,7 +206,10 @@ int ChatView::estimate(const Message &m) const {
     int lines = qMax(1, (fm.horizontalAdvance(text) + width - 1) / width);
     lines += text.count('\n');
     int height = lines * fm.lineSpacing() + 8;
-    if (!m.system && (m.special == "alert" || m.special == "member" || m.special == "super")) height += fm.lineSpacing();
+    if (!m.system && (m.special == "alert" || m.special == "member" || m.special == "super")) {
+        const bool hasBody = !m.alertText.isEmpty() && m.alertBodyStart < m.text.size();
+        height += fm.lineSpacing() * (hasBody ? 2 : 1);
+    }
     if (!m.reply.isEmpty() && !threadMode) {
         height += fm.lineSpacing();
     }
@@ -273,7 +276,7 @@ QImage channelIcon(Source *source, Images *images, int size) {
     QPainterPath circle;
     circle.addEllipse(QRectF(0, 0, size, size));
     painter.setClipPath(circle);
-    const auto url = source ? str(source->header["avatar"]) : QString();
+    const auto url = source ? str(source->header.value("avatar")) : QString();
     const auto image = url.isEmpty() ? QImage() : images->get({url}, false);
     if (!image.isNull()) {
         const auto scaled = image.scaled(size, size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
@@ -377,7 +380,17 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
     if (isAlert) {
         const QColor accent = source && source->platform == "kick" ? QColor("#53fc18")
                             : source && source->platform == "youtube" ? QColor("#ff7777") : QColor("#bf94ff");
-        cursor.insertText(QString::fromUtf8("♛ "), format(username, accent));
+        const auto crown = primeCrown();
+        if (!crown.isNull()) {
+            const int height = qMax(14, QFontMetrics(username).height() - 2);
+            const QSize size = crown.size().scaled(height + 2, height, Qt::KeepAspectRatio);
+            doc->addResource(QTextDocument::ImageResource, QUrl("icon:prime-crown"), crown);
+            QTextImageFormat icon; icon.setName("icon:prime-crown");
+            icon.setWidth(size.width()); icon.setHeight(size.height());
+            icon.setVerticalAlignment(QTextCharFormat::AlignMiddle);
+            detail.imageCodes[cursor.position()] = "[Alert]";
+            cursor.insertImage(icon); cursor.insertText(" ", normalFormat);
+        }
         detail.nameStart = cursor.position();
         cursor.insertText(m.name, format(username, accent));
         detail.nameEnd = cursor.position();
@@ -432,7 +445,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         cursor.insertImage(f);
     };
     if (mixed && source) {
-        const auto url = str(source->header["avatar"]);
+        const auto url = str(source->header.value("avatar"));
         const QString resource = url.isEmpty() ? "channel:" + source->key : url;
         if (!url.isEmpty()) detail.urls.insert(url);
         const auto icon = channelIcon(source, hub->images, 24);
@@ -750,30 +763,28 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
     }
     (void)doc->size();
     const QPointF local(point.x() - 6, y - offsets.value(row) - 3);
+    const auto containsImage = [&](int candidate) {
+        const auto block = doc->findBlock(candidate);
+        if (!block.isValid() || !block.layout()) return false;
+        const auto line = block.layout()->lineForTextPosition(candidate - block.position());
+        if (!line.isValid()) return false;
+        const auto bounds = doc->documentLayout()->blockBoundingRect(block);
+        const qreal x1 = line.cursorToX(candidate - block.position());
+        const qreal x2 = line.cursorToX(candidate - block.position() + 1);
+        return QRectF(bounds.left() + qMin(x1, x2), bounds.top() + line.y(),
+                      qAbs(x2 - x1), line.height()).adjusted(-0.5, -0.5, 0.5, 0.5).contains(local);
+    };
     const int hit = doc->documentLayout()->hitTest(local, Qt::ExactHit);
-    int position = hit;
-    if (!info.contains(position) && info.contains(position - 1)) {
-        --position;
+    int position = -1;
+    if (info.contains(hit) && containsImage(hit)) position = hit;
+    else if (info.contains(hit - 1) && containsImage(hit - 1)) position = hit - 1;
+    else {
+        // Qt's exact hit test can miss an inline image in wrapped/multiline
+        // alert text. Check the actual inline image bounds as a fallback.
+        for (auto it = info.cbegin(); it != info.cend(); ++it)
+            if (containsImage(it.key())) { position = it.key(); break; }
     }
-    if (hit < 0 || !info.contains(position)) {
-        hideEmoteTooltip();
-        return false;
-    }
-    const auto block = doc->findBlock(position);
-    if (!block.isValid() || !block.layout()) {
-        hideEmoteTooltip();
-        return false;
-    }
-    const auto line = block.layout()->lineForTextPosition(position - block.position());
-    if (!line.isValid()) {
-        hideEmoteTooltip();
-        return false;
-    }
-    const auto bounds = doc->documentLayout()->blockBoundingRect(block);
-    const qreal x1 = line.cursorToX(position - block.position());
-    const qreal x2 = line.cursorToX(position - block.position() + 1);
-    if (!QRectF(bounds.left() + qMin(x1, x2), bounds.top() + line.y(),
-                qAbs(x2 - x1), line.height()).contains(local)) {
+    if (position < 0) {
         hideEmoteTooltip();
         return false;
     }
@@ -806,7 +817,7 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
 void ChatView::showChannelTooltip(Source *source, QPoint global) {
     if (!source) { hideEmoteTooltip(); return; }
     streamPreviewSource.clear();
-    const QString url = str(source->header["avatar"]);
+    const QString url = str(source->header.value("avatar"));
     tooltipUrls = url.isEmpty() ? QStringList() : QStringList{url};
     tooltipMessage = 0;
     tooltipPosition = -1;
@@ -1595,6 +1606,13 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     filterButton->hide();
     hl->addWidget(filterButton);
     connect(filterButton, &QToolButton::clicked, this, [this] { emit filtersRequested(this); });
+    phoneButton = new QToolButton(header);
+    phoneButton->setObjectName("active-phone");
+    phoneButton->setStyleSheet("QToolButton{color:#b5e4c3;background:#183123;border-radius:3px;padding:3px 5px;}"
+                               "QToolButton:hover{background:#245036;}");
+    phoneButton->hide();
+    hl->addWidget(phoneButton);
+    connect(phoneButton, &QToolButton::clicked, this, [this] { emit phoneRequested(this); });
     auto *actions = new QToolButton(header);
     actions->setText("▾");
     hl->addWidget(actions);
@@ -1637,7 +1655,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     layout->addWidget(view, 1);
     connect(hub->images, &Images::ready, this, [this](const QString &url) {
         for (const auto &source : sources) {
-            if (source && str(source->header["avatar"]) == url) { refresh(); break; }
+            if (source && str(source->header.value("avatar")) == url) { refresh(); break; }
         }
     });
     replyBar = new QWidget(this);
@@ -1931,7 +1949,13 @@ void Pane::refreshDecorations() {
             ++count;
         };
         add(hub->cfg->T("Pinned message"), source->pinned);
-        add(hub->cfg->T("Poll"), source->activePoll);
+        QString pollHeading = hub->cfg->T(source->activePoll.value("ended").toBool() ? "Poll result" : "Poll");
+        if (source->activePoll.value("last_observed").toBool()) pollHeading += " · " + hub->cfg->T("last observed");
+        add(pollHeading, source->activePoll);
+        QString predictionHeading = hub->cfg->T(source->activePrediction.value("ended").toBool() ? "Prediction result" : "Prediction");
+        if (str(source->activePrediction.value("status")) == "LOCKED") predictionHeading += " · " + hub->cfg->T("Locked");
+        if (str(source->activePrediction.value("status")) == "CANCELED") predictionHeading += " · " + hub->cfg->T("Canceled");
+        add(predictionHeading, source->activePrediction);
     }
     decorations->setVisible(count > 0 && !detached);
 }
@@ -1940,6 +1964,8 @@ void Pane::refresh() {
     const bool hasFilter = !filter["hidden_users"].toArray().isEmpty() ||
         !filter["include_terms"].toArray().isEmpty() || !filter["exclude_terms"].toArray().isEmpty() ||
         filter["hide_deleted"].toBool() || filter["hide_system"].toBool();
+    phoneButton->setText(hub->cfg->T("Phone"));
+    phoneButton->setToolTip(hub->cfg->T("Phone access is active. Click to open or stop it."));
     filterButton->setText(hub->cfg->T("Filters"));
     filterButton->setToolTip(hub->cfg->T("Filters are active. Click to review them."));
     filterButton->setVisible(hasFilter && !detached);

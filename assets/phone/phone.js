@@ -60,18 +60,31 @@ function content(parent, message, offset) {
 function selectChannel(key) {
   const channel = $('channel'); if ([...channel.options].some(o => o.value === key)) channel.value = key;
 }
+function channelIcon(source) {
+  const icon = source.avatar ? node('img', undefined, 'channel-icon') : node('span', source.name.charAt(0).toUpperCase(), 'channel-fallback');
+  if (source.avatar) {
+    icon.src = source.avatar; icon.alt = source.name; icon.loading = 'lazy';
+    icon.addEventListener('error', () => {
+      const fallback = channelIcon({...source, avatar:''}); icon.replaceWith(fallback);
+    }, {once:true});
+  }
+  icon.title = source.name; icon.setAttribute('aria-label', source.name); icon.dataset.channelIcon = source.key;
+  return icon;
+}
 function messageRow(m) {
   const source = sources.find(s => s.key === m.source);
   const row = node('div', undefined, 'row' + (m.special ? ' alert' : '') + (source ? ' ' + source.platform : '') + (m.deleted ? ' deleted' : ''));
   if (m.system) { row.append(node('span', m.time + ' ' + m.text, 'system')); return row; }
   if (m.special) {
-    const event = node('div', undefined, 'event'); event.append(node('div', '♛ ' + m.name, 'event-name'));
+    const event = node('div', undefined, 'event'); const eventName = node('div', undefined, 'event-name');
+    const crown = node('img', undefined, 'event-icon'); crown.src = '/prime-crown.png'; crown.alt = '';
+    eventName.append(crown, document.createTextNode(m.name)); event.append(eventName);
     event.append(node('div', m.alert || m.text, 'event-desc')); row.append(event);
   }
   const offset = m.special && m.alert ? Math.max(0, Math.min(m.alertBodyStart || 0, m.text.length)) : (m.special ? m.text.length : 0);
   if (offset < m.text.length) {
     const body = node('div', undefined, 'body');
-    if (sources.length > 1 && source) body.append(node('span', '[' + source.name + '] ', 'source'));
+    if (sources.length > 1 && source) body.append(channelIcon(source));
     body.append(node('span', m.time + ' ', 'time'));
     for (const badge of m.badges || []) if (badge.url) { const img = node('img', undefined, 'badge'); img.src = badge.url; img.alt = badge.name || 'badge'; img.title = badge.name || 'badge'; img.loading = 'lazy'; body.append(img); }
     const name = node('span', m.name + ': ', 'name'); name.style.color = m.color || '#efeff1'; body.append(name); content(body, m, offset);
@@ -94,8 +107,8 @@ function messageRow(m) {
 }
 function updateSources(next) {
   const select = $('channel'), old = select.value;
-  const signature = JSON.stringify(next.map(s => [s.key,s.name,s.platform,s.moderate]));
-  if (signature === JSON.stringify(sources.map(s => [s.key,s.name,s.platform,s.moderate]))) return;
+  const signature = JSON.stringify(next.map(s => [s.key,s.name,s.platform,s.avatar,s.moderate]));
+  if (signature === JSON.stringify(sources.map(s => [s.key,s.name,s.platform,s.avatar,s.moderate]))) return;
   sources = next; select.replaceChildren();
   for (const source of sources) { const option = node('option', source.name); option.value = source.key; select.append(option); }
   select.hidden = sources.length <= 1; selectChannel(old);
