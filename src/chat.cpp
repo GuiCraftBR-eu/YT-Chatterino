@@ -645,7 +645,15 @@ void Source::youtubeApiPollState(const QJsonObject &data) {
     const auto metadata = at(data, {"activePollItem", "snippet", "pollDetails", "metadata"}).toObject();
     QJsonObject state;
     const QString question = str(metadata["questionText"]);
-    if (question.isEmpty() && activePoll.value("ended").toBool() && pollResultTimer.isActive()) state = activePoll;
+    if (question.isEmpty() && !activePoll.isEmpty()) {
+        if (activePoll.value("ended").toBool() && pollResultTimer.isActive()) state = activePoll;
+        else if (!activePoll.value("ended").toBool()) {
+            state = activePoll;
+            state["ended"] = true;
+            state["last_observed"] = true;
+            pollResultTimer.start(180000);
+        }
+    }
     if (!question.isEmpty()) {
         QStringList choices;
         for (const auto &value : metadata["options"].toArray()) {

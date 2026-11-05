@@ -136,6 +136,9 @@ void NativeTests::youtubePinAndPollLifecycle() {
     QCOMPARE(str(yt->activePoll["text"]), "Play another?");
     QVERIFY(str(yt->activePoll["options"]).contains("Yes (20)"));
     yt->youtubeApiPollState({});
+    QVERIFY(yt->activePoll.value("ended").toBool());
+    QVERIFY(yt->activePoll.value("last_observed").toBool());
+    QVERIFY(QMetaObject::invokeMethod(&yt->pollResultTimer, "timeout", Qt::DirectConnection));
     QVERIFY(yt->activePoll.isEmpty());
     yt->youtubeActions({QJsonObject{{"removeBannerForLiveChatCommand",
                                    QJsonObject{{"targetActionId", "wrong"}}}}});
