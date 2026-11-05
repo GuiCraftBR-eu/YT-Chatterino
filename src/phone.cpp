@@ -17,6 +17,14 @@ static QString safeImage(const QStringList &urls) {
 
 PhoneServer::PhoneServer(Hub *h, QObject *parent) : QObject(parent), hub(h), listener(this) {
     connect(&listener, &QTcpServer::newConnection, this, &PhoneServer::acceptConnections);
+    stateFlush.setSingleShot(true);
+    stateFlush.setInterval(30);
+    connect(&stateFlush, &QTimer::timeout, this, [this] { flushStates(); });
+    const auto changed = [this] { if (!pendingStates.isEmpty() && !stateFlush.isActive()) stateFlush.start(); };
+    connect(hub, &Hub::message, this, [changed](Source *, Message) { changed(); });
+    connect(hub, &Hub::sourceChanged, this, [changed](Source *) { changed(); });
+    connect(hub->cfg, &Config::appearanceChanged, this, changed);
+    connect(hub->cfg, &Config::filtersChanged, this, [changed](const QString &) { changed(); });
 }
 
 bool PhoneServer::start(Pane *p, QHostAddress ip, quint16 port) {
@@ -27,16 +35,21 @@ bool PhoneServer::start(Pane *p, QHostAddress ip, quint16 port) {
     pane = p; bindAddress = ip;
     renewPairingCode();
     paneDestroyed = connect(p, &QObject::destroyed, this, &PhoneServer::stop);
+    paneSourcesChanged = connect(p, &Pane::sourcesChanged, this, [this] {
+        if (!pendingStates.isEmpty() && !stateFlush.isActive()) stateFlush.start();
+    });
     return true;
 }
 
 void PhoneServer::stop() {
     const bool wasActive = listener.isListening();
     disconnect(paneDestroyed);
+    disconnect(paneSourcesChanged);
     paneDestroyed = {};
+    paneSourcesChanged = {};
     listener.close();
     for (auto *socket : buffers.keys()) { socket->abort(); socket->deleteLater(); }
-    buffers.clear(); sessions.clear(); attempts.clear(); pane.clear(); code.clear();
+    buffers.clear(); pendingStates.clear(); stateFlush.stop(); sessions.clear(); attempts.clear(); pane.clear(); code.clear();
     if (wasActive) emit stopped();
 }
 bool PhoneServer::isActive() const { return listener.isListening() && pane; }
@@ -57,9 +70,26 @@ void PhoneServer::acceptConnections() {
         buffers.insert(socket, {});
         connect(socket, &QTcpSocket::readyRead, this, [this, socket] { receive(socket); });
         connect(socket, &QTcpSocket::disconnected, this, [this, socket] {
-            buffers.remove(socket); socket->deleteLater();
+            buffers.remove(socket); pendingStates.remove(socket); socket->deleteLater();
         });
         QTimer::singleShot(45000, socket, [socket] { socket->abort(); });
+    }
+}
+
+void PhoneServer::flushStates(bool force, QTcpSocket *only) {
+    for (auto *socket : pendingStates.keys()) {
+        if (only && socket != only) continue;
+        const auto pending = pendingStates.value(socket);
+        const auto session = sessions.constFind(pending.session);
+        if (session == sessions.cend() || session->expires <= QDateTime::currentSecsSinceEpoch()) {
+            pendingStates.remove(socket);
+            respond(socket, 401, "application/json", "{\"error\":\"Pair again on your PC.\"}");
+            continue;
+        }
+        const auto result = state(pending.after, pending.revision);
+        if (!force && !result["reset"].toBool() && result["messages"].toArray().isEmpty()) continue;
+        pendingStates.remove(socket);
+        respond(socket, 200, "application/json", QJsonDocument(result).toJson(QJsonDocument::Compact));
     }
 }
 
@@ -167,7 +197,7 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
             {"color", userColor(m).name()}, {"system", m.system}, {"deleted", m.deleted},
             {"special", m.special}, {"alert", visibleAlertText(m, *hub->cfg)}, {"alertBodyStart", m.alertBodyStart},
             {"badges", badges}, {"emotes", spans},
-            {"reply", QJsonObject{{"name", m.reply["name"]}, {"text", m.reply["text"]}}}};
+            {"reply", QJsonObject{{"name", m.reply["name"]}, {"login", m.reply["login"]}, {"text", m.reply["text"]}}}};
 }
 
 QJsonObject PhoneServer::state(qint64 after, quint32 clientRevision) const {
@@ -177,11 +207,13 @@ QJsonObject PhoneServer::state(qint64 after, quint32 clientRevision) const {
     for (auto source : pane->sources) if (source && !source->closed) {
         const auto avatar = safeImage({str(source->header.value("avatar"))});
         const bool moderate = hub->hasModerationRole(source);
+        const auto modes = source->chatModeSummary();
         sources.append(QJsonObject{{"key", source->key}, {"name", source->name()}, {"platform", source->platform},
-                                   {"avatar", avatar}, {"moderate", moderate}});
+                                   {"avatar", avatar}, {"moderate", moderate}, {"modes", modes}});
         sourceRevision = (sourceRevision ^ quint32(qHash(source->key, 0))) * 16777619u;
         sourceRevision = (sourceRevision ^ quint32(qHash(source->name(), 0))) * 16777619u;
         sourceRevision = (sourceRevision ^ quint32(qHash(avatar, 0)) ^ quint32(moderate)) * 16777619u;
+        sourceRevision = (sourceRevision ^ quint32(qHash(modes, 0))) * 16777619u;
     }
     const auto &all = pane->view->messages;
     const int first = qMax(0, int(all.size()) - 250);
@@ -269,9 +301,58 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
         const QUrlQuery query(target);
         bool ok = false; const auto after = query.queryItemValue("after").toLongLong(&ok);
         bool revisionOk = false; const auto revision = query.queryItemValue("revision").toUInt(&revisionOk);
-        respond(socket, 200, "application/json",
-                QJsonDocument(state(ok ? qMax(qint64(0), after) : 0, revisionOk ? revision : 0))
-                    .toJson(QJsonDocument::Compact));
+        const auto safeAfter = ok ? qMax(qint64(0), after) : 0;
+        const auto safeRevision = revisionOk ? revision : 0;
+        const auto result = state(safeAfter, safeRevision);
+        if (query.queryItemValue("wait") == "1" && safeAfter > 0 && !result["reset"].toBool() &&
+            result["messages"].toArray().isEmpty()) {
+            pendingStates.insert(socket, {safeAfter, safeRevision, key});
+            QTimer::singleShot(20000, socket, [this, socket] { flushStates(true, socket); });
+            return;
+        }
+        respond(socket, 200, "application/json", QJsonDocument(result).toJson(QJsonDocument::Compact));
+        return;
+    }
+    if (method == "GET" && (path == "/api/thread" || path == "/api/user-history")) {
+        const QUrlQuery query(target);
+        auto *source = allowedSource(query.queryItemValue("source", QUrl::FullyDecoded));
+        bool ok = false;
+        const auto seq = query.queryItemValue("seq").toLongLong(&ok);
+        const auto selected = ok ? findMessage(seq, source) : Message();
+        if (!source || selected.id.isEmpty()) {
+            respond(socket, 400, "application/json", "{\"error\":\"Message is no longer available.\"}"); return;
+        }
+        QVector<Message> history;
+        QString displayName = selected.name;
+        if (path == "/api/thread") {
+            if (selected.reply.isEmpty()) {
+                respond(socket, 400, "application/json", "{\"error\":\"No reply thread.\"}"); return;
+            }
+            QString root;
+            history = collectThread(source->history, selected, &root);
+            if (!root.isEmpty() && (history.isEmpty() || history.first().id != root)) {
+                Message parent;
+                parent.source = source->key; parent.id = root;
+                parent.name = str(selected.reply["name"]);
+                if (parent.name.isEmpty()) parent.name = str(selected.reply["login"]);
+                parent.text = str(selected.reply["text"]);
+                if (parent.text.isEmpty()) parent.text = hub->cfg->T("[Earlier message unavailable]");
+                history.prepend(parent);
+            }
+            if (!history.isEmpty() && !history.first().name.isEmpty()) displayName = history.first().name;
+        } else {
+            for (const auto &m : source->history) {
+                if (m.system) continue;
+                const bool same = !selected.uid.isEmpty() && !m.uid.isEmpty() ? selected.uid == m.uid
+                    : !selected.login.isEmpty() && m.login.compare(selected.login, Qt::CaseInsensitive) == 0;
+                if (same) history << m;
+            }
+        }
+        QJsonArray rows;
+        for (int i = qMax(0, int(history.size()) - 500); i < history.size(); ++i)
+            rows.append(renderMessage(history[i]));
+        respond(socket, 200, "application/json", QJsonDocument(QJsonObject{{"name", displayName},
+                {"channel", source->name()}, {"messages", rows}}).toJson(QJsonDocument::Compact));
         return;
     }
     if (method == "GET" && path == "/api/emotes") {
@@ -290,6 +371,7 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
     }
     if (method == "POST" && path == "/api/logout") {
         sessions.remove(key);
+        flushStates();
         respond(socket, 200, "application/json", "{\"ok\":true}",
                 "Set-Cookie: ytphone=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/\r\n"); return;
     }

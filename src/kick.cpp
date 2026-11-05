@@ -93,6 +93,53 @@ void Source::kickError(QString error) {
     kickRetryMs = qMin(300000, kickRetryMs * 2);
 }
 
+void Source::kickUpdateChatModes(const QJsonObject &room) {
+    QJsonObject modes;
+    for (const auto &pair : QList<QPair<QString, QString>>{
+             {"followers_mode", "followers"}, {"following_min_duration", "follow_minutes"},
+             {"subscribers_mode", "subscribers"}, {"emotes_mode", "emotes"},
+             {"slow_mode", "slow"}, {"message_interval", "slow_seconds"}}) {
+        if (!room.value(pair.first).isUndefined() && !room.value(pair.first).isNull()) {
+            const auto value = room.value(pair.first);
+            if (value.isObject()) {
+                const auto setting = value.toObject();
+                if (setting.contains("enabled")) modes[pair.second] = setting["enabled"];
+                if (pair.first == "followers_mode" && setting.contains("min_duration"))
+                    modes["follow_minutes"] = setting["min_duration"];
+                if (pair.first == "slow_mode" && setting.contains("message_interval"))
+                    modes["slow_seconds"] = setting["message_interval"];
+            } else modes[pair.second] = value;
+        }
+    }
+    const auto age = room["account_age"].toObject();
+    if (age.contains("enabled")) modes["account_age"] = age["enabled"];
+    if (age.contains("min_duration")) modes["account_age_minutes"] = age["min_duration"];
+    const bool complete = modes.contains("followers") && modes.contains("subscribers") &&
+                          modes.contains("emotes") && modes.contains("slow");
+    if (!modes.isEmpty()) updateChatModes(modes, chatModesKnown || complete);
+}
+
+void Source::kickRefreshChatModes() {
+    if (closed || platform != "kick" || hub->testMode || kickModesPending) return;
+    kickModesPending = true;
+    const auto epoch = generation;
+    QPointer<Source> self(this);
+    hub->net->json(QUrl("https://kick.com/api/v2/channels/" + id + "/chatroom"),
+                   [self, epoch](QJsonObject data, QString error) {
+        if (!self || self->closed || self->generation != epoch) return;
+        self->kickModesPending = false;
+        if (error.isEmpty() && data.contains("followers_mode") && data.contains("subscribers_mode") &&
+            data.contains("emotes_mode") && data.contains("slow_mode")) {
+            self->kickUpdateChatModes(data);
+            self->kickModesRetryMs = 60000;
+        } else {
+            self->updateChatModes({}, false);
+            self->kickModesRetryMs = qMin(300000, self->kickModesRetryMs * 2);
+        }
+        self->kickModesTimer.start(self->kickModesRetryMs);
+    });
+}
+
 void Source::kickConnect() {
     if (closed || hub->testMode || kickConnecting) return;
     kickConnecting = true;
@@ -110,6 +157,8 @@ void Source::kickConnect() {
         const bool firstConnection = self->kickChannelId.isEmpty();
         self->kickChannelId = channelId;
         self->kickRoomId = str(at(data, {"chatroom", "id"}));
+        self->kickUpdateChatModes(data["chatroom"].toObject());
+        if (!self->kickModesPending && !self->kickModesTimer.isActive()) self->kickRefreshChatModes();
         if (firstConnection) self->kickLoadEmotes();
         if (!self->kickRoomId.isEmpty() && !self->kickSocketActive && !self->kickSocketStarting &&
             !self->kickSocketRetry.isActive()) self->kickStartSocket();
@@ -361,6 +410,10 @@ void Source::kickSocketMessage(const QString &text) {
 }
 
 void Source::kickEvent(QString event, QJsonObject data) {
+    if (event.endsWith("ChatroomUpdatedEvent") || event.endsWith("ChatroomSettingsUpdatedEvent")) {
+        const auto room = data["chatroom"].isObject() ? data["chatroom"].toObject() : data;
+        kickUpdateChatModes(room); return;
+    }
     if (event.endsWith("ChatMessageEvent")) {
         auto message = parseKick(data);
         if (!message.id.isEmpty()) publish(message);

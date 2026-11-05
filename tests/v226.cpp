@@ -68,6 +68,10 @@ void NativeTests::kickChatPollingAndRetry() {
             return;
         }
         if (url.path() == "/emotes/example") { done("[]", {}); return; }
+        if (url.path() == "/api/v2/channels/example/chatroom") {
+            done(R"({"followers_mode":{"enabled":true,"min_duration":15},"subscribers_mode":{"enabled":false},"emotes_mode":{"enabled":false},"slow_mode":{"enabled":true,"message_interval":8}})", {});
+            return;
+        }
         if (url.host() == "files.kick.com") { done({}, "Fixture image unavailable"); return; }
         QCOMPARE(url.path(), QString("/api/v2/channels/123/messages"));
         ++requests;

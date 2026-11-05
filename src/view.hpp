@@ -155,6 +155,7 @@ class Pane : public QWidget {
     bool detached;
     QWidget *header, *replyBar, *searchBar, *decorations;
     QLabel *headerText, *headerIcon, *replyLabel, *countLabel, *searchCount;
+    QLabel *chatModesLabel;
     QWidget *mixedHeader;
     QVector<QLabel *> mixedIcons, mixedTitles;
     QLabel *mixedMore;
@@ -173,6 +174,7 @@ class Pane : public QWidget {
     QString threadId;
     void refresh();
     void refreshDecorations();
+    void refreshChatModes();
     void reload();
     void incoming(Source *source, Message message);
     void send();
@@ -189,6 +191,7 @@ class Pane : public QWidget {
     void menuRequested(Pane *pane, QPoint point);
     void filtersRequested(Pane *pane);
     void phoneRequested(Pane *pane);
+    void sourcesChanged();
     void userRequested(Pane *pane, Source *source, yc::Message message);
     void threadRequested(Source *source, yc::Message message);
     void messageMenu(Pane *pane, yc::Message message, QPoint point);

@@ -406,7 +406,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         cursor.insertText("\n", normalFormat);
     }
     if (a["show_timestamps"].toBool(true) && m.stamp.isValid()) {
-        cursor.insertText(hub->cfg->time(m.stamp) + ' ', format(normal, dim));
+        cursor.insertText(hub->cfg->time(m.stamp) + ' ', format(hub->cfg->timestampFont(), dim));
     }
     if (m.system) {
         cursor.insertText(hub->cfg->T(m.text), format(normal, dim));
@@ -1617,6 +1617,12 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     actions->setText("▾");
     hl->addWidget(actions);
     layout->addWidget(header);
+    chatModesLabel = new QLabel(this);
+    chatModesLabel->setObjectName("chat-modes");
+    chatModesLabel->setTextFormat(Qt::PlainText);
+    chatModesLabel->setWordWrap(true);
+    chatModesLabel->setStyleSheet("background:#17171a;color:#b7b7c0;padding:3px 7px;font-size:11px;");
+    layout->addWidget(chatModesLabel);
     decorations = new QWidget(this);
     decorations->setObjectName("chat-decorations");
     auto *decorationLayout = new QVBoxLayout(decorations);
@@ -1826,7 +1832,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         reload();
         refresh();
     });
-    connect(hub->cfg, &Config::languageChanged, this, [this] { refresh(); refreshDecorations(); });
+    connect(hub->cfg, &Config::languageChanged, this, [this] { refresh(); refreshDecorations(); refreshChatModes(); });
     historyReload.setSingleShot(true);
     connect(&historyReload, &QTimer::timeout, this, &Pane::reload);
     headerClock.setInterval(1000);
@@ -1843,6 +1849,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     setSources(list);
     if (detached) {
         header->hide();
+        chatModesLabel->hide();
         target->hide();
         view->threadMode = true;
     }
@@ -1891,14 +1898,17 @@ void Pane::setSources(QList<Source *> list) {
         connect(s, &Source::message, this, [this, s](Message m) { incoming(s, m); });
         connect(s, &Source::changed, this, [this] {
             refresh();
+            refreshChatModes();
             reload();
         });
         connect(s, &Source::headerChanged, this, [this, s] {
             refresh();
+            refreshChatModes();
             if (view->streamPreviewSource == s && view->emoteTooltip && view->emoteTooltip->isVisible())
                 view->showStreamTooltip(s, view->streamPreviewGlobal);
         });
         connect(s, &Source::decorationsChanged, this, &Pane::refreshDecorations);
+        connect(s, &Source::chatModesChanged, this, &Pane::refreshChatModes);
         connect(s, &Source::redacted, this, [this](QJsonObject target) {
             if (detached || reply.id.isEmpty()) {
                 return;
@@ -1921,6 +1931,19 @@ void Pane::setSources(QList<Source *> list) {
     reload();
     refresh();
     refreshDecorations();
+    refreshChatModes();
+    emit sourcesChanged();
+}
+
+void Pane::refreshChatModes() {
+    QStringList labels;
+    for (auto source : sources) {
+        if (!source || source->closed) continue;
+        const auto label = source->chatModeSummary();
+        labels << (sources.size() > 1 ? source->name() + ": " + label : label);
+    }
+    chatModesLabel->setText(labels.join("\n"));
+    chatModesLabel->setVisible(!detached && !labels.isEmpty());
 }
 
 void Pane::refreshDecorations() {

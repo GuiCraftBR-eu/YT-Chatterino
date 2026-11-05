@@ -131,6 +131,8 @@ Source::Source(Hub *h, QString p, QString value)
     kickSocketRetry.setSingleShot(true);
     kickSocketWatchdog.setSingleShot(true);
     kickSocketRenew.setSingleShot(true);
+    kickModesTimer.setSingleShot(true);
+    connect(&kickModesTimer, &QTimer::timeout, this, &Source::kickRefreshChatModes);
     connect(&kickSocketRetry, &QTimer::timeout, this, &Source::kickStartSocket);
     connect(&kickSocketWatchdog, &QTimer::timeout, &kickSocket, &QWebSocket::abort);
     connect(&kickSocketRenew, &QTimer::timeout, &kickSocket, &QWebSocket::abort);
@@ -188,6 +190,7 @@ void Source::stop() {
     decorationTimer.stop();
     pollResultTimer.stop();
     kickSocketRetry.stop(); kickSocketWatchdog.stop(); kickSocketRenew.stop();
+    kickModesTimer.stop(); kickModesPending = false;
     kickSocket.abort();
     if (platform == "twitch") {
         hub->twitch.part(this);
@@ -199,6 +202,8 @@ void Source::reconnect() {
         return;
     }
     ++generation;
+    chatModes = {}; chatModesKnown = false; youtubeModeNotice.clear();
+    emit chatModesChanged();
     requesting = false;
     historyLoading = false;
     historyRetry.stop();
@@ -217,6 +222,7 @@ void Source::reconnect() {
         if (!historyLoaded) loadHistory();
     } else if (platform == "kick") {
         poll.stop();
+        kickModesTimer.stop(); kickModesPending = false; kickModesRetryMs = 60000;
         kickSocketRetry.stop(); kickSocketWatchdog.stop(); kickSocketRenew.stop();
         kickSocketStarting = false; kickSocketActive = false; kickSocket.abort();
         kickConnecting = false;
@@ -402,6 +408,71 @@ void Source::updateTwitchUserState(const QJsonObject &tags) {
         }
     }
     if (updated) emit changed();
+}
+
+void Source::updateChatModes(const QJsonObject &patch, bool known) {
+    auto next = chatModes;
+    for (auto it = patch.begin(); it != patch.end(); ++it) next[it.key()] = it.value();
+    if (next == chatModes && chatModesKnown == known) return;
+    chatModes = next;
+    chatModesKnown = known;
+    emit chatModesChanged();
+}
+
+static QString modeDuration(int minutes, const Config *cfg) {
+    QStringList duration;
+    if (minutes >= 1440) { duration << QString::number(minutes / 1440) + " d"; minutes %= 1440; }
+    if (minutes >= 60) { duration << QString::number(minutes / 60) + " h"; minutes %= 60; }
+    if (minutes) duration << QString::number(minutes) + " " + cfg->T("min");
+    return duration.join(" ");
+}
+
+QString Source::chatModeSummary() const {
+    if (platform == "youtube") {
+        return youtubeModeNotice.isEmpty() ? hub->cfg->T("Chat modes unavailable")
+            : hub->cfg->T("Last YouTube mode notice") + ": " + youtubeModeNotice;
+    }
+    if (!chatModesKnown) return hub->cfg->T("Chat modes unavailable");
+    QStringList active;
+    if (chatModes["subscribers"].toBool()) active << hub->cfg->T("Subscribers only");
+    if (chatModes["followers"].toBool()) {
+        const int minutes = chatModes["follow_minutes"].toInt();
+        auto label = hub->cfg->T("Followers only");
+        if (minutes > 0) label += " (" + modeDuration(minutes, hub->cfg) + ")";
+        active << label;
+    }
+    if (chatModes["emotes"].toBool()) active << hub->cfg->T("Emotes only");
+    if (chatModes["account_age"].toBool()) {
+        const int minutes = chatModes["account_age_minutes"].toInt();
+        auto label = hub->cfg->T("Account age restriction");
+        if (minutes > 0) label += " (" + modeDuration(minutes, hub->cfg) + ")";
+        active << label;
+    }
+    if (chatModes["unique"].toBool()) active << hub->cfg->T("Unique messages");
+    if (chatModes["slow"].toBool()) {
+        const int seconds = chatModes["slow_seconds"].toInt();
+        auto label = hub->cfg->T("Slow mode");
+        if (seconds > 0) label += QString(" (%1 %2)").arg(seconds).arg(hub->cfg->T("sec"));
+        active << label;
+    }
+    return active.isEmpty() ? hub->cfg->T("No known restrictions") : active.join(" · ");
+}
+
+void Source::youtubeModeNotices(const QJsonValue &data) {
+    QString latest;
+    walk(data, [&](const QJsonObject &o) {
+        const auto notice = o.value("liveChatModeChangeMessageRenderer").toObject();
+        if (notice.isEmpty()) return;
+        const auto icon = str(at(notice, {"icon", "iconType"}));
+        if (icon != "SLOW_MODE" && icon != "TAB_SUBSCRIPTIONS" && icon != "SPONSORSHIP" &&
+            icon != "MEMBERSHIP") return;
+        const auto title = textOf(notice["text"]), detail = textOf(notice["subtext"]);
+        if (!title.isEmpty()) latest = title + (detail.isEmpty() ? QString() : " · " + detail);
+    });
+    if (!latest.isEmpty() && latest != youtubeModeNotice) {
+        youtubeModeNotice = latest.left(400);
+        emit chatModesChanged();
+    }
 }
 
 void Source::redact(const QJsonObject &target) {
@@ -987,6 +1058,7 @@ void Source::youtubePopout(QJsonObject chat, QJsonObject config) {
                 config[i.key()] = i.value();
             }
             self->youtubeContinue(chat, config);
+            self->youtubeModeNotices(initialData);
             self->youtubeWebPollState(initialData);
         },
         "GET", {},
@@ -1037,6 +1109,7 @@ void Source::youtubeContinue(QJsonObject chat, QJsonObject config) {
 }
 
 void Source::youtubeActions(const QJsonArray &actions, bool historical) {
+    youtubeModeNotices(actions);
     youtubeBannerActions(actions);
     for (const auto &v : actions) {
         auto a = v.toObject();
@@ -1373,6 +1446,11 @@ TwitchConnection::TwitchConnection(Hub *h) : QObject(h), hub(h) {
         for (auto source : channels) {
             if (source) {
                 source->twitchJoined = false;
+                if (source->chatModesKnown) {
+                    source->chatModes = {};
+                    source->chatModesKnown = false;
+                    emit source->chatModesChanged();
+                }
                 if (source->twitchModeratorKnown) {
                     source->twitchModeratorKnown = false;
                     emit source->permissionsChanged();
@@ -1531,6 +1609,22 @@ void TwitchConnection::line(const QString &raw) {
             source->connectionStatus("Connected to Twitch");
         }
     } else if (p.command == "ROOMSTATE") {
+        QJsonObject modes;
+        const auto &tags = p.tags;
+        if (tags.contains("subs-only")) modes["subscribers"] = str(tags["subs-only"]) == "1";
+        if (tags.contains("emote-only")) modes["emotes"] = str(tags["emote-only"]) == "1";
+        if (tags.contains("r9k")) modes["unique"] = str(tags["r9k"]) == "1";
+        if (tags.contains("followers-only")) {
+            const int minutes = str(tags["followers-only"]).toInt();
+            modes["followers"] = minutes >= 0;
+            modes["follow_minutes"] = qMax(0, minutes);
+        }
+        if (tags.contains("slow")) {
+            const int seconds = str(tags["slow"]).toInt();
+            modes["slow"] = seconds > 0;
+            modes["slow_seconds"] = qMax(0, seconds);
+        }
+        if (!modes.isEmpty()) source->updateChatModes(modes);
         QString room = str(p.tags["room-id"]);
         if (!room.isEmpty() && source->room() != room) {
             source->header["channel_id"] = room;
@@ -1585,6 +1679,7 @@ Source *Hub::source(QString platform, QString id) {
     sources[key] = s;
     connect(s, &Source::changed, this, [this, s] { emit sourceChanged(s); });
     connect(s, &Source::headerChanged, this, [this, s] { emit sourceChanged(s); });
+    connect(s, &Source::chatModesChanged, this, [this, s] { emit sourceChanged(s); });
     if (!testMode) {
         QTimer::singleShot(0, s, &Source::start);
     }

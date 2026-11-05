@@ -24,11 +24,16 @@ class PhoneServer : public QObject {
     QHash<QByteArray, Session> sessions;
     QHash<QString, Attempts> attempts;
     QHash<QTcpSocket *, QByteArray> buffers;
+    struct PendingState { qint64 after; quint32 revision; QByteArray session; };
+    QHash<QTcpSocket *, PendingState> pendingStates;
+    QTimer stateFlush;
     QMetaObject::Connection paneDestroyed;
+    QMetaObject::Connection paneSourcesChanged;
   signals:
     void stopped();
   private:
     void acceptConnections();
+    void flushStates(bool force = false, QTcpSocket *only = nullptr);
     void receive(QTcpSocket *socket);
     void handle(QTcpSocket *socket, QByteArray method, QUrl target,
                 QMap<QByteArray, QByteArray> headers, QByteArray body);

@@ -13,6 +13,9 @@ class Source : public QObject {
     QString platform, id, key;
     QJsonObject header;
     QJsonObject pinned, activePoll, activePrediction;
+    QJsonObject chatModes;
+    bool chatModesKnown = false;
+    QString youtubeModeNotice;
     QVector<Message> history;
     QHash<quintptr, int> viewCaps;
     QSet<QString> seen;
@@ -38,6 +41,9 @@ class Source : public QObject {
     QString kickChannelId, kickRoomId, kickLastPollId, kickPollHead, kickSocketToken;
     QWebSocket kickSocket;
     QTimer kickSocketRetry, kickSocketWatchdog, kickSocketRenew;
+    QTimer kickModesTimer;
+    bool kickModesPending = false;
+    int kickModesRetryMs = 60000;
     bool kickSocketActive = false, kickSocketStarting = false;
     bool kickThumbnailPending = false;
     qint64 kickThumbnailRetryAt = 0;
@@ -82,6 +88,9 @@ class Source : public QObject {
     void setPrediction(QJsonObject prediction);
     void youtubeBannerActions(const QJsonArray &actions);
     void youtubeWebPollState(const QJsonObject &response);
+    void updateChatModes(const QJsonObject &patch, bool known = true);
+    void youtubeModeNotices(const QJsonValue &data);
+    QString chatModeSummary() const;
     void youtubeApiPollState(const QJsonObject &data);
     void loadEmotes(QString channelId = {});
     void loadBadges();
@@ -96,6 +105,8 @@ class Source : public QObject {
     void kickSocketMessage(const QString &text);
     void kickSocketFailed();
     void kickEvent(QString event, QJsonObject data);
+    void kickUpdateChatModes(const QJsonObject &room);
+    void kickRefreshChatModes();
     void kickCheckRole();
     void youtubeConnect();
     void youtubePopout(QJsonObject chat, QJsonObject config);
@@ -114,6 +125,7 @@ class Source : public QObject {
     void changed();
     void headerChanged();
     void decorationsChanged();
+    void chatModesChanged();
     void permissionsChanged();
     void redacted(QJsonObject target);
 };

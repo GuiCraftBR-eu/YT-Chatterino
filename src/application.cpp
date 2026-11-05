@@ -822,7 +822,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             }
         }
     }
-    auto *phone = menu.addAction(cfg.T("Open on phone (beta)…"), this, [this, p] { showPhone(p); });
+    auto *phone = menu.addAction(cfg.T("Open on phone…"), this, [this, p] { showPhone(p); });
     phone->setObjectName("open-phone");
     menu.addSeparator();
     menu.addAction(cfg.T("Search messages…") + "\tCtrl+F", p, &Pane::showSearch);
@@ -909,7 +909,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
 void MainWindow::showPhone(Pane *target) {
     if (!target) return;
     if (phoneServer && phoneServer->isActive() && phoneServer->pane != target) {
-        QMessageBox::information(this, cfg.T("Open on phone (beta)"),
+        QMessageBox::information(this, cfg.T("Open on phone"),
                                  cfg.T("Phone access is active in another pane. Stop it there first."));
         return;
     }
@@ -922,7 +922,7 @@ void MainWindow::showPhone(Pane *target) {
     phoneTarget = target;
     dialog->setObjectName("phone-dialog");
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setWindowTitle(cfg.T("Open on phone (beta)"));
+    dialog->setWindowTitle(cfg.T("Open on phone"));
     auto *layout = new QVBoxLayout(dialog);
     layout->addWidget(label(cfg, "Choose the computer's local network, then start phone access.", true));
     auto *interfaces = new QComboBox(dialog);
@@ -987,7 +987,7 @@ void MainWindow::showPhone(Pane *target) {
     connect(start, &QPushButton::clicked, dialog, [this, safe, interfaces, dialog, renderPairing] {
         if (!safe || interfaces->currentIndex() < 0 ||
             !phoneServer->start(safe, QHostAddress(interfaces->currentData().toString()))) {
-            QMessageBox::warning(dialog, cfg.T("Open on phone (beta)"),
+            QMessageBox::warning(dialog, cfg.T("Open on phone"),
                                  cfg.T("Could not start phone access on that network.")); return;
         }
         safe->phoneButton->show();
