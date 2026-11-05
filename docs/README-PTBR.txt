@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.4.0 — WINDOWS 11 x64
+YT-CHATTERINO 2.4.1 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.4.0.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.4.1.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -47,12 +47,12 @@ aplicativo aberto. A janela do QR code pode ser fechada; clique em Celular no pa
 para reabri-la e em Parar para encerrar o acesso. Se o Windows
 solicitar acesso pela rede, permita apenas redes privadas; o firewall pode bloquear
 a conexão até ser configurado. A conexão usa HTTP local: use uma rede confiável. A versão para celular permite ler, enviar, responder, usar emotes e moderar conforme
-suas permissões, mas ainda não inclui todos os recursos do aplicativo.
+suas permissões, além de editar título e categoria. Toque em emotes e emblemas para ampliá-los.
 
 CONTROLES ÚTEIS
 Ctrl+Shift+T: adicionar painel. Ctrl+W: fechar painel focado. Ctrl+Shift+W: fechar aba.
 Ctrl+Tab: próxima aba. Ctrl+1-8: selecionar aba. Ctrl+9: última aba.
-Arraste as abas para reordenar; arraste as divisórias para redimensionar. Role sobre as abas para trocar.
+Arraste o título da live para ajustar a altura. Arraste as abas para reordenar; arraste as divisórias para redimensionar. Role sobre as abas para trocar.
 Clique com o botão do meio no espaço vazio das abas para adicionar chat. Clique com o direito no cabeçalho para opções de layout/navegador.
 Dê dois cliques no cabeçalho para ampliar/restaurar o painel. Alt+Setas: focar outro painel.
 Ctrl+F / Ctrl+Shift+F: buscar no painel / em todos os chats. Ctrl+K: troca rápida.

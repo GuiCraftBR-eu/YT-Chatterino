@@ -647,10 +647,7 @@ void ChatView::paintEvent(QPaintEvent *) {
         QRect rect(0, y, viewport()->width(), height);
         QColor background = highlight(messages[i], *hub->cfg, hub->accounts->names());
         if (!background.isValid()) {
-            const bool alert = !messages[i].system && (messages[i].special == "alert" ||
-                               messages[i].special == "member" || messages[i].special == "super");
-            background = alert ? QColor("#24242b") :
-                         a["alternate_rows"].toBool(true) && rowStripes.value(messages[i].seq)
+            background = a["alternate_rows"].toBool(true) && rowStripes.value(messages[i].seq)
                              ? QColor("#0e0e0e") : QColor(Qt::black);
         }
         painter.fillRect(rect, background);
@@ -1562,6 +1559,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     headerText->setMouseTracking(true);
     headerText->installEventFilter(this);
     headerText->setWordWrap(true);
+    headerText->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     headerText->setTextFormat(Qt::PlainText);
     headerText->setFont(QFont("Segoe UI", 9, QFont::Bold));
     hl->addWidget(headerText, 1);
@@ -1584,6 +1582,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         title->setObjectName("mixed-channel-title");
         title->setTextFormat(Qt::PlainText);
         title->setWordWrap(true);
+        title->setAlignment(Qt::AlignLeft | Qt::AlignTop);
         title->setFont(QFont("Segoe UI", 9, QFont::Bold));
         title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         title->setMouseTracking(true);
@@ -1617,6 +1616,13 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     actions->setText("▾");
     hl->addWidget(actions);
     layout->addWidget(header);
+    headerResize = new QWidget(this);
+    headerResize->setObjectName("header-resize");
+    headerResize->setFixedHeight(5);
+    headerResize->setCursor(Qt::SizeVerCursor);
+    headerResize->setStyleSheet("background:#1b1b1e;");
+    headerResize->installEventFilter(this);
+    layout->addWidget(headerResize);
     chatModesLabel = new QLabel(this);
     chatModesLabel->setObjectName("chat-modes");
     chatModesLabel->setTextFormat(Qt::PlainText);
@@ -1849,6 +1855,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     setSources(list);
     if (detached) {
         header->hide();
+        headerResize->hide();
         chatModesLabel->hide();
         target->hide();
         view->threadMode = true;
@@ -2058,6 +2065,7 @@ void Pane::refresh() {
         title->setObjectName("mixed-channel-title");
         title->setTextFormat(Qt::PlainText);
         title->setWordWrap(true);
+        title->setAlignment(Qt::AlignLeft | Qt::AlignTop);
         title->setFont(QFont("Segoe UI", 9, QFont::Bold));
         title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         title->setMouseTracking(true);
@@ -2082,6 +2090,7 @@ void Pane::refresh() {
         title->setToolTip(fullTitles.value(i));
     }
     mixedMore->hide();
+    applyHeaderLineLimit();
     if (isMixed) header->setMinimumHeight(0);
     if (sources.size() == 1 && sources[0]) {
         headerText->setProperty("source-key", sources[0]->key);
@@ -2192,6 +2201,37 @@ void Pane::showSearch() {
 }
 
 bool Pane::eventFilter(QObject *object, QEvent *event) {
+    const bool titleDragTarget = object == headerResize || object == header || object == headerText ||
+                                 mixedTitles.contains(qobject_cast<QLabel *>(object));
+    if (titleDragTarget && event->type() == QEvent::MouseButtonPress) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->button() == Qt::LeftButton) {
+            auto *label = qobject_cast<QLabel *>(object);
+            if (!label || (label != headerText && !mixedTitles.contains(label)))
+                label = sources.size() > 1 ? mixedTitles.value(0) : headerText;
+            const int lineHeight = qMax(1, QFontMetrics(label->font()).lineSpacing());
+            headerDragStartLines = headerLines > 0 ? headerLines : qMax(1, qCeil(double(label->height()) / lineHeight));
+            headerDragStartY = mouse->globalPosition().toPoint().y();
+            headerDragging = true;
+            if (object == headerResize) return true;
+        }
+    } else if (headerDragging && event->type() == QEvent::MouseMove && titleDragTarget) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->buttons().testFlag(Qt::LeftButton)) {
+            const int lineHeight = qMax(1, QFontMetrics(headerText->font()).lineSpacing());
+            const int delta = mouse->globalPosition().toPoint().y() - headerDragStartY;
+            if (qAbs(delta) >= 3) {
+                const int lines = qBound(1, headerDragStartLines + qRound(double(delta) / lineHeight), 100);
+                if (lines != headerLines) { headerLines = lines; applyHeaderLineLimit(); }
+                if (view) view->hideEmoteTooltip();
+                return true;
+            }
+        }
+    } else if (headerDragging && event->type() == QEvent::MouseButtonRelease && titleDragTarget) {
+        headerDragging = false;
+        emit headerLinesChanged();
+        if (object == headerResize) return true;
+    }
     if (auto *icon = qobject_cast<QLabel *>(object);
         view && icon && (icon == headerIcon || mixedIcons.contains(icon))) {
         auto *source = hub->sources.value(icon->property("source-key").toString());
@@ -2231,12 +2271,26 @@ bool Pane::eventFilter(QObject *object, QEvent *event) {
     return QWidget::eventFilter(object, event);
 }
 
+void Pane::applyHeaderLineLimit() {
+    auto apply = [this](QLabel *label) {
+        if (!label) return;
+        const int height = headerLines > 0 ? qMax(1, QFontMetrics(label->font()).lineSpacing() * headerLines) : QWIDGETSIZE_MAX;
+        label->setMaximumHeight(height);
+        label->updateGeometry();
+    };
+    apply(headerText);
+    for (auto *label : mixedTitles) apply(label);
+    header->setMinimumHeight(0);
+    header->updateGeometry();
+    updateGeometry();
+}
+
 void Pane::resizeEvent(QResizeEvent *event) {
     QWidget::resizeEvent(event);
     if (!detached) {
         QTimer::singleShot(0, this, [this] {
             if (sources.size() <= 1 && headerText->width() > 50) {
-                int h = qMax(24, headerText->heightForWidth(headerText->width()) + 6);
+                int h = qMax(24, qMin(headerText->heightForWidth(headerText->width()), headerText->maximumHeight()) + 6);
                 if (header->minimumHeight() != h) {
                     header->setMinimumHeight(h);
                 }
@@ -2252,7 +2306,7 @@ QJsonObject Pane::serialize() const {
             keys.append(s->key);
         }
     }
-    return {{"sources", keys}, {"pane_id", uid}};
+    return {{"sources", keys}, {"pane_id", uid}, {"header_lines", headerLines}};
 }
 
 struct UnlockedEmotes {
@@ -2684,6 +2738,8 @@ QWidget *Workspace::restoreNode(const QJsonObject &node, int depth) {
             return nullptr;
         }
         auto *p = new Pane(hub, list, this);
+        p->headerLines = qBound(0, node["header_lines"].toInt(), 100);
+        p->applyHeaderLineLimit();
         p->uid = str(node["pane_id"]);
         if (p->uid.isEmpty()) {
             p->uid = QUuid::createUuid().toString(QUuid::WithoutBraces);

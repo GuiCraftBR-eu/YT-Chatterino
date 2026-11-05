@@ -153,7 +153,7 @@ class Pane : public QWidget {
     QList<QPointer<Source>> sources;
     QString uid;
     bool detached;
-    QWidget *header, *replyBar, *searchBar, *decorations;
+    QWidget *header, *replyBar, *searchBar, *decorations, *headerResize;
     QLabel *headerText, *headerIcon, *replyLabel, *countLabel, *searchCount;
     QLabel *chatModesLabel;
     QWidget *mixedHeader;
@@ -168,6 +168,8 @@ class Pane : public QWidget {
     QLineEdit *searchInput;
     Message reply;
     bool sending = false;
+    int headerLines = 0, headerDragStartY = 0, headerDragStartLines = 0;
+    bool headerDragging = false;
     quint64 sendEpoch = 0;
     QJsonObject filter;
     std::function<bool(const Message &)> extraFilter;
@@ -175,6 +177,7 @@ class Pane : public QWidget {
     void refresh();
     void refreshDecorations();
     void refreshChatModes();
+    void applyHeaderLineLimit();
     void reload();
     void incoming(Source *source, Message message);
     void send();
@@ -192,6 +195,7 @@ class Pane : public QWidget {
     void filtersRequested(Pane *pane);
     void phoneRequested(Pane *pane);
     void sourcesChanged();
+    void headerLinesChanged();
     void userRequested(Pane *pane, Source *source, yc::Message message);
     void threadRequested(Source *source, yc::Message message);
     void messageMenu(Pane *pane, yc::Message message, QPoint point);

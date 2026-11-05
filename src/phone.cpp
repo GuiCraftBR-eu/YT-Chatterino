@@ -24,6 +24,7 @@ PhoneServer::PhoneServer(Hub *h, QObject *parent) : QObject(parent), hub(h), lis
     connect(hub, &Hub::message, this, [changed](Source *, Message) { changed(); });
     connect(hub, &Hub::sourceChanged, this, [changed](Source *) { changed(); });
     connect(hub->cfg, &Config::appearanceChanged, this, changed);
+    connect(hub->accounts, &Accounts::changed, this, changed);
     connect(hub->cfg, &Config::filtersChanged, this, [changed](const QString &) { changed(); });
 }
 
@@ -158,6 +159,60 @@ Message PhoneServer::findMessage(qint64 seq, Source *source) const {
     return {};
 }
 
+QJsonArray PhoneServer::messageMentions(const Message &m) const {
+    QJsonArray result;
+    const auto text = visibleMessageText(m, *hub->cfg);
+    if (m.system || (m.deleted && !hub->cfg->data["show_deleted_messages"].toBool(false))) return result;
+    QVector<MentionSpan> found;
+    for (const auto &mention : m.mentions)
+        if (mention.start >= 0 && mention.end > mention.start && mention.end <= text.size()) found << mention;
+    static const QRegularExpression re("(?<![\\p{L}\\p{N}_@])@[\\p{L}\\p{N}_][\\p{L}\\p{N}_.-]{0,63}");
+    static const QRegularExpression urls("https?://[^\\s<>]+");
+    QVector<QPair<int, int>> blocked;
+    auto links = urls.globalMatch(text);
+    while (links.hasNext()) { const auto x = links.next(); blocked << qMakePair(x.capturedStart(), x.capturedEnd()); }
+    for (const auto &emote : m.emotes) blocked << qMakePair(emote.start, emote.end);
+    auto matches = re.globalMatch(text);
+    while (matches.hasNext()) {
+        const auto match = matches.next();
+        QString value = match.captured();
+        while (value.endsWith('.')) value.chop(1);
+        if (value.size() < 2) continue;
+        const int start = match.capturedStart(), end = start + int(value.size());
+        bool overlap = false;
+        for (const auto &range : blocked) if (start < range.second && end > range.first) { overlap = true; break; }
+        for (const auto &mention : found) if (start < mention.end && end > mention.start) { overlap = true; break; }
+        if (!overlap) found << MentionSpan{start, end, value.mid(1), {}};
+    }
+    std::sort(found.begin(), found.end(), [](const MentionSpan &a, const MentionSpan &b) { return a.start < b.start; });
+    int last = 0;
+    for (const auto &mention : found) {
+        if (mention.start < last) continue;
+        result.append(QJsonObject{{"start", mention.start}, {"end", mention.end}, {"name", mention.name}, {"uid", mention.uid}});
+        last = mention.end;
+    }
+    return result;
+}
+
+Message PhoneServer::resolveMention(const Message &message, Source *source, int index, QString *name) const {
+    if (!source || index < 0) return {};
+    const auto mentions = messageMentions(message);
+    if (index >= mentions.size()) return {};
+    const auto mention = mentions[index].toObject();
+    const auto uid = str(mention["uid"]);
+    auto nick = str(mention["name"]).trimmed();
+    while (nick.startsWith('@')) nick.remove(0, 1);
+    if (name) *name = nick;
+    for (auto i = source->history.crbegin(); i != source->history.crend(); ++i) {
+        if (i->system) continue;
+        const bool match = !uid.isEmpty() ? i->uid == uid :
+            (!nick.isEmpty() && (stripAt(i->login).compare(nick, Qt::CaseInsensitive) == 0 ||
+                                 stripAt(i->name).compare(nick, Qt::CaseInsensitive) == 0));
+        if (match) return *i;
+    }
+    return {};
+}
+
 QJsonObject PhoneServer::renderMessage(const Message &m) const {
     auto *source = allowedSource(m.source);
     QJsonArray badges, spans;
@@ -196,7 +251,7 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
             {"text", text}, {"time", m.stamp.isValid() ? hub->cfg->time(m.stamp) : QString()},
             {"color", userColor(m).name()}, {"system", m.system}, {"deleted", m.deleted},
             {"special", m.special}, {"alert", visibleAlertText(m, *hub->cfg)}, {"alertBodyStart", m.alertBodyStart},
-            {"badges", badges}, {"emotes", spans},
+            {"badges", badges}, {"emotes", spans}, {"mentions", messageMentions(m)},
             {"reply", QJsonObject{{"name", m.reply["name"]}, {"login", m.reply["login"]}, {"text", m.reply["text"]}}}};
 }
 
@@ -207,12 +262,19 @@ QJsonObject PhoneServer::state(qint64 after, quint32 clientRevision) const {
     for (auto source : pane->sources) if (source && !source->closed) {
         const auto avatar = safeImage({str(source->header.value("avatar"))});
         const bool moderate = hub->hasModerationRole(source);
+        const bool editable = hub->canEditChannel(source);
+        const bool canBan = moderate && (source->platform != "kick" || hub->accounts->kickAllows({"moderation:ban"}));
+        const bool canDelete = moderate && (source->platform != "kick" || hub->accounts->kickAllows({"moderation:chat_message:manage"}));
         const auto modes = source->chatModeSummary();
         sources.append(QJsonObject{{"key", source->key}, {"name", source->name()}, {"platform", source->platform},
-                                   {"avatar", avatar}, {"moderate", moderate}, {"modes", modes}});
+                                   {"avatar", avatar}, {"moderate", moderate}, {"canBan", canBan}, {"canDelete", canDelete},
+                                   {"editable", editable}, {"title", source->header["title"]},
+                                   {"category", source->header["category"]}, {"modes", modes}});
         sourceRevision = (sourceRevision ^ quint32(qHash(source->key, 0))) * 16777619u;
         sourceRevision = (sourceRevision ^ quint32(qHash(source->name(), 0))) * 16777619u;
         sourceRevision = (sourceRevision ^ quint32(qHash(avatar, 0)) ^ quint32(moderate)) * 16777619u;
+        sourceRevision = (sourceRevision ^ quint32(editable) ^ (quint32(canBan) << 1) ^ (quint32(canDelete) << 2)) * 16777619u;
+        sourceRevision = (sourceRevision ^ quint32(qHash(str(source->header["title"]), 0)) ^ quint32(qHash(str(source->header["category"]), 0))) * 16777619u;
         sourceRevision = (sourceRevision ^ quint32(qHash(modes, 0))) * 16777619u;
     }
     const auto &all = pane->view->messages;
@@ -318,12 +380,22 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
         auto *source = allowedSource(query.queryItemValue("source", QUrl::FullyDecoded));
         bool ok = false;
         const auto seq = query.queryItemValue("seq").toLongLong(&ok);
-        const auto selected = ok ? findMessage(seq, source) : Message();
-        if (!source || selected.id.isEmpty()) {
+        const auto anchor = ok ? findMessage(seq, source) : Message();
+        if (!source || anchor.id.isEmpty()) {
             respond(socket, 400, "application/json", "{\"error\":\"Message is no longer available.\"}"); return;
         }
+        Message selected = anchor;
+        QString mentionedName;
+        if (path == "/api/user-history" && query.hasQueryItem("mention")) {
+            bool mentionOk = false;
+            const int index = query.queryItemValue("mention").toInt(&mentionOk);
+            if (!mentionOk || index < 0 || index >= messageMentions(anchor).size()) {
+                respond(socket, 400, "application/json", "{\"error\":\"Invalid mention.\"}"); return;
+            }
+            selected = resolveMention(anchor, source, index, &mentionedName);
+        }
         QVector<Message> history;
-        QString displayName = selected.name;
+        QString displayName = selected.name.isEmpty() ? mentionedName : selected.name;
         if (path == "/api/thread") {
             if (selected.reply.isEmpty()) {
                 respond(socket, 400, "application/json", "{\"error\":\"No reply thread.\"}"); return;
@@ -351,8 +423,46 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
         QJsonArray rows;
         for (int i = qMax(0, int(history.size()) - 500); i < history.size(); ++i)
             rows.append(renderMessage(history[i]));
+        const bool canModerateUser = !selected.uid.isEmpty() && !roles(selected).contains("owner") &&
+            selected.uid != source->room() && hub->hasModerationRole(source) &&
+            (source->platform != "kick" || hub->accounts->kickAllows({"moderation:ban"}));
         respond(socket, 200, "application/json", QJsonDocument(QJsonObject{{"name", displayName},
-                {"channel", source->name()}, {"messages", rows}}).toJson(QJsonDocument::Compact));
+                {"channel", source->name()}, {"messages", rows}, {"canModerateUser", canModerateUser},
+                {"canUnban", canModerateUser && source->platform != "youtube"}}).toJson(QJsonDocument::Compact));
+        return;
+    }
+    if (method == "GET" && path == "/api/categories") {
+        const QUrlQuery query(target);
+        auto *source = allowedSource(query.queryItemValue("source", QUrl::FullyDecoded));
+        const auto term = query.queryItemValue("q", QUrl::FullyDecoded).trimmed();
+        if (!source || !hub->canEditChannel(source) || source->platform == "youtube" || term.size() < 2 || term.size() > 80) {
+            respond(socket, 403, "application/json", "{\"error\":\"Channel editing is unavailable.\"}"); return;
+        }
+        QPointer<PhoneServer> self(this); QPointer<QTcpSocket> client(socket); QPointer<Source> safeSource(source);
+        auto done = [self, client, safeSource, key](QJsonObject data, QString error) {
+            if (!self || !client) return;
+            if (!safeSource || self->allowedSource(safeSource->key) != safeSource ||
+                !self->hub->canEditChannel(safeSource) || !self->sessions.contains(key) ||
+                self->sessions.value(key).expires <= QDateTime::currentSecsSinceEpoch()) {
+                self->respond(client, 403, "application/json", "{\"error\":\"Channel editing is unavailable.\"}"); return;
+            }
+            if (!error.isEmpty()) {
+                self->respond(client, 400, "application/json", QJsonDocument(QJsonObject{{"error", error.left(500)}}).toJson(QJsonDocument::Compact)); return;
+            }
+            QJsonArray categories;
+            for (const auto &item : data["data"].toArray()) {
+                const auto value = item.toObject();
+                const auto id = str(value["id"]), name = str(value["name"]);
+                if (QRegularExpression("^[0-9]{1,20}$").match(id).hasMatch() && !name.isEmpty())
+                    categories.append(QJsonObject{{"id", id}, {"name", name.left(120)}});
+                if (categories.size() >= 25) break;
+            }
+            self->respond(client, 200, "application/json", QJsonDocument(QJsonObject{{"categories", categories}}).toJson(QJsonDocument::Compact));
+        };
+        if (source->platform == "kick") {
+            const auto encoded = Network::query("https://api.kick.com/public/v1/categories", {{"q", term}}).query(QUrl::FullyEncoded);
+            hub->accounts->kickApi("categories?" + encoded, done);
+        } else hub->accounts->helix("search/categories", done, "GET", {{"query", term}, {"first", "20"}});
         return;
     }
     if (method == "GET" && path == "/api/emotes") {
@@ -375,6 +485,39 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
         respond(socket, 200, "application/json", "{\"ok\":true}",
                 "Set-Cookie: ytphone=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/\r\n"); return;
     }
+    if (method == "POST" && path == "/api/channel") {
+        if (session->sending) { respond(socket, 429, "application/json", "{\"error\":\"Please wait.\"}"); return; }
+        QJsonParseError parseError;
+        const auto request = QJsonDocument::fromJson(body, &parseError).object();
+        auto *source = allowedSource(str(request["source"]));
+        const auto title = str(request["title"]).trimmed(), category = str(request["categoryId"]);
+        if (parseError.error != QJsonParseError::NoError || !source || !hub->canEditChannel(source) ||
+            (source->platform == "youtube" && (!category.isEmpty() || title.isEmpty() || title.size() > 100 || title.contains('<') || title.contains('>'))) ||
+            (source->platform == "twitch" && (title.isEmpty() || title.size() > 140)) ||
+            (source->platform == "kick" && (title.size() > 200 || (title.isEmpty() && category.isEmpty()))) ||
+            (!category.isEmpty() && !QRegularExpression("^[0-9]{1,20}$").match(category).hasMatch())) {
+            respond(socket, 403, "application/json", "{\"error\":\"Channel editing is unavailable.\"}"); return;
+        }
+        if (source->platform == "twitch" && !hub->accounts->twitchAllows({"channel:manage:broadcast"})) {
+            respond(socket, 403, "application/json", "{\"error\":\"Enable the required permissions on the computer.\"}"); return;
+        }
+        session->sending = true;
+        const auto requestId = ++session->request;
+        QPointer<PhoneServer> self(this); QPointer<QTcpSocket> client(socket); QPointer<Source> safeSource(source);
+        QTimer::singleShot(45000, this, [self, key, requestId] {
+            if (self && self->sessions.contains(key) && self->sessions[key].request == requestId)
+                self->sessions[key].sending = false;
+        });
+        hub->editChannel(source, title, category, [self, client, safeSource, key, requestId](QJsonObject, QString error) {
+            if (!self) return;
+            if (self->sessions.contains(key) && self->sessions[key].request == requestId) self->sessions[key].sending = false;
+            if (safeSource && error.isEmpty()) safeSource->refreshHeader();
+            if (!client) return;
+            const auto result = error.isEmpty() ? QJsonObject{{"ok", true}} : QJsonObject{{"error", error.left(500)}};
+            self->respond(client, error.isEmpty() ? 200 : 400, "application/json", QJsonDocument(result).toJson(QJsonDocument::Compact));
+        });
+        return;
+    }
     if (method == "POST" && (path == "/api/send" || path == "/api/moderate")) {
         if (session->sending) { respond(socket, 429, "application/json", "{\"error\":\"Please wait.\"}"); return; }
         QJsonParseError parseError;
@@ -384,7 +527,7 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
             respond(socket, 400, "application/json", "{\"error\":\"Invalid channel.\"}"); return;
         }
         const auto seq = qint64(request["seq"].toDouble());
-        const auto message = findMessage(seq, source);
+        auto message = findMessage(seq, source);
         if (path == "/api/send") {
             const auto text = str(request["text"]).trimmed();
             if (text.isEmpty() || text.size() > 2000 || (seq && (message.id.isEmpty() || message.deleted ||
@@ -411,10 +554,19 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
         }
         const auto action = str(request["action"]);
         const int duration = request["duration"].toInt();
-        if (!hub->hasModerationRole(source) || message.id.isEmpty() || message.deleted ||
+        if (request.contains("mention") && action != "delete") {
+            const int index = request["mention"].toInt(-1);
+            message = resolveMention(message, source, index);
+        }
+        if (!hub->hasModerationRole(source) || message.id.isEmpty() || (message.deleted && action == "delete") ||
+            ((action != "delete") && (message.uid.isEmpty() || message.uid == source->room() || roles(message).contains("owner"))) ||
             !QStringList{"delete", "timeout", "ban", "unban"}.contains(action) ||
+            (action == "unban" && source->platform == "youtube") ||
             (action == "timeout" && !QList<int>{60, 600, 3600}.contains(duration))) {
             respond(socket, 403, "application/json", "{\"error\":\"Moderation is unavailable.\"}"); return;
+        }
+        if (source->platform == "twitch" && !hub->accounts->twitchAllows({"user:read:moderated_channels", action == "delete" ? "moderator:manage:chat_messages" : "moderator:manage:banned_users"})) {
+            respond(socket, 403, "application/json", "{\"error\":\"Enable the required permissions on the computer.\"}"); return;
         }
         session->sending = true;
         const auto requestId = ++session->request;

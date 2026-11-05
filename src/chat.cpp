@@ -1679,6 +1679,7 @@ Source *Hub::source(QString platform, QString id) {
     sources[key] = s;
     connect(s, &Source::changed, this, [this, s] { emit sourceChanged(s); });
     connect(s, &Source::headerChanged, this, [this, s] { emit sourceChanged(s); });
+    connect(s, &Source::permissionsChanged, this, [this, s] { emit sourceChanged(s); });
     connect(s, &Source::chatModesChanged, this, [this, s] { emit sourceChanged(s); });
     if (!testMode) {
         QTimer::singleShot(0, s, &Source::start);

@@ -1411,7 +1411,7 @@ QWidget *SettingsWindow::tutorialPage() {
               "Scan the QR code or enter the address and code in your phone browser. Keep the app open "
               "and use the same trusted network. You may close this window; click Phone in the pane to "
               "reopen it or stop access. The phone connection uses local HTTP and supports "
-              "reading, sending, replies, emotes and permitted moderation, but not every desktop feature."},
+              "reading, sending, replies, emote previews, permitted moderation and channel editing."},
              {"Appearance, highlights and sounds",
               "Appearance has separate text/name fonts, badge/emote sizes, timestamps and date formats. "
               "Messages sets the retention cap (default 2000). Highlights matches users, badges, names and "
