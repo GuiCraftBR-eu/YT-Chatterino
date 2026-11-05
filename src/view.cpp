@@ -1599,10 +1599,11 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     hl->addWidget(mixedHeader, 1);
     mixedHeader->hide();
     auto *statusStrip = new QWidget(this);
+    statusStrip->setObjectName("chat-status-strip");
     auto *statusLayout = new QHBoxLayout(statusStrip);
-    statusLayout->setContentsMargins(6, 2, 6, 2);
-    statusLayout->setSpacing(5);
-    statusStrip->setStyleSheet("background:#151518;");
+    statusLayout->setContentsMargins(8, 3, 6, 3);
+    statusLayout->setSpacing(6);
+    statusStrip->setStyleSheet("QWidget#chat-status-strip{background:#111111;}");
     filterButton = new QToolButton(statusStrip);
     filterButton->setObjectName("active-filter");
     filterButton->setStyleSheet("QToolButton{color:#f0c674;background:#29251c;border-radius:3px;padding:3px 5px;}"
@@ -1623,14 +1624,19 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     headerResize->setObjectName("header-resize");
     headerResize->setFixedHeight(5);
     headerResize->setCursor(Qt::SizeVerCursor);
-    headerResize->setStyleSheet("background:#1b1b1e;");
+    headerResize->setStyleSheet("background:#111111;border-bottom:1px solid #282828;");
     headerResize->installEventFilter(this);
     layout->addWidget(headerResize);
+    auto *modeCaption = new QLabel("CHAT", statusStrip);
+    modeCaption->setObjectName("chat-modes-caption");
+    modeCaption->setStyleSheet("background:#1c1c1c;color:#aaaaaa;border:1px solid #363636;"
+                               "border-radius:3px;padding:1px 4px;font-size:9px;font-weight:bold;");
+    statusLayout->addWidget(modeCaption, 0, Qt::AlignVCenter);
     chatModesLabel = new QLabel(statusStrip);
     chatModesLabel->setObjectName("chat-modes");
     chatModesLabel->setTextFormat(Qt::PlainText);
     chatModesLabel->setWordWrap(true);
-    chatModesLabel->setStyleSheet("background:transparent;color:#b7b7c0;font-size:11px;");
+    chatModesLabel->setStyleSheet("background:transparent;color:#b7b7b7;font-size:11px;");
     statusLayout->addWidget(chatModesLabel, 1);
     statusLayout->addWidget(filterButton);
     statusLayout->addWidget(phoneButton);
@@ -1958,6 +1964,8 @@ void Pane::refreshChatModes() {
     }
     chatModesLabel->setText(labels.join("\n"));
     chatModesLabel->setVisible(!detached && !labels.isEmpty());
+    if (auto *caption = chatModesLabel->parentWidget()->findChild<QLabel *>("chat-modes-caption"))
+        caption->setVisible(!detached && !labels.isEmpty());
 }
 
 void Pane::refreshDecorations() {
@@ -2213,11 +2221,22 @@ bool Pane::eventFilter(QObject *object, QEvent *event) {
     if (titleDragTarget && event->type() == QEvent::MouseButtonPress) {
         auto *mouse = static_cast<QMouseEvent *>(event);
         if (mouse->button() == Qt::LeftButton) {
-            auto *label = qobject_cast<QLabel *>(object);
-            if (!label || (label != headerText && !mixedTitles.contains(label)))
-                label = sources.size() > 1 ? mixedTitles.value(0) : headerText;
-            const int lineHeight = qMax(1, QFontMetrics(label->font()).lineSpacing());
-            headerDragStartLines = headerLines > 0 ? headerLines : qMax(1, qCeil(double(label->height()) / lineHeight));
+            // Start at the visible height, not a saved limit that might be far
+            // larger than the current title. In a mixed pane use the tallest
+            // visible title because the limit applies to every channel.
+            const auto visibleLines = [](QLabel *label) {
+                const int lineHeight = qMax(1, QFontMetrics(label->font()).lineSpacing());
+                const int naturalHeight = label->width() > 0 ? label->heightForWidth(label->width()) : -1;
+                const int usedHeight = naturalHeight > 0 ? qMin(label->height(), naturalHeight) : label->height();
+                return qMax(1, qRound(double(usedHeight) / lineHeight));
+            };
+            headerDragStartLines = 1;
+            if (sources.size() > 1) {
+                for (int i = 0; i < sources.size() && i < mixedTitles.size(); ++i)
+                    if (sources[i]) headerDragStartLines = qMax(headerDragStartLines, visibleLines(mixedTitles[i]));
+            } else {
+                headerDragStartLines = visibleLines(headerText);
+            }
             headerDragStartY = mouse->globalPosition().toPoint().y();
             headerDragging = true;
             headerDragMoved = false;
