@@ -23,6 +23,7 @@ class NativeTests : public QObject {
     void resizableStreamHeaderAndAlertBackground();
     void phoneMentionModerationAndChannelEditing();
     void phoneKickAndYouTubeChannelActions();
+    void independentAlertAndMentionColors();
     void phonePairingSecurityAndMessaging();
     void alertCardsAndEventParsing();
     void savedChannelNamesWithoutAt();

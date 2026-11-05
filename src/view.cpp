@@ -1598,19 +1598,22 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     mixedLayout->addWidget(mixedMore);
     hl->addWidget(mixedHeader, 1);
     mixedHeader->hide();
-    filterButton = new QToolButton(header);
+    auto *statusStrip = new QWidget(this);
+    auto *statusLayout = new QHBoxLayout(statusStrip);
+    statusLayout->setContentsMargins(6, 2, 6, 2);
+    statusLayout->setSpacing(5);
+    statusStrip->setStyleSheet("background:#151518;");
+    filterButton = new QToolButton(statusStrip);
     filterButton->setObjectName("active-filter");
     filterButton->setStyleSheet("QToolButton{color:#f0c674;background:#29251c;border-radius:3px;padding:3px 5px;}"
                                 "QToolButton:hover{background:#443a27;}");
     filterButton->hide();
-    hl->addWidget(filterButton);
     connect(filterButton, &QToolButton::clicked, this, [this] { emit filtersRequested(this); });
-    phoneButton = new QToolButton(header);
+    phoneButton = new QToolButton(statusStrip);
     phoneButton->setObjectName("active-phone");
     phoneButton->setStyleSheet("QToolButton{color:#b5e4c3;background:#183123;border-radius:3px;padding:3px 5px;}"
                                "QToolButton:hover{background:#245036;}");
     phoneButton->hide();
-    hl->addWidget(phoneButton);
     connect(phoneButton, &QToolButton::clicked, this, [this] { emit phoneRequested(this); });
     auto *actions = new QToolButton(header);
     actions->setText("▾");
@@ -1623,12 +1626,15 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     headerResize->setStyleSheet("background:#1b1b1e;");
     headerResize->installEventFilter(this);
     layout->addWidget(headerResize);
-    chatModesLabel = new QLabel(this);
+    chatModesLabel = new QLabel(statusStrip);
     chatModesLabel->setObjectName("chat-modes");
     chatModesLabel->setTextFormat(Qt::PlainText);
     chatModesLabel->setWordWrap(true);
-    chatModesLabel->setStyleSheet("background:#17171a;color:#b7b7c0;padding:3px 7px;font-size:11px;");
-    layout->addWidget(chatModesLabel);
+    chatModesLabel->setStyleSheet("background:transparent;color:#b7b7c0;font-size:11px;");
+    statusLayout->addWidget(chatModesLabel, 1);
+    statusLayout->addWidget(filterButton);
+    statusLayout->addWidget(phoneButton);
+    layout->addWidget(statusStrip);
     decorations = new QWidget(this);
     decorations->setObjectName("chat-decorations");
     auto *decorationLayout = new QVBoxLayout(decorations);
@@ -1856,6 +1862,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     if (detached) {
         header->hide();
         headerResize->hide();
+        statusStrip->hide();
         chatModesLabel->hide();
         target->hide();
         view->threadMode = true;
@@ -2213,7 +2220,10 @@ bool Pane::eventFilter(QObject *object, QEvent *event) {
             headerDragStartLines = headerLines > 0 ? headerLines : qMax(1, qCeil(double(label->height()) / lineHeight));
             headerDragStartY = mouse->globalPosition().toPoint().y();
             headerDragging = true;
-            if (object == headerResize) return true;
+            headerDragMoved = false;
+            headerDragWidget = qobject_cast<QWidget *>(object);
+            if (headerDragWidget && QGuiApplication::platformName() != "offscreen") headerDragWidget->grabMouse();
+            return true;
         }
     } else if (headerDragging && event->type() == QEvent::MouseMove && titleDragTarget) {
         auto *mouse = static_cast<QMouseEvent *>(event);
@@ -2222,15 +2232,17 @@ bool Pane::eventFilter(QObject *object, QEvent *event) {
             const int delta = mouse->globalPosition().toPoint().y() - headerDragStartY;
             if (qAbs(delta) >= 3) {
                 const int lines = qBound(1, headerDragStartLines + qRound(double(delta) / lineHeight), 100);
-                if (lines != headerLines) { headerLines = lines; applyHeaderLineLimit(); }
+                if (lines != headerLines) { headerLines = lines; headerDragMoved = true; applyHeaderLineLimit(); }
                 if (view) view->hideEmoteTooltip();
                 return true;
             }
         }
     } else if (headerDragging && event->type() == QEvent::MouseButtonRelease && titleDragTarget) {
         headerDragging = false;
-        emit headerLinesChanged();
-        if (object == headerResize) return true;
+        if (headerDragWidget && QWidget::mouseGrabber() == headerDragWidget) headerDragWidget->releaseMouse();
+        headerDragWidget.clear();
+        if (headerDragMoved) emit headerLinesChanged();
+        return true;
     }
     if (auto *icon = qobject_cast<QLabel *>(object);
         view && icon && (icon == headerIcon || mixedIcons.contains(icon))) {
@@ -2272,14 +2284,18 @@ bool Pane::eventFilter(QObject *object, QEvent *event) {
 }
 
 void Pane::applyHeaderLineLimit() {
-    auto apply = [this](QLabel *label) {
+    bool changed = false;
+    auto apply = [this, &changed](QLabel *label) {
         if (!label) return;
         const int height = headerLines > 0 ? qMax(1, QFontMetrics(label->font()).lineSpacing() * headerLines) : QWIDGETSIZE_MAX;
+        if (label->maximumHeight() == height) return;
+        changed = true;
         label->setMaximumHeight(height);
         label->updateGeometry();
     };
     apply(headerText);
     for (auto *label : mixedTitles) apply(label);
+    if (!changed) return;
     header->setMinimumHeight(0);
     header->updateGeometry();
     updateGeometry();

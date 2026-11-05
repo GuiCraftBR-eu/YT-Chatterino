@@ -708,12 +708,31 @@ QWidget *SettingsWindow::highlightsPage() {
     auto *mention = new QCheckBox(cfg.T("Highlight mentions of my signed-in names"), w);
     mention->setChecked(settings["mention_me"].toBool(true));
     form->addRow(mention);
+    auto colorField = [&](const QString &key, const QString &label) {
+        auto *row = new QWidget(w); auto *layout = new QHBoxLayout(row);
+        layout->setContentsMargins(0, 0, 0, 0);
+        auto *value = new QLineEdit(settings[key].toString(settings["mention_color"].toString("#227400")), row);
+        value->setObjectName(key); value->setMaximumWidth(100);
+        layout->addWidget(value);
+        layout->addWidget(action(cfg, "Color", row, [this, value] {
+            const auto chosen = QColorDialog::getColor(QColor(value->text()), this);
+            if (chosen.isValid()) value->setText(chosen.name());
+        }));
+        layout->addStretch(); form->addRow(cfg.T(label), row); return value;
+    };
+    auto *mentionColor = colorField("mention_color", "Mention highlight color");
     auto *alerts = new QCheckBox(cfg.T("Highlight subscription, membership and reward alerts"), w);
     alerts->setObjectName("highlight-chat-alerts");
     alerts->setChecked(settings["alerts"].toBool(false));
     form->addRow(alerts);
+    auto *alertColor = colorField("alert_color", "Alert highlight color");
     l->addLayout(form);
-    l->addWidget(action(cfg, "Apply highlights", w, [this, users, terms, mention, alerts, roleChecks, colors] {
+    l->addWidget(action(cfg, "Apply highlights", w, [this, users, terms, mention, alerts, roleChecks, colors, mentionColor, alertColor] {
+        const QColor mentionValue(mentionColor->text()), alertValue(alertColor->text());
+        if (!mentionValue.isValid() || !alertValue.isValid()) {
+            QMessageBox::warning(this, main->cfg.T("Highlights"), main->cfg.T("Enter colors as #RRGGBB."));
+            return;
+        }
         QJsonObject people, roles;
         for (const auto &line : users->toPlainText().split('\n')) {
             auto parts = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
@@ -746,6 +765,8 @@ QWidget *SettingsWindow::highlightsPage() {
         h["words"] = strings(words(terms->text()));
         h["mention_me"] = mention->isChecked();
         h["alerts"] = alerts->isChecked();
+        h["mention_color"] = mentionValue.name();
+        h["alert_color"] = alertValue.name();
         main->cfg.setFeature("highlight", h);
     }));
     l->addStretch();

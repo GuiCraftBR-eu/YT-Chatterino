@@ -169,7 +169,8 @@ class Pane : public QWidget {
     Message reply;
     bool sending = false;
     int headerLines = 0, headerDragStartY = 0, headerDragStartLines = 0;
-    bool headerDragging = false;
+    bool headerDragging = false, headerDragMoved = false;
+    QPointer<QWidget> headerDragWidget;
     quint64 sendEpoch = 0;
     QJsonObject filter;
     std::function<bool(const Message &)> extraFilter;
