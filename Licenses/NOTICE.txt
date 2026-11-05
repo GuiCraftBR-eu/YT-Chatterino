@@ -1,4 +1,4 @@
-YT-Chatterino 2.3.1 — native library notices
+YT-Chatterino 2.3.2 — native library notices
 
 The application dynamically links unmodified Qt 6.8.3 Core/Gui/Widgets/Network/Svg/WebSockets
 and Qt image/platform/TLS plugins. Qt is used under LGPL 3.0; the complete
@@ -25,3 +25,6 @@ These library licenses do not assign the owner's application/artwork rights.
 Twitch/YouTube/provider artwork and emotes belong to their respective owners.
 Python, Tk, Pillow, PyInstaller and OpenSSL are not shipped in the native app.
 Windows TLS uses Schannel. Arch uses its distribution's Qt libraries/licenses.
+
+QR Code generator library by Project Nayuki is included under the MIT license.
+See QR-Code-generator-MIT.txt for its license.

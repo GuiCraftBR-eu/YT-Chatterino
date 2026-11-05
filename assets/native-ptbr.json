@@ -295,5 +295,19 @@
   "Select a YouTube channel": "Selecione um canal do YouTube",
   "Matching channels": "Canais encontrados",
   "Select saved channels": "Selecione os canais salvos",
-  "Additional channels to notify": "Canais adicionais para notificar"
+  "Additional channels to notify": "Canais adicionais para notificar",
+  "Channel handle or URL": "Identificador ou link do canal",
+  "Open on phone (beta)…": "Abrir no celular (beta)…",
+  "Open on phone (beta)": "Abrir no celular (beta)",
+  "Choose the computer's local network, then start phone access.": "Escolha a rede local do computador e inicie o acesso pelo celular.",
+  "Keep this window and the app open. Use a trusted local network; this connection uses local HTTP.": "Mantenha esta janela e o aplicativo abertos. Use uma rede local confiável; a conexão usa HTTP local.",
+  "Start phone access": "Iniciar acesso pelo celular",
+  "Could not start phone access on that network.": "Não foi possível iniciar o acesso nessa rede.",
+  "Code: {code} · expires in 5 minutes": "Código: {code} · expira em 5 minutos",
+  "No private IPv4 network was found.": "Nenhuma rede IPv4 privada foi encontrada.",
+  "Redeemed a channel reward": "Resgatou uma recompensa do canal",
+  "Highlighted a message": "Destacou uma mensagem",
+  "Cheered {count} Bits": "Enviou {count} Bits",
+  "Right-click the tab and choose Open on phone (beta). Select your local network and start. Scan the QR code or enter the address and code in your phone browser. Keep the app and this window open, and use the same trusted network. The beta uses local HTTP and supports reading, sending, replies, emotes and permitted moderation, but not every desktop feature.": "Clique com o botão direito na aba e escolha Abrir no celular (beta). Selecione a rede local e inicie. Leia o QR code ou digite o endereço e o código no navegador do celular. Mantenha o aplicativo e esta janela abertos e use a mesma rede confiável. O beta usa HTTP local e permite ler, enviar, responder, usar emotes e moderar conforme suas permissões, mas ainda não inclui todos os recursos do computador.",
+  "Sent a gift: {gift}": "Enviou um presente: {gift}"
 }

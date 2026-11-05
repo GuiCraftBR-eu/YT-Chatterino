@@ -1,4 +1,6 @@
 #include "application.hpp"
+#include "phone.hpp"
+#include "vendor/qrcodegen.hpp"
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -814,6 +816,8 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             }
         }
     }
+    auto *phone = menu.addAction(cfg.T("Open on phone (beta)…"), this, [this, p] { showPhone(p); });
+    phone->setObjectName("open-phone");
     menu.addSeparator();
     menu.addAction(cfg.T("Search messages…") + "\tCtrl+F", p, &Pane::showSearch);
     auto *historyMenu = menu.addMenu(cfg.T("Filters and history"));
@@ -894,6 +898,90 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
         }
         QTimer::singleShot(0, this, &MainWindow::pruneSources);
     });
+}
+
+void MainWindow::showPhone(Pane *target) {
+    if (!target) return;
+    if (phoneDialog && phoneTarget == target) {
+        phoneDialog->show(); phoneDialog->raise(); phoneDialog->activateWindow(); return;
+    }
+    if (phoneDialog) phoneDialog->close();
+    auto *dialog = new QDialog(this);
+    phoneDialog = dialog;
+    phoneTarget = target;
+    dialog->setObjectName("phone-dialog");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(cfg.T("Open on phone (beta)"));
+    auto *layout = new QVBoxLayout(dialog);
+    layout->addWidget(label(cfg, "Choose the computer's local network, then start phone access.", true));
+    auto *interfaces = new QComboBox(dialog);
+    interfaces->setObjectName("phone-network");
+    QSet<QString> seen;
+    for (const auto &networkInterface : QNetworkInterface::allInterfaces()) {
+        if (!networkInterface.flags().testFlag(QNetworkInterface::IsUp) ||
+            networkInterface.flags().testFlag(QNetworkInterface::IsLoopBack)) continue;
+        for (const auto &entry : networkInterface.addressEntries()) {
+            const auto ip = entry.ip();
+            if (ip.protocol() != QAbstractSocket::IPv4Protocol ||
+                !(ip.isInSubnet(QHostAddress("10.0.0.0"), 8) ||
+                  ip.isInSubnet(QHostAddress("172.16.0.0"), 12) ||
+                  ip.isInSubnet(QHostAddress("192.168.0.0"), 16))) continue;
+            if (seen.contains(ip.toString())) continue;
+            seen.insert(ip.toString());
+            interfaces->addItem(networkInterface.humanReadableName() + " · " + ip.toString(), ip.toString());
+        }
+    }
+    layout->addWidget(interfaces);
+    auto *hint = label(cfg, "Keep this window and the app open. Use a trusted local network; this connection uses local HTTP.", true);
+    hint->setWordWrap(true); layout->addWidget(hint);
+    auto *qr = new QLabel(dialog);
+    qr->setObjectName("phone-qr"); qr->setAlignment(Qt::AlignCenter); qr->setMinimumHeight(220);
+    layout->addWidget(qr);
+    auto *info = new QLabel(dialog);
+    info->setObjectName("phone-address"); info->setTextFormat(Qt::PlainText);
+    info->setTextInteractionFlags(Qt::TextSelectableByMouse); info->setAlignment(Qt::AlignCenter);
+    info->setWordWrap(true); layout->addWidget(info);
+    auto *row = new QHBoxLayout;
+    auto *start = new QPushButton(cfg.T("Start phone access"), dialog);
+    start->setObjectName("phone-start");
+    auto *stop = new QPushButton(cfg.T("Stop"), dialog);
+    stop->setObjectName("phone-stop"); stop->setEnabled(false);
+    auto *close = new QPushButton(cfg.T("Close"), dialog);
+    row->addWidget(start); row->addWidget(stop); row->addStretch(); row->addWidget(close);
+    layout->addLayout(row);
+    if (!phoneServer) phoneServer = new PhoneServer(&hub, this);
+    QPointer<Pane> safe(target);
+    connect(start, &QPushButton::clicked, dialog, [this, safe, interfaces, qr, info, start, stop, dialog] {
+        if (!safe || interfaces->currentIndex() < 0 ||
+            !phoneServer->start(safe, QHostAddress(interfaces->currentData().toString()))) {
+            QMessageBox::warning(dialog, cfg.T("Open on phone (beta)"),
+                                 cfg.T("Could not start phone access on that network.")); return;
+        }
+        const auto url = phoneServer->address();
+        const auto code = phoneServer->pairingCode();
+        const auto qrText = (url + "/#pair=" + code).toUtf8();
+        const auto codeImage = qrcodegen::QrCode::encodeText(qrText.constData(), qrcodegen::QrCode::Ecc::MEDIUM);
+        const int side = codeImage.getSize(), border = 4, scale = qMax(1, 220 / (side + border * 2));
+        QImage image((side + border * 2) * scale, (side + border * 2) * scale, QImage::Format_RGB32);
+        image.fill(Qt::white);
+        QPainter painter(&image);
+        painter.setPen(Qt::NoPen); painter.setBrush(Qt::black);
+        for (int y = 0; y < side; ++y) for (int x = 0; x < side; ++x)
+            if (codeImage.getModule(x, y)) painter.drawRect((x + border) * scale, (y + border) * scale, scale, scale);
+        painter.end();
+        qr->setPixmap(QPixmap::fromImage(image));
+        info->setText(url + "\n" + cfg.T("Code: {code} · expires in 5 minutes", {{"code", code}}));
+        interfaces->setEnabled(false); start->setEnabled(false); stop->setEnabled(true);
+    });
+    connect(stop, &QPushButton::clicked, dialog, [this] { if (phoneServer) phoneServer->stop(); });
+    connect(phoneServer, &PhoneServer::stopped, dialog, [interfaces, qr, info, start, stop] {
+        interfaces->setEnabled(true); start->setEnabled(true); stop->setEnabled(false); qr->clear(); info->clear();
+    });
+    connect(dialog, &QDialog::finished, this, [this] { if (phoneServer) phoneServer->stop(); });
+    connect(close, &QPushButton::clicked, dialog, &QDialog::close);
+    start->setEnabled(interfaces->count() > 0);
+    if (!interfaces->count()) info->setText(cfg.T("No private IPv4 network was found."));
+    dialog->resize(450, 430); dialog->show(); darkTitlebar(dialog);
 }
 
 void MainWindow::tabMenu(int index, QPoint position) {

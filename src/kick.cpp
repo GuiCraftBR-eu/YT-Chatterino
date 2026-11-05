@@ -405,6 +405,8 @@ void Source::kickEvent(QString event, QJsonObject data) {
     } else return;
     m.name = m.name.left(100); m.text = m.text.left(2000);
     if (m.name.isEmpty()) m.name = "Kick";
+    m.alertText = m.text;
+    m.alertBodyStart = m.text.size();
     if (!m.text.isEmpty()) publish(m);
 }
 } // namespace yc

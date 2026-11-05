@@ -13,6 +13,10 @@ class NativeTests : public QObject {
   private slots:
     void init();
     void cleanup();
+    void phonePairingSecurityAndMessaging();
+    void alertCardsAndEventParsing();
+    void savedChannelNamesWithoutAt();
+    void youtubeMentionKeepsDisplayName();
     void quickAddSavedAndMultipleNames();
     void youtubeChannelDiscoveryAndChooser();
     void kickLiveNotificationsAndCooldown();

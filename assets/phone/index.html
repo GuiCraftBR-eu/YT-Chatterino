@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>YT-Chatterino · Phone beta</title>
+  <link rel="stylesheet" href="/phone.css">
+  <script src="/phone.js" defer></script>
+</head>
+<body>
+  <main id="pairing" class="pairing" hidden>
+    <h1>YT-Chatterino</h1>
+    <p data-i18n="Enter the six-digit code shown on your computer.">Enter the six-digit code shown on your computer.</p>
+    <form id="pair-form">
+      <label for="code" data-i18n="Pairing code">Pairing code</label>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+      <button type="submit" data-i18n="Connect">Connect</button>
+    </form>
+    <p class="muted" data-i18n="Use a trusted local network. The computer must remain on with the app open.">Use a trusted local network. The computer must remain on with the app open.</p>
+    <p id="pair-error" class="error" role="alert"></p>
+  </main>
+  <main id="chat" class="app" hidden>
+    <header><strong>YT-Chatterino <small>PHONE BETA</small></strong><button id="disconnect" data-i18n="Disconnect">Disconnect</button></header>
+    <div id="status" role="status">Connecting…</div>
+    <div id="messages" class="messages" aria-live="off"></div>
+    <div id="reply" class="reply" hidden><span id="reply-text"></span><button id="cancel-reply">×</button></div>
+    <div id="picker" class="picker" hidden><div><input id="emote-search" placeholder="Search emotes" aria-label="Search emotes"><button id="close-picker">×</button></div><div id="emotes" class="emotes"></div></div>
+    <dialog id="mod-dialog"><h2 id="mod-target"></h2><div class="mod-actions">
+      <button type="button" data-mod="delete" data-i18n="Delete message">Delete message</button>
+      <button type="button" data-mod="timeout" data-i18n="Timeout · 10 minutes">Timeout · 10 minutes</button>
+      <button type="button" data-mod="ban" data-i18n="Ban user">Ban user</button>
+      <button type="button" data-mod="unban" data-i18n="Unban user">Unban user</button>
+      <button type="button" id="mod-cancel" data-i18n="Cancel">Cancel</button>
+    </div></dialog>
+    <form id="send-form" class="composer">
+      <select id="channel" aria-label="Channel"></select>
+      <input id="message" placeholder="Send a message…" maxlength="2000" autocomplete="off" aria-label="Message">
+      <button id="show-emotes" type="button" aria-label="Choose emote">☺</button>
+      <button id="send" type="submit" data-i18n="Send">Send</button>
+    </form>
+  </main>
+</body>
+</html>

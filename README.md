@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.3.1](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.1) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.3.2](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.2) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,20 +17,20 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.3.1 | Instalação |
+| Sistema | Download da versão 2.3.2 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.1/YT-Chatterino-Windows11-2.3.1.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.1/yt-chatterino-2.3.1-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.2/YT-Chatterino-Windows11-2.3.2.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.2/yt-chatterino-2.3.2-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.3.1-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.3.2-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.1).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.2).
 
 ## Primeiros passos
 
-1. Clique em **+** ou pressione **Ctrl+T**. Escolha a plataforma e digite nomes ou links separados por espaço. Na lista, selecione também canais salvos; no YouTube, o app procura as transmissões ao vivo do canal. Coloque nomes com espaços entre aspas, por exemplo, `"Lofi Girl"`.
+1. Clique em **+** ou pressione **Ctrl+T**. Escolha a plataforma e digite nomes ou links separados por espaço. No YouTube, use o identificador do link, por exemplo `LofiGirl` para `youtube.com/@LofiGirl`; o `@` é opcional. Na lista, você também pode selecionar canais salvos; o app procura as transmissões ao vivo do canal.
 2. Para conectar a Twitch, abra **Configurações → Contas** e autorize o acesso no navegador.
 3. Para abrir um chat da Kick, cole o link ou selecione Kick e digite o nome do canal. Para enviar ou moderar, crie seu aplicativo em [Kick Developer](https://kick.com/settings/developer) e siga o **guia ilustrado da Kick** em Configurações → Tutorial. O endereço de redirecionamento é `http://localhost:37365/callback`. Em **Configurações → Contas**, conecte sua conta e autorize as permissões desejadas.
 4. Para enviar mensagens, moderar ou editar títulos no YouTube, ative a **YouTube Data API v3** no Google Cloud, crie um cliente **OAuth para computador** e selecione o JSON em **Contas**. Depois, conecte sua conta.
@@ -45,7 +45,8 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 
 - **Organizar os chats:** abas, painéis lado a lado ou empilhados e painel misto com ícones de canais.
 - **Alertas:** canais abertos da Twitch e Kick podem avisar quando entram ao vivo; é possível adicionar outros canais nas configurações.
-- **Conversar:** respostas na Twitch, preenchimento de nomes, histórico de mensagens enviadas e seletor de emotes nativos, BTTV e 7TV.
+- **Conversar:** respostas na Twitch, preenchimento de nomes de exibição, histórico de mensagens enviadas e seletor de emotes nativos, BTTV e 7TV.
+- **Abrir no celular (beta):** clique com o botão direito na aba, escolha o painel e **Abrir no celular (beta)**. Inicie na rede local e leia o QR code ou informe o endereço e código no navegador do celular. Computador e celular precisam estar na mesma rede, com o app e a janela de acesso abertos. O beta oferece leitura, envio, respostas, emotes e moderação disponível no painel; não inclui todos os recursos do aplicativo. A conexão usa HTTP local: use uma rede confiável e feche a janela para encerrar o acesso.
 - **Acompanhar mensagens:** pesquisa, filtros, destaques e sons; histórico padrão de 2.000 mensagens por painel. Um botão aparece no cabeçalho quando há filtros ativos; clique nele para revisá-los.
 - **Personalizar:** fontes, emotes, emblemas, cores, horários e janela sempre no topo.
 - **Acompanhar a transmissão:** cabeçalho com duração e campos configuráveis; avisos de inscritos, membros e recompensas reconhecidos pelo chat.

@@ -1,12 +1,12 @@
-YT-CHATTERINO 2.3.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.3.2 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.3.1.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.3.2.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
 
 ADICIONAR UM CHAT
-Pressione Ctrl+T (ou clique em +). Cole o link de uma LIVE do YouTube, um @canal/link da Twitch ou o link de um canal da Kick.
+Pressione Ctrl+T (ou clique em +). Digite o canal ou cole o link. No YouTube, use o identificador do link: por exemplo, LofiGirl para youtube.com/@LofiGirl. O @ é opcional para abrir e salvar canais.
 A leitura comum pelo site do YouTube não precisa de chave, conta do Google nem unidades de cota.
 Se o Google limitar o acesso (HTTP 429), conecte sua conta e ative por chat a alternativa
 da API oficial no menu do canal. Ela usa 5 unidades por solicitação, cerca de 986 unidades
@@ -38,6 +38,14 @@ crie um cliente OAuth do tipo Aplicativo para computador; baixe o JSON. Em Conta
 o JSON e clique em Entrar no YouTube. O guia com imagens fica em Configurações > Contas. Se o app OAuth estiver em teste, adicione obrigatoriamente a conta Google exata usada no login em Público-alvo > Usuários de teste.
 Você precisa ter permissão real de moderador/dono no canal. Há mais instruções no Tutorial.
 Não compartilhe seu JSON, tokens nem perfil com amigos. Compartilhe somente este ZIP limpo.
+
+ABRIR NO CELULAR (BETA)
+Clique com o direito na aba, escolha o painel e Abrir no celular (beta). Selecione
+a rede local, inicie e leia o QR code no celular ou digite o endereço e código exibidos.
+Use a mesma rede Wi-Fi no celular e no computador. Deixe o aplicativo e a janela de
+acesso abertos; ao fechá-la, o acesso termina. A conexão usa HTTP local: use uma
+rede confiável. O beta permite ler, enviar, responder, usar emotes e moderar conforme
+suas permissões, mas ainda não inclui todos os recursos do aplicativo.
 
 CONTROLES ÚTEIS
 Ctrl+Shift+T: adicionar painel. Ctrl+W: fechar painel focado. Ctrl+Shift+W: fechar aba.

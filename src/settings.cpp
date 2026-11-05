@@ -890,12 +890,14 @@ QWidget *SettingsWindow::savedPage() {
     l->addWidget(list, 1);
     auto *addRow = new QHBoxLayout;
     auto *platform = new QComboBox(w);
+    platform->setObjectName("saved-add-platform");
     platform->addItems({"Twitch", "YouTube", "Kick"});
     auto *address = new QLineEdit(w);
-    address->setPlaceholderText(main->cfg.T("@channel or channel URL"));
+    address->setObjectName("saved-add-address");
+    address->setPlaceholderText(main->cfg.T("Channel handle or URL"));
     addRow->addWidget(platform);
     addRow->addWidget(address, 1);
-    addRow->addWidget(action(main->cfg, "Add channel", w, [this, w, platform, address, refresh] {
+    auto *addChannel = action(main->cfg, "Add channel", w, [this, w, platform, address, refresh] {
         QString value = address->text().trimmed();
         if (value.isEmpty()) {
             return;
@@ -927,9 +929,12 @@ QWidget *SettingsWindow::savedPage() {
             if (!login.isEmpty()) { store("kick", login, login); address->clear(); }
             return;
         }
+        const bool bare = !value.contains('/') && !value.contains(':');
         QUrl url(value.startsWith('@')    ? "https://www.youtube.com/" + value
-                 : value.startsWith("UC") ? "https://www.youtube.com/channel/" + value
-                                          : value);
+                 : QRegularExpression("^UC[A-Za-z0-9_-]{22}$").match(value).hasMatch()
+                                           ? "https://www.youtube.com/channel/" + value
+                 : bare                    ? "https://www.youtube.com/@" + value
+                                           : value);
         if (url.scheme().isEmpty()) {
             url = QUrl("https://" + value);
         }
@@ -958,7 +963,9 @@ QWidget *SettingsWindow::savedPage() {
                 address->clear();
             },
             "GET", {}, {}, 16 * 1024 * 1024);
-    }));
+    });
+    addChannel->setObjectName("saved-add-button");
+    addRow->addWidget(addChannel);
     l->addLayout(addRow);
     auto *row = new QHBoxLayout;
     row->addWidget(action(main->cfg, "Open", w, [this, list] {
@@ -1396,6 +1403,11 @@ QWidget *SettingsWindow::tutorialPage() {
               "Left-click a Twitch reply to open its retained thread. Ctrl+F5 reconnects. Pause YouTube "
               "manually from the header menu or pause all from the gear menu. Middle-click the chat for "
               "autoscroll; move the mouse to choose speed, then click or press Esc to stop."},
+             {"Open on phone (beta)",
+              "Right-click the tab and choose Open on phone (beta). Select your local network and start. "
+              "Scan the QR code or enter the address and code in your phone browser. Keep the app and "
+              "this window open, and use the same trusted network. The beta uses local HTTP and supports "
+              "reading, sending, replies, emotes and permitted moderation, but not every desktop feature."},
              {"Appearance, highlights and sounds",
               "Appearance has separate text/name fonts, badge/emote sizes, timestamps and date formats. "
               "Messages sets the retention cap (default 2000). Highlights matches users, badges, names and "
@@ -1404,7 +1416,8 @@ QWidget *SettingsWindow::tutorialPage() {
               "only after confirmation."}}) {
         const int group = section.first == "Read chats" ? 0
                           : section.first == "Tabs, splits and saved channels" ||
-                                    section.first == "Messages, emotes and reply threads" ? 2
+                                    section.first == "Messages, emotes and reply threads" ||
+                                    section.first == "Open on phone (beta)" ? 2
                           : section.first == "Appearance, highlights and sounds" ? 3 : 1;
         auto *card = new QFrame(w);
         card->setObjectName("tutorial-card");
