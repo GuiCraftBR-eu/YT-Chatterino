@@ -47,7 +47,7 @@ jobs:
           $stderr = Join-Path $env:RUNNER_TEMP 'yt-version-err.txt'
           $process = Start-Process -FilePath $exe -ArgumentList '--version' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           if ($process.ExitCode -ne 0) { throw 'Packaged executable did not start.' }
-          if (((Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)) -notmatch '2\.3\.2') { throw 'Wrong packaged application version.' }
+          if (((Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)) -notmatch '2\.3\.3') { throw 'Wrong packaged application version.' }
       - uses: actions/upload-artifact@v4
         with:
           name: YT-Chatterino-Windows-2.3.3
