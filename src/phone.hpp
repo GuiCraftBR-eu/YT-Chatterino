@@ -43,5 +43,7 @@ class PhoneServer : public QObject {
     QJsonObject renderMessage(const Message &message) const;
     Source *allowedSource(const QString &key) const;
     Message findMessage(qint64 seq, Source *source) const;
+    QJsonArray messageMentions(const Message &message) const;
+    Message resolveMention(const Message &message, Source *source, int index, QString *name = nullptr) const;
 };
 }

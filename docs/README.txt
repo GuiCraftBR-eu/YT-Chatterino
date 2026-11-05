@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.4.0 — WINDOWS 11 x64
+YT-CHATTERINO 2.4.1 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.4.0.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.4.1.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -50,7 +50,7 @@ reading, sending, replies, emotes and permitted moderation, but not every deskto
 USEFUL CONTROLS
 Ctrl+Shift+T: add a split. Ctrl+W: close focused pane. Ctrl+Shift+W: close tab.
 Ctrl+Tab: next tab. Ctrl+1-8: select tab. Ctrl+9: last tab.
-Drag tabs to reorder; drag dividers to resize. Scroll over tabs to switch.
+Drag the stream title to adjust its height. Drag tabs to reorder; drag dividers to resize. Scroll over tabs to switch.
 Middle-click empty tab-bar space to add a chat. Right-click a header for layout/browser actions.
 Double-click a header to zoom/restore a pane. Alt+Arrows: focus another pane.
 Ctrl+F / Ctrl+Shift+F: search pane / all chats. Ctrl+K: quick switch.

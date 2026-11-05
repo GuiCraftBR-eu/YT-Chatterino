@@ -20,6 +20,9 @@ class NativeTests : public QObject {
     void chatModeIndicators();
     void timestampFontSetting();
     void phoneThreadsHistoryAndLongPoll();
+    void resizableStreamHeaderAndAlertBackground();
+    void phoneMentionModerationAndChannelEditing();
+    void phoneKickAndYouTubeChannelActions();
     void phonePairingSecurityAndMessaging();
     void alertCardsAndEventParsing();
     void savedChannelNamesWithoutAt();

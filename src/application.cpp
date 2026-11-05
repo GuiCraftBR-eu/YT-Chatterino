@@ -317,6 +317,7 @@ Workspace *MainWindow::addWorkspace(QList<Source *> sources, QString title) {
 }
 
 void MainWindow::attachPane(Pane *p) {
+    connect(p, &Pane::headerLinesChanged, this, [this] { sessionTimer.start(); });
     connect(p, &Pane::focused, this, [this](Pane *pane) {
         if (current()) {
             current()->focusedPane = pane;
