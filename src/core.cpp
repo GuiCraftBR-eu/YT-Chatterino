@@ -899,6 +899,26 @@ QString visibleMessageText(const Message &m, const Config &cfg) {
                ? cfg.T("[message deleted]") : m.text;
 }
 
+QImage primeCrown() {
+    static const QImage crown = [] {
+        QImage image(":/prime-crown.png");
+        if (image.isNull()) return image;
+        image = image.convertToFormat(QImage::Format_ARGB32);
+        int left = image.width(), top = image.height(), right = -1, bottom = -1;
+        for (int y = 0; y < image.height(); ++y) {
+            auto *row = reinterpret_cast<QRgb *>(image.scanLine(y));
+            for (int x = 0; x < image.width(); ++x) {
+                const auto pixel = row[x];
+                const int alpha = qBound(0, qRound((255 - qGreen(pixel)) * 255.0 / 185.0), 255);
+                row[x] = qRgba(145, 70, 255, alpha);
+                if (alpha > 0) { left = qMin(left, x); top = qMin(top, y); right = qMax(right, x); bottom = qMax(bottom, y); }
+            }
+        }
+        return right >= left ? image.copy(left, top, right-left+1, bottom-top+1) : QImage();
+    }();
+    return crown;
+}
+
 QString visibleAlertText(const Message &m, const Config &cfg) {
     const auto match = QRegularExpression("^Cheered ([0-9]+) Bits$").match(m.alertText);
     if (match.hasMatch()) return cfg.T("Cheered {count} Bits", {{"count", match.captured(1)}});

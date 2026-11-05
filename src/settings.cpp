@@ -322,7 +322,7 @@ QWidget *SettingsWindow::accountsPage() {
     twLayout->addWidget(twStatus);
     twLayout->addWidget(twPermissions);
     twLayout->addWidget(text(main->cfg,
-        "Pinned Twitch messages require moderator access. Twitch polls are available only in your own channel.", true));
+        "Pinned Twitch messages require moderator access. Twitch polls and predictions are available only in your own channel, with the corresponding permissions.", true));
     twLayout->addWidget(twButton);
     twLayout->addWidget(twReconnect);
     l->addWidget(twBox);
@@ -444,6 +444,7 @@ QWidget *SettingsWindow::accountsPage() {
                   {"user:read:moderated_channels", "moderator:manage:chat_messages",
                    "moderator:manage:banned_users"}},
                  {"Polls in your channel", {"channel:read:polls"}},
+                 {"Predictions in your channel", {"channel:read:predictions"}},
                  {"Title / category editing", {"channel:manage:broadcast"}}}) {
             permissions << (accounts.twitchAllows(item.second) ? "✓ " : "○ ") + cfg.T(item.first);
         }
@@ -1405,8 +1406,9 @@ QWidget *SettingsWindow::tutorialPage() {
               "autoscroll; move the mouse to choose speed, then click or press Esc to stop."},
              {"Open on phone (beta)",
               "Right-click the tab and choose Open on phone (beta). Select your local network and start. "
-              "Scan the QR code or enter the address and code in your phone browser. Keep the app and "
-              "this window open, and use the same trusted network. The beta uses local HTTP and supports "
+              "Scan the QR code or enter the address and code in your phone browser. Keep the app open "
+              "and use the same trusted network. You may close this window; click Phone in the pane to "
+              "reopen it or stop access. The beta uses local HTTP and supports "
               "reading, sending, replies, emotes and permitted moderation, but not every desktop feature."},
              {"Appearance, highlights and sounds",
               "Appearance has separate text/name fonts, badge/emote sizes, timestamps and date formats. "

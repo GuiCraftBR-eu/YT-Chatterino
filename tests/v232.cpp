@@ -33,6 +33,11 @@ void NativeTests::phonePairingSecurityAndMessaging() {
     twitch->publish(incoming);
     Span emote; emote.code = "Wave"; emote.urls = {"https://cdn.betterttv.net/emote/1/3x"};
     twitch->emotes[emote.code] = emote;
+    twitch->header["avatar"] = "https://cdn.betterttv.net/emote/54fa8f1401e468494b85b537/3x";
+    auto avatar = QSharedPointer<Images::Entry>::create();
+    avatar->image = QImage(20, 20, QImage::Format_ARGB32); avatar->image.fill(Qt::blue);
+    app->images.cache[str(twitch->header["avatar"])] = avatar;
+    app->images.cache["https://cdn.betterttv.net/emote/54fa8fce01e468494b85b53c/3x"] = avatar;
     PhoneServer server(&app->hub);
     QVERIFY(!server.start(pane, QHostAddress::AnyIPv4));
     QVERIFY(server.start(pane, QHostAddress::LocalHost));
@@ -58,6 +63,15 @@ void NativeTests::phonePairingSecurityAndMessaging() {
     QVERIFY(result.startsWith("HTTP/1.1 200"));
     const auto state = QJsonDocument::fromJson(result.mid(result.indexOf("\r\n\r\n") + 4)).object();
     QCOMPARE(state["sources"].toArray().size(), 1);
+    QCOMPARE(str(state["sources"].toArray().first().toObject()["avatar"]), str(twitch->header["avatar"]));
+    const auto previousAvatar = twitch->header["avatar"];
+    twitch->header["avatar"] = "https://cdn.betterttv.net/emote/54fa8fce01e468494b85b53c/3x";
+    result = phoneRequest(server, "GET", "/api/state?after=" + QByteArray::number(qint64(state["after"].toDouble())) +
+                                    "&revision=" + QByteArray::number(state["revision"].toVariant().toULongLong()), {}, cookie);
+    const auto refreshed = QJsonDocument::fromJson(result.mid(result.indexOf("\r\n\r\n") + 4)).object();
+    QVERIFY(refreshed["reset"].toBool());
+    QCOMPARE(str(refreshed["sources"].toArray().first().toObject()["avatar"]), str(twitch->header["avatar"]));
+    twitch->header["avatar"] = previousAvatar;
     QCOMPARE(str(state["messages"].toArray().last().toObject()["text"]), incoming.text);
     QVERIFY(!result.contains("fake-token"));
     result = phoneRequest(server, "GET", "/api/emotes?source=twitch%3Aguicraft_", {}, cookie);
@@ -117,7 +131,7 @@ void NativeTests::alertCardsAndEventParsing() {
     auto m = parsed.message; m.source = twitch->key; m.seq = 777;
     ChatView view(&app->hub); view.resize(430, 200); view.show(); view.setMessages({m});
     const auto text = view.document(0)->toPlainText();
-    QVERIFY(text.contains(QString::fromUtf8("♛ Alice")));
+    QVERIFY(text.contains(QString("Alice")));
     QVERIFY(text.contains("Subscribed!"));
     QVERIFY(text.contains("Alice: "));
     QVERIFY(text.indexOf("Subscribed!") < text.indexOf("Alice: "));

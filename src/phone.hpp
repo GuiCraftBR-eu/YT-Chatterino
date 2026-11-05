@@ -12,6 +12,7 @@ class PhoneServer : public QObject {
     bool isActive() const;
     QString address() const;
     QString pairingCode() const;
+    void renewPairingCode();
     Hub *hub;
     QPointer<Pane> pane;
     QTcpServer listener;

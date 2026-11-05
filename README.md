@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.3.2](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.2) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.3.3](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.3) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.3.2 | Instalação |
+| Sistema | Download da versão 2.3.3 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.2/YT-Chatterino-Windows11-2.3.2.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.2/yt-chatterino-2.3.2-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.3/YT-Chatterino-Windows11-2.3.3.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.3.3/yt-chatterino-2.3.3-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.3.2-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.3.3-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.2).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.3.3).
 
 ## Primeiros passos
 
@@ -46,7 +46,7 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 - **Organizar os chats:** abas, painéis lado a lado ou empilhados e painel misto com ícones de canais.
 - **Alertas:** canais abertos da Twitch e Kick podem avisar quando entram ao vivo; é possível adicionar outros canais nas configurações.
 - **Conversar:** respostas na Twitch, preenchimento de nomes de exibição, histórico de mensagens enviadas e seletor de emotes nativos, BTTV e 7TV.
-- **Abrir no celular (beta):** clique com o botão direito na aba, escolha o painel e **Abrir no celular (beta)**. Inicie na rede local e leia o QR code ou informe o endereço e código no navegador do celular. Computador e celular precisam estar na mesma rede, com o app e a janela de acesso abertos. O beta oferece leitura, envio, respostas, emotes e moderação disponível no painel; não inclui todos os recursos do aplicativo. A conexão usa HTTP local: use uma rede confiável e feche a janela para encerrar o acesso. Se o Windows solicitar acesso pela rede, permita-o apenas em redes privadas; o firewall pode bloquear a conexão até ser configurado.
+- **Abrir no celular (beta):** clique com o botão direito na aba, escolha o painel e **Abrir no celular (beta)**. Inicie na rede local e leia o QR code ou informe o endereço e código no navegador do celular. Computador e celular precisam estar na mesma rede, com o app aberto. A janela do QR code pode ser fechada; clique em **Celular** no painel para reabri-la ou encerrar o acesso. O beta oferece leitura, envio, respostas, emotes e moderação disponível no painel; não inclui todos os recursos do aplicativo. A conexão usa HTTP local: use uma rede confiável e pressione **Parar** para encerrar o acesso. Se o Windows solicitar acesso pela rede, permita-o apenas em redes privadas; o firewall pode bloquear a conexão até ser configurado.
 - **Acompanhar mensagens:** pesquisa, filtros, destaques e sons; histórico padrão de 2.000 mensagens por painel. Um botão aparece no cabeçalho quando há filtros ativos; clique nele para revisá-los.
 - **Personalizar:** fontes, emotes, emblemas, cores, horários e janela sempre no topo.
 - **Acompanhar a transmissão:** cabeçalho com duração e campos configuráveis; avisos de inscritos, membros e recompensas reconhecidos pelo chat.
@@ -55,7 +55,7 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 
 A leitura da Kick usa a conexão pública do site, não documentada oficialmente. Ela entrega mensagens em tempo real e recupera o histórico recente após desconexões, mas pode mudar ou perder mensagens durante falhas prolongadas. Alertas dependem dos eventos disponibilizados pela plataforma. Para moderar ou editar seu canal, habilite as permissões correspondentes no aplicativo de desenvolvedor e reconecte a conta; ações de moderação exigem o cargo no canal.
 
-Mensagens fixadas do YouTube usam os dados disponíveis no chat do site; a API oficial de leitura não informa essas fixações. Na Twitch, mensagens fixadas exigem acesso de moderador; enquetes estão disponíveis apenas no próprio canal e exigem autorização adicional em **Configurações → Contas**. Enquetes do YouTube dependem dos dados retornados pelo chat ou pela leitura opcional da API oficial. Nem todos os eventos são disponibilizados pelas plataformas.
+Mensagens fixadas do YouTube usam os dados disponíveis no chat do site; a API oficial de leitura não informa essas fixações. Na Twitch, mensagens fixadas exigem acesso de moderador; enquetes e apostas estão disponíveis apenas no próprio canal e exigem as respectivas permissões em **Configurações → Contas**. Seus resultados recentes aparecem por até três minutos. Enquetes do YouTube dependem dos dados recebidos do chat ou da API oficial; quando só houver a última contagem observada, ela será identificada como tal. Nem todos os eventos são disponibilizados pelas plataformas.
 
 Quando a Kick está offline, a API pode ocultar o título atual. Ao alterar só a categoria, deixe o título em branco para preservá-lo.
 
