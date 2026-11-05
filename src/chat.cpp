@@ -311,6 +311,10 @@ void Source::publish(Message m) {
                     m.seq = old.seq;
                     m.own = true;
                     m.deleted = m.deleted || old.deleted;
+                    if (old.deleted) {
+                        m.deletionReason = old.deletionReason;
+                        m.deletionDuration = old.deletionDuration;
+                    }
                     old = m;
                     emit changed();
                 } else if (m.own && !old.own) {
@@ -476,18 +480,29 @@ void Source::youtubeModeNotices(const QJsonValue &data) {
 }
 
 void Source::redact(const QJsonObject &target) {
+    const auto userLogin = stripAt(str(target["user_login"]));
+    QString reason = str(target["reason"]);
+    if (reason.isEmpty()) reason = target["all"].toBool() ? "clear"
+                                   : !str(target["message_id"]).isEmpty() ? "deleted" : "removed";
+    const qint64 duration = qMax<qint64>(0, target["duration"].toInteger());
     for (auto &m : history) {
         bool match = target["all"].toBool() ||
                      (!str(target["message_id"]).isEmpty() &&
                       (str(target["message_id"]) == m.id || str(target["message_id"]) == m.apiId ||
                        str(target["message_id"]) == m.webId)) ||
-                     (!str(target["user_id"]).isEmpty() && str(target["user_id"]) == m.uid);
+                     (!str(target["user_id"]).isEmpty() && str(target["user_id"]) == m.uid) ||
+                     (!userLogin.isEmpty() && stripAt(m.login) == userLogin);
         if (match && !m.system) {
+            if (!m.deleted || m.deletionReason.isEmpty()) {
+                m.deletionReason = reason;
+                m.deletionDuration = duration;
+            }
             m.deleted = true;
         }
         if (!m.reply.isEmpty() &&
             ((!str(target["message_id"]).isEmpty() && str(m.reply["id"]) == str(target["message_id"])) ||
              (!str(target["user_id"]).isEmpty() && str(m.reply["user_id"]) == str(target["user_id"])) ||
+             (!userLogin.isEmpty() && stripAt(str(m.reply["login"])) == userLogin) ||
              target["all"].toBool())) {
             m.reply["text"] = hub->cfg->T("[message deleted]");
         }
@@ -1634,8 +1649,18 @@ void TwitchConnection::line(const QString &raw) {
     } else if (p.command == "CLEARMSG") {
         source->redact({{"message_id", p.tags["target-msg-id"]}});
     } else if (p.command == "CLEARCHAT") {
-        QString user = str(p.tags["target-user-id"]);
-        source->redact(user.isEmpty() ? QJsonObject{{"all", true}} : QJsonObject{{"user_id", user}});
+        const QString user = str(p.tags.value("target-user-id"));
+        const QString login = p.params.contains(" :") ? p.params.section(" :", 1).trimmed() : QString();
+        if (user.isEmpty() && login.isEmpty()) {
+            source->redact({{"all", true}});
+        } else {
+            bool valid = false;
+            const qint64 seconds = str(p.tags.value("ban-duration")).toLongLong(&valid);
+            const QString reason = p.tags.contains("ban-duration") ? (valid && seconds > 0 ? "timeout" : "removed")
+                                   : p.tags.isEmpty() ? "removed" : "ban";
+            source->redact({{"user_id", user}, {"user_login", login}, {"reason", reason},
+                            {"duration", double(valid ? qMax<qint64>(0, seconds) : 0)}});
+        }
     } else if (p.command == "NOTICE") {
         source->status(p.params.section(" :", 1));
     }
@@ -2201,17 +2226,19 @@ void Hub::moderate(Source *s, const Message &m, QString action, int duration, Js
         if (action == "timeout") body["duration"] = qBound(1, (duration + 59) / 60, 10080);
         if (action != "timeout" && action != "ban" && action != "unban") { done({}, "Unknown moderation action."); return; }
         QPointer<Source> safe(s);
-        accounts->kickApi("moderation/bans", [safe, m, action, done](QJsonObject d, QString e) {
-            if (safe && e.isEmpty() && action != "unban") safe->redact({{"user_id", m.uid}});
+        accounts->kickApi("moderation/bans", [safe, m, action, duration, done](QJsonObject d, QString e) {
+            if (safe && e.isEmpty() && action != "unban")
+                safe->redact({{"user_id", m.uid}, {"reason", action},
+                              {"duration", action == "timeout" ? qBound(1, (duration + 59) / 60, 10080) * 60 : 0}});
             done(d, e);
         }, action == "unban" ? "DELETE" : "POST", body);
         return;
     }
     QPointer<Source> self(s);
-    auto complete = [self, m, action, done](QJsonObject d, QString e) {
+    auto complete = [self, m, action, duration, done](QJsonObject d, QString e) {
         if (self && e.isEmpty() && action != "unban") {
             self->redact(action == "delete" ? QJsonObject{{"message_id", m.id}}
-                                            : QJsonObject{{"user_id", m.uid}});
+                                            : QJsonObject{{"user_id", m.uid}, {"reason", action}, {"duration", duration}});
         }
         done(d, e);
     };

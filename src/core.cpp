@@ -531,6 +531,8 @@ QJsonObject Message::json() const {
             {"sent_at", stamp.isValid() ? stamp.toMSecsSinceEpoch() / 1000.0 : 0},
             {"_seq", seq},
             {"deleted", deleted},
+            {"deletion_reason", deletionReason},
+            {"deletion_duration", double(deletionDuration)},
             {"_history", history},
             {"_own", own},
             {"system", system},
@@ -555,6 +557,8 @@ Message Message::fromJson(const QJsonObject &o) {
     m.badgeInfo = str(o["badge_info"]);
     m.seq = o["_seq"].toInteger();
     m.deleted = o["deleted"].toBool();
+    m.deletionReason = str(o["deletion_reason"]);
+    m.deletionDuration = qMax<qint64>(0, o["deletion_duration"].toInteger());
     m.history = o["_history"].toBool();
     m.own = o["_own"].toBool();
     m.system = o["system"].toBool();
@@ -904,6 +908,29 @@ QColor userColor(const Message &m) {
 QString visibleMessageText(const Message &m, const Config &cfg) {
     return m.deleted && !cfg.data["show_deleted_messages"].toBool(false)
                ? cfg.T("[message deleted]") : m.text;
+}
+
+QString deletionReasonText(const Message &m, const Config &cfg) {
+    if (!m.deleted) return {};
+    const auto reason = m.deletionReason;
+    if (reason == "timeout") {
+        qint64 seconds = qMax<qint64>(0, m.deletionDuration);
+        if (!seconds) return cfg.T("Timed out");
+        QStringList parts;
+        for (const auto &[unit, suffix] : QList<QPair<qint64, QString>>{{86400, "d"}, {3600, "h"}, {60, "m"}, {1, "s"}}) {
+            const qint64 amount = seconds / unit;
+            if (amount) parts << QString::number(amount) + suffix;
+            seconds %= unit;
+        }
+        return cfg.T("Timed out for {duration}", {{"duration", parts.join(' ')}});
+    }
+    if (reason == "ban") return cfg.T("Banned");
+    if (reason == "clear") return cfg.T("Chat cleared");
+    if (reason == "deleted") {
+        // The hidden-message placeholder already says it was deleted.
+        return cfg.data["show_deleted_messages"].toBool(false) ? cfg.T("Deleted") : QString();
+    }
+    return cfg.T("Removed");
 }
 
 QImage primeCrown() {

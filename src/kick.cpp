@@ -421,7 +421,17 @@ void Source::kickEvent(QString event, QJsonObject data) {
     }
     if (event.endsWith("UserBannedEvent")) {
         const auto uid = str(at(data, {"user", "id"}));
-        if (!uid.isEmpty()) redact({{"user_id", uid}});
+        if (!uid.isEmpty()) {
+            QString reason = "removed";
+            qint64 seconds = 0;
+            if (data["permanent"].isBool()) {
+                reason = data["permanent"].toBool() ? "ban" : "timeout";
+                bool ok = false;
+                const auto minutes = str(data["duration"]).toLongLong(&ok);
+                if (reason == "timeout" && ok && minutes > 0 && minutes <= 10080) seconds = minutes * 60;
+            }
+            redact({{"user_id", uid}, {"reason", reason}, {"duration", double(seconds)}});
+        }
         return;
     }
     if (event.endsWith("ChatroomClearEvent")) { redact({{"all", true}}); return; }

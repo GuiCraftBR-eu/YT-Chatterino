@@ -338,5 +338,11 @@
   "No known restrictions": "Nenhuma restrição conhecida",
   "Right-click the tab and choose Open on phone. Select your local network and start. Scan the QR code or enter the address and code in your phone browser. Keep the app open and use the same trusted network. You may close this window; click Phone in the pane to reopen it or stop access. The phone connection uses local HTTP and supports reading, sending, replies, emote previews, permitted moderation and channel editing.": "Clique com o botão direito na aba e escolha Abrir no celular. Selecione a rede local e inicie. Leia o QR code ou digite o endereço e o código no navegador do celular. Mantenha o aplicativo aberto e use a mesma rede confiável. Você pode fechar esta janela; clique em Celular no painel para reabri-la ou encerrar o acesso. A conexão usa HTTP local e permite ler, enviar, responder, visualizar emotes, moderar e editar canais conforme suas permissões.",
   "Mention highlight color": "Cor do destaque de menções",
-  "Alert highlight color": "Cor do destaque de alertas"
+  "Alert highlight color": "Cor do destaque de alertas",
+  "Timed out": "Silenciado temporariamente",
+  "Timed out for {duration}": "Silenciado por {duration}",
+  "Banned": "Banido",
+  "Chat cleared": "Chat limpo",
+  "Deleted": "Excluída",
+  "Removed": "Removida"
 }

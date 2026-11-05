@@ -250,6 +250,7 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
     return {{"seq", double(m.seq)}, {"source", m.source}, {"name", m.name}, {"login", m.login},
             {"text", text}, {"time", m.stamp.isValid() ? hub->cfg->time(m.stamp) : QString()},
             {"color", userColor(m).name()}, {"system", m.system}, {"deleted", m.deleted},
+            {"deletionLabel", deletionReasonText(m, *hub->cfg)},
             {"special", m.special}, {"alert", visibleAlertText(m, *hub->cfg)}, {"alertBodyStart", m.alertBodyStart},
             {"badges", badges}, {"emotes", spans}, {"mentions", messageMentions(m)},
             {"reply", QJsonObject{{"name", m.reply["name"]}, {"login", m.reply["login"]}, {"text", m.reply["text"]}}}};
@@ -281,7 +282,10 @@ QJsonObject PhoneServer::state(qint64 after, quint32 clientRevision) const {
     const int first = qMax(0, int(all.size()) - 250);
     quint32 revision = sourceRevision ^ (hub->cfg->data["show_deleted_messages"].toBool(false) ? 1u : 0u);
     for (int i = first; i < all.size(); ++i)
-        if (all[i].deleted) revision = (revision ^ quint32(all[i].seq)) * 16777619u;
+        if (all[i].deleted) {
+            revision = (revision ^ quint32(all[i].seq)) * 16777619u;
+            revision = (revision ^ quint32(qHash(all[i].deletionReason, 0)) ^ quint32(all[i].deletionDuration)) * 16777619u;
+        }
     qint64 highest = after;
     bool reset = after <= 0 || revision != clientRevision;
     if (after > 0 && first > 0 && all[first].seq > after) reset = true;

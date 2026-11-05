@@ -202,7 +202,7 @@ int ChatView::estimate(const Message &m) const {
     const auto a = hub->cfg->appearance();
     const QFontMetrics fm(hub->cfg->messageFont());
     int width = qMax(120, viewport()->width() - 14);
-    QString text = m.name + ": " + visibleMessageText(m, *hub->cfg);
+    QString text = m.name + ": " + visibleMessageText(m, *hub->cfg) + deletionReasonText(m, *hub->cfg);
     int lines = qMax(1, (fm.horizontalAdvance(text) + width - 1) / width);
     lines += text.count('\n');
     int height = lines * fm.lineSpacing() + 8;
@@ -399,6 +399,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         const bool hasBody = !m.alertText.isEmpty() && bodyOffset < m.text.size() &&
                              (!m.deleted || hub->cfg->data["show_deleted_messages"].toBool(false));
         if (!hasBody) {
+            const auto reason = deletionReasonText(m, *hub->cfg);
+            if (!reason.isEmpty()) cursor.insertText(" · " + reason, normalFormat);
             documents[m.seq] = doc;
             details[m.seq] = detail;
             return doc;
@@ -588,6 +590,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         offset = e.end;
     }
     insertText(body.mid(offset), offset);
+    const auto reason = deletionReasonText(m, *hub->cfg);
+    if (!reason.isEmpty()) cursor.insertText(" · " + reason, normalFormat);
     if (!query.isEmpty()) {
         QTextCursor found(doc.data());
         while (!(found = doc->find(query, found)).isNull()) {
@@ -1934,7 +1938,8 @@ void Pane::setSources(QList<Source *> list) {
                 return;
             }
             if (target["all"].toBool() || str(target["message_id"]) == reply.id ||
-                (!str(target["user_id"]).isEmpty() && str(target["user_id"]) == reply.uid)) {
+                (!str(target["user_id"]).isEmpty() && str(target["user_id"]) == reply.uid) ||
+                (!str(target["user_login"]).isEmpty() && stripAt(str(target["user_login"])) == stripAt(reply.login))) {
                 cancelReply();
             }
         });
