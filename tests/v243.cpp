@@ -50,11 +50,10 @@ void NativeTests::compactChatStatusPresentation() {
     pane->filter["include_terms"] = QJsonArray{"hello"}; pane->refresh(); pane->phoneButton->show();
     QTest::qWait(50);
     auto *strip = pane->findChild<QWidget *>("chat-status-strip");
-    auto *caption = pane->findChild<QLabel *>("chat-modes-caption");
-    QVERIFY(strip && caption && caption->isVisible());
+    QVERIFY(strip && !pane->findChild<QLabel *>("chat-modes-caption"));
     QVERIFY(pane->chatModesLabel->text().contains("Followers only"));
     QVERIFY(pane->filterButton->isVisible() && pane->phoneButton->isVisible());
-    QVERIFY(caption->geometry().right() < pane->chatModesLabel->geometry().left());
+    QVERIFY(pane->chatModesLabel->isVisible());
     QVERIFY(pane->chatModesLabel->geometry().right() < pane->filterButton->geometry().left());
     const auto background = strip->grab().toImage().pixelColor(1, 1);
     QCOMPARE(background.red(), background.green());

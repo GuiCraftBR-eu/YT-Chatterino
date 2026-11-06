@@ -1631,11 +1631,6 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     headerResize->setStyleSheet("background:#111111;border-bottom:1px solid #282828;");
     headerResize->installEventFilter(this);
     layout->addWidget(headerResize);
-    auto *modeCaption = new QLabel("CHAT", statusStrip);
-    modeCaption->setObjectName("chat-modes-caption");
-    modeCaption->setStyleSheet("background:#1c1c1c;color:#aaaaaa;border:1px solid #363636;"
-                               "border-radius:3px;padding:1px 4px;font-size:9px;font-weight:bold;");
-    statusLayout->addWidget(modeCaption, 0, Qt::AlignVCenter);
     chatModesLabel = new QLabel(statusStrip);
     chatModesLabel->setObjectName("chat-modes");
     chatModesLabel->setTextFormat(Qt::PlainText);
@@ -1969,8 +1964,6 @@ void Pane::refreshChatModes() {
     }
     chatModesLabel->setText(labels.join("\n"));
     chatModesLabel->setVisible(!detached && !labels.isEmpty());
-    if (auto *caption = chatModesLabel->parentWidget()->findChild<QLabel *>("chat-modes-caption"))
-        caption->setVisible(!detached && !labels.isEmpty());
 }
 
 void Pane::refreshDecorations() {

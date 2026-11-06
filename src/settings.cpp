@@ -28,6 +28,8 @@ class TutorialPreview final : public QLabel {
 
 static QPushButton *action(Config &cfg, QString text, QObject *receiver, std::function<void()> fn) {
     auto *b = new QPushButton(cfg.T(text));
+    b->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    if (text.startsWith("Apply")) b->setProperty("settingsPrimary", true);
     QObject::connect(b, &QPushButton::clicked, receiver, std::move(fn));
     return b;
 }
@@ -62,12 +64,51 @@ static QString normalize(QString s) {
 
 static QWidget *pageWidget(Config &cfg, const QString &title, QVBoxLayout **layout) {
     auto *w = new QWidget;
+    w->setObjectName("settings-page");
     *layout = new QVBoxLayout(w);
-    (*layout)->setContentsMargins(14, 8, 14, 10);
+    (*layout)->setContentsMargins(18, 15, 18, 16);
+    (*layout)->setSpacing(10);
     auto *heading = text(cfg, title);
+    heading->setObjectName("settings-page-heading");
     heading->setFont(QFont("Segoe UI", 14, QFont::Bold));
     (*layout)->addWidget(heading);
+    static const QMap<QString, QString> descriptions{
+        {"Accounts", "Connect accounts and manage permissions."},
+        {"Appearance", "Customize the window, chat text and stream header."},
+        {"Messages", "Choose how much history to keep and how deleted messages appear."},
+        {"Highlights", "Choose which messages stand out and their colors."},
+        {"Notifications", "Choose sounds and channels to follow."},
+        {"Saved channels", "Keep favorite channels ready to open."},
+        {"YouTube quota", "Review the estimated quota used by YouTube actions."},
+        {"Updates", "Control automatic update checks."},
+        {"Keyboard shortcuts", "Quick controls for navigating and chatting."},
+        {"Tutorial", "Find setup guides and learn the main features."}};
+    const auto description = descriptions.value(title);
+    if (!description.isEmpty()) {
+        auto *subtitle = text(cfg, description, true);
+        subtitle->setObjectName("settings-page-description");
+        (*layout)->addWidget(subtitle);
+    }
     return w;
+}
+
+static QFormLayout *settingsCard(Config &cfg, QVBoxLayout *parent, QWidget *owner, const QString &title) {
+    auto *card = new QFrame(owner);
+    card->setObjectName("settings-card");
+    auto *layout = new QVBoxLayout(card);
+    layout->setContentsMargins(12, 10, 12, 12);
+    layout->setSpacing(8);
+    auto *heading = text(cfg, title);
+    heading->setObjectName("settings-card-heading");
+    layout->addWidget(heading);
+    auto *form = new QFormLayout;
+    form->setVerticalSpacing(8);
+    form->setHorizontalSpacing(12);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    layout->addLayout(form);
+    parent->addWidget(card);
+    return form;
 }
 
 SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
@@ -76,22 +117,21 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
     resize(850, 700);
     setMinimumSize(620, 400);
     auto *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(12, 10, 12, 12);
-    outer->setSpacing(10);
+    outer->setContentsMargins(14, 12, 14, 14);
+    outer->setSpacing(12);
     heading = new QLabel(main->cfg.T("Settings"), this);
     heading->setObjectName("settings-heading");
     outer->addWidget(heading);
     auto *body = new QHBoxLayout;
-    body->setSpacing(10);
-    auto *sidebar = new QFrame(this);
+    body->setSpacing(12);
+    sidebar = new QFrame(this);
     sidebar->setObjectName("settings-sidebar");
-    sidebar->setMinimumWidth(155);
-    sidebar->setMaximumWidth(205);
+    sidebar->setFixedWidth(160);
     auto *sideLayout = new QVBoxLayout(sidebar);
-    sideLayout->setContentsMargins(7, 7, 7, 7);
-    sideLayout->setSpacing(7);
+    sideLayout->setContentsMargins(9, 9, 9, 9);
+    sideLayout->setSpacing(9);
     search = new QLineEdit(this);
-    search->setPlaceholderText(main->cfg.T("Search settings"));
+    search->setPlaceholderText(main->cfg.T("Search"));
     search->setClearButtonEnabled(true);
     search->setObjectName("settings-search");
     sideLayout->addWidget(search);
@@ -102,23 +142,64 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
     navigation->setIndentation(14);
     sideLayout->addWidget(navigation, 1);
     body->addWidget(sidebar);
-    pages = new QStackedWidget(this);
+    auto *content = new QWidget(this);
+    auto *contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(8);
+    pages = new QStackedWidget(content);
     pages->setObjectName("settings-pages");
-    body->addWidget(pages, 1);
+    contentLayout->addWidget(pages, 1);
+    applyBar = new QWidget(content);
+    applyBar->setObjectName("settings-apply-bar");
+    auto *applyLayout = new QHBoxLayout(applyBar);
+    applyLayout->setContentsMargins(0, 6, 0, 0);
+    applyLayout->addStretch();
+    applyButton = new QPushButton(main->cfg.T("Apply"), applyBar);
+    applyButton->setObjectName("settings-apply");
+    applyButton->setProperty("settingsPrimary", true);
+    applyButton->setMinimumWidth(110);
+    applyLayout->addWidget(applyButton);
+    contentLayout->addWidget(applyBar);
+    applyBar->hide();
+    body->addWidget(content, 1);
     outer->addLayout(body, 1);
     results = new QListWidget(this);
     results->setObjectName("settings-results");
     pages->addWidget(results);
-    setStyleSheet("QDialog#settings-window{background:#090909;}"
-                  "QLabel#settings-heading{font-size:19px;font-weight:600;color:#efeff1;}"
-                  "QFrame#settings-sidebar{background:#111;border:1px solid #282828;border-radius:5px;}"
-                  "QTreeWidget#settings-navigation,QListWidget#settings-results{background:#111;"
-                  "border:0;outline:0;color:#efeff1;}"
-                  "QTreeWidget#settings-navigation::item{height:28px;padding:2px 5px;border-radius:3px;}"
-                  "QTreeWidget#settings-navigation::item:hover{background:#222;}"
-                  "QTreeWidget#settings-navigation::item:selected{background:#243d51;color:#fff;}"
-                  "QListWidget#settings-results::item{padding:8px;}"
-                  "QListWidget#settings-results::item:selected{background:#243d51;}"
+    setStyleSheet("QDialog#settings-window{background:#090909;color:#efeff1;font-size:13px;}"
+                  "QLabel#settings-heading{font-size:20px;font-weight:600;color:#efeff1;}"
+                  "QLabel#settings-page-heading{font-size:19px;font-weight:600;color:#f1f1f1;}"
+                  "QLabel#settings-page-description{color:#a5a5a5;font-size:12px;padding-bottom:2px;}"
+                  "QFrame#settings-sidebar{background:#111;border:1px solid #2b2b2b;border-radius:6px;}"
+                  "QScrollArea#settings-content{background:#101010;border:1px solid #292929;border-radius:6px;}"
+                  "QWidget#settings-apply-bar{border-top:1px solid #292929;}"
+                  "QWidget#settings-page{background:#101010;}"
+                  "QFrame#settings-card{background:#171717;border:1px solid #303030;border-radius:6px;}"
+                  "QLabel#settings-card-heading{font-weight:600;color:#dedede;font-size:13px;}"
+                  "QTreeWidget#settings-navigation{background:transparent;border:0;outline:0;color:#efeff1;}"
+                  "QListWidget#settings-results{background:#111;border:1px solid #2b2b2b;"
+                  "border-radius:6px;outline:0;color:#efeff1;padding:5px;}"
+                  "QTreeWidget#settings-navigation::item{height:29px;padding:2px 6px;border-radius:4px;}"
+                  "QTreeWidget#settings-navigation::item:hover{background:#242424;}"
+                  "QTreeWidget#settings-navigation::item:selected{background:#253f52;color:#fff;}"
+                  "QListWidget#settings-results::item{padding:9px;border-radius:4px;}"
+                  "QListWidget#settings-results::item:hover{background:#242424;}"
+                  "QListWidget#settings-results::item:selected{background:#253f52;}"
+                  "QLineEdit,QPlainTextEdit,QComboBox,QSpinBox,QDoubleSpinBox{background:#1b1b1b;"
+                  "color:#efeff1;border:1px solid #414141;border-radius:4px;padding:5px;}"
+                  "QLineEdit:focus,QPlainTextEdit:focus,QComboBox:focus,QSpinBox:focus,QDoubleSpinBox:focus{border-color:#4a9cdb;}"
+                  "QPushButton{background:#252525;color:#efeff1;border:1px solid #3b3b3b;"
+                  "border-radius:4px;padding:6px 12px;}"
+                  "QPushButton:hover{background:#313131;border-color:#555;}"
+                  "QPushButton:disabled{color:#777;background:#1b1b1b;border-color:#303030;}"
+                  "QPushButton[settingsPrimary=\"true\"]{background:#274a61;border-color:#3b6f8f;color:#fff;}"
+                  "QPushButton[settingsPrimary=\"true\"]:hover{background:#315a74;}"
+                  "QGroupBox{background:#171717;border:1px solid #303030;border-radius:6px;"
+                  "margin-top:14px;padding:15px 12px 12px;font-weight:600;}"
+                  "QGroupBox::title{subcontrol-origin:margin;subcontrol-position:top left;left:10px;padding:0 5px;color:#efeff1;}"
+                  "QGroupBox QLabel{background:transparent;font-weight:normal;}"
+                  "QTableWidget{background:#151515;alternate-background-color:#1b1b1b;border:1px solid #303030;gridline-color:#303030;}"
+                  "QHeaderView::section{background:#202020;color:#ddd;border:0;border-bottom:1px solid #3a3a3a;padding:6px;}"
                   "QCheckBox::indicator{width:14px;height:14px;background:#171717;"
                   "border:1px solid #777;border-radius:2px;}"
                   "QCheckBox::indicator:checked{background:#285b7a;border-color:#4a9cdb;"
@@ -129,16 +210,19 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
                   "QTabWidget#tutorial-topics QTabBar::tab:selected{background:#202024;color:#fff;"
                   "border-top:2px solid #4a9cdb;}"
                   "QFrame#tutorial-card{background:#141416;border:1px solid #303037;border-radius:5px;}"
-                  "QLabel#settings-section{font-weight:600;color:#aeb8c2;padding-top:8px;}");
+                  "QLabel#settings-section{font-weight:600;color:#dedede;padding-top:8px;}");
     auto *shortcut = new QShortcut(QKeySequence::Find, this);
     connect(shortcut, &QShortcut::activated, this, [this] {
         search->setFocus();
         search->selectAll();
     });
     connect(search, &QLineEdit::textChanged, this, &SettingsWindow::searchSettings);
+    connect(applyButton, &QPushButton::clicked, this, [this] {
+        if (auto button = applyActions.value(currentPage)) button->click();
+    });
     connect(navigation, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem *item, int) {
         const auto page = item->data(0, Qt::UserRole).toString();
-        if (!page.isEmpty()) {
+        if (!page.isEmpty() && (page != currentPage || !search->text().isEmpty() || pages->currentWidget() == results)) {
             search->clear();
             showPage(page);
         }
@@ -150,11 +234,38 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
                     showPage(item->data(0, Qt::UserRole).toString());
                 }
             });
-    connect(results, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
+    const auto openResult = [this](QListWidgetItem *item) {
+        if (!item || !(item->flags() & Qt::ItemIsEnabled)) return;
         QString page = item->data(Qt::UserRole).toString();
+        const auto label = main->cfg.T(item->data(Qt::UserRole + 1).toString());
         search->clear();
         showPage(page);
-    });
+        auto *scroll = qobject_cast<QScrollArea *>(built.value(page));
+        if (!scroll || label.isEmpty()) return;
+        for (auto *widget : scroll->widget()->findChildren<QWidget *>()) {
+            const auto *caption = qobject_cast<QLabel *>(widget);
+            const auto *button = qobject_cast<QAbstractButton *>(widget);
+            if ((caption && caption->text() == label) || (button && button->text() == label)) {
+                for (auto *tabs : scroll->widget()->findChildren<QTabWidget *>()) {
+                    for (int i = 0; i < tabs->count(); ++i) {
+                        if (tabs->widget(i)->isAncestorOf(widget)) { tabs->setCurrentIndex(i); break; }
+                    }
+                }
+                QPointer<QWidget> target(widget);
+                QPointer<QScrollArea> safe(scroll);
+                QTimer::singleShot(0, scroll, [safe, target] {
+                    if (!safe || !target) return;
+                    for (auto *parent = target->parentWidget(); parent; parent = parent->parentWidget()) {
+                        if (auto *area = qobject_cast<QScrollArea *>(parent))
+                            if (area->widget() && area->widget()->isAncestorOf(target)) area->ensureWidgetVisible(target, 0, 24);
+                    }
+                });
+                break;
+            }
+        }
+    };
+    connect(results, &QListWidget::itemActivated, this, openResult);
+    connect(results, &QListWidget::itemClicked, this, openResult);
     QFile file(":/settings-search.json");
     if (file.open(QIODevice::ReadOnly)) {
         auto list = QJsonDocument::fromJson(file.readAll()).array();
@@ -173,6 +284,14 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
     rebuildLanguage();
 }
 
+void SettingsWindow::resizeEvent(QResizeEvent *event) {
+    QDialog::resizeEvent(event);
+    if (sidebar) {
+        const int width = qBound(160, 160 + qMax(0, event->size().width() - 620) / 6, 195);
+        if (sidebar->minimumWidth() != width) sidebar->setFixedWidth(width);
+    }
+}
+
 void SettingsWindow::rebuildLanguage() {
     QString keep = currentPage.isEmpty() ? "Accounts" : currentPage;
     navigation->clear();
@@ -189,19 +308,23 @@ void SettingsWindow::rebuildLanguage() {
         for (const auto &name : group.second) {
             auto *child = new QTreeWidgetItem(section, {main->cfg.T(name)});
             child->setData(0, Qt::UserRole, name);
+            child->setToolTip(0, main->cfg.T(name));
         }
         section->setExpanded(true);
     }
     const auto old = built.values();
     built.clear();
+    applyActions.clear();
     for (auto *w : old) {
         pages->removeWidget(w);
         w->deleteLater();
     }
     setWindowTitle(main->cfg.T("Settings · YT-Chatterino"));
     heading->setText(main->cfg.T("Settings"));
-    search->setPlaceholderText(main->cfg.T("Search settings"));
+    search->setPlaceholderText(main->cfg.T("Search"));
+    applyButton->setText(main->cfg.T("Apply"));
     showPage(keep);
+    if (!search->text().trimmed().isEmpty()) searchSettings();
 }
 
 void SettingsWindow::showPage(QString name) {
@@ -228,13 +351,24 @@ void SettingsWindow::showPage(QString name) {
     if (!built.contains(name)) {
         auto *inner = buildPage(name);
         auto *scroll = new QScrollArea(this);
+        scroll->setObjectName("settings-content");
         scroll->setWidgetResizable(true);
         scroll->setFrameShape(QFrame::NoFrame);
+        for (auto *spin : inner->findChildren<QAbstractSpinBox *>()) spin->setMaximumWidth(120);
+        for (auto *combo : inner->findChildren<QComboBox *>()) combo->setMaximumWidth(280);
+        for (auto *button : inner->findChildren<QPushButton *>()) {
+            if (button->property("settingsPrimary").toBool()) {
+                button->hide();
+                applyActions.insert(name, button);
+                break;
+            }
+        }
         scroll->setWidget(inner);
         built[name] = scroll;
         pages->addWidget(scroll);
     }
     pages->setCurrentWidget(built[name]);
+    applyBar->setVisible(!applyActions.value(name).isNull());
 }
 
 QWidget *SettingsWindow::buildPage(QString name) {
@@ -273,6 +407,7 @@ void SettingsWindow::searchSettings() {
     if (q.isEmpty()) {
         if (built.contains(currentPage)) {
             pages->setCurrentWidget(built[currentPage]);
+            applyBar->setVisible(!applyActions.value(currentPage).isNull());
         }
         return;
     }
@@ -296,6 +431,7 @@ void SettingsWindow::searchSettings() {
                 displayed.insert(identity);
                 auto *item = new QListWidgetItem(main->cfg.T(i.key()) + " — " + main->cfg.T(label), results);
                 item->setData(Qt::UserRole, i.key());
+                item->setData(Qt::UserRole + 1, label);
             }
         }
     }
@@ -304,6 +440,7 @@ void SettingsWindow::searchSettings() {
         none->setFlags(Qt::NoItemFlags);
     }
     pages->setCurrentWidget(results);
+    applyBar->hide();
 }
 
 QWidget *SettingsWindow::accountsPage() {
@@ -511,12 +648,9 @@ QWidget *SettingsWindow::appearancePage() {
     QVBoxLayout *l;
     auto *w = pageWidget(cfg, "Appearance", &l);
     auto a = cfg.appearance();
-    auto *form = new QFormLayout;
-    form->setVerticalSpacing(8);
-    auto section = [w, form, &cfg](const QString &title) {
-        auto *label = new QLabel(cfg.T(title), w);
-        label->setObjectName("settings-section");
-        form->addRow(label);
+    QFormLayout *form = nullptr;
+    auto section = [w, l, &cfg, &form](const QString &title) {
+        form = settingsCard(cfg, l, w, title);
     };
     section("Language and window");
     auto *lang = new QComboBox(w);
@@ -579,7 +713,6 @@ QWidget *SettingsWindow::appearancePage() {
     scrollSpeed->setSuffix("×");
     scrollSpeed->setValue(a.value("scroll_multiplier").toDouble(2.0));
     form->addRow(cfg.T("Mouse wheel speed"), scrollSpeed);
-    l->addLayout(form);
     l->addWidget(
         text(cfg, "Text size: Ctrl++ / Ctrl+- · Ctrl+0 resets. Images keep their aspect ratio.", true));
     l->addWidget(text(cfg, "HH = 24-hour; hh with am/pm = 12-hour. Add :ss to show seconds.", true));
@@ -624,7 +757,7 @@ QWidget *SettingsWindow::appearancePage() {
 QWidget *SettingsWindow::messagesPage() {
     QVBoxLayout *l;
     auto *w = pageWidget(main->cfg, "Messages", &l);
-    auto *form = new QFormLayout;
+    auto *form = settingsCard(main->cfg, l, w, "History and retention");
     auto *cap = new QSpinBox(w);
     cap->setRange(100, 20000);
     cap->setSingleStep(100);
@@ -633,11 +766,11 @@ QWidget *SettingsWindow::messagesPage() {
     auto *history = new QCheckBox(main->cfg.T("Load recent Twitch messages when opening a channel"), w);
     history->setChecked(main->cfg.data["load_twitch_history"].toBool(true));
     form->addRow(history);
+    form = settingsCard(main->cfg, l, w, "Deleted messages");
     auto *deleted = new QCheckBox(main->cfg.T("Show deleted messages received while connected"), w);
     deleted->setObjectName("show-deleted-messages");
     deleted->setChecked(main->cfg.data["show_deleted_messages"].toBool(false));
     form->addRow(deleted);
-    l->addLayout(form);
     l->addWidget(text(main->cfg,
                       "Twitch history uses recent-messages.robotty.de without account tokens. Availability "
                       "varies. YouTube loads the recent messages its page provides.",
@@ -665,7 +798,8 @@ QWidget *SettingsWindow::highlightsPage() {
     auto settings = cfg.feature("highlight");
     QVBoxLayout *l;
     auto *w = pageWidget(cfg, "Highlights", &l);
-    l->addWidget(text(cfg, "Users · one username per line, optionally followed by #RRGGBB"));
+    auto *userForm = settingsCard(cfg, l, w, "Users");
+    userForm->addRow(text(cfg, "Users · one username per line, optionally followed by #RRGGBB", true));
     auto *users = new QPlainTextEdit(w);
     users->setMaximumHeight(130);
     QStringList lines;
@@ -674,8 +808,8 @@ QWidget *SettingsWindow::highlightsPage() {
         lines << i.key() + ' ' + i.value().toString();
     }
     users->setPlainText(lines.join('\n'));
-    l->addWidget(users);
-    auto *form = new QFormLayout;
+    userForm->addRow(users);
+    auto *form = settingsCard(cfg, l, w, "Roles and badges");
     QMap<QString, QCheckBox *> roleChecks;
     QMap<QString, QLineEdit *> colors;
     for (const auto &pair : QList<QPair<QString, QString>>{{"owner", "Owners"},
@@ -703,6 +837,7 @@ QWidget *SettingsWindow::highlightsPage() {
         roleChecks[pair.first] = check;
         colors[pair.first] = color;
     }
+    form = settingsCard(cfg, l, w, "Words and mentions");
     auto *terms = new QLineEdit(stringList(settings["words"]).join(", "), w);
     form->addRow(cfg.T("Words / phrases · separate with commas"), terms);
     auto *mention = new QCheckBox(cfg.T("Highlight mentions of my signed-in names"), w);
@@ -721,12 +856,12 @@ QWidget *SettingsWindow::highlightsPage() {
         layout->addStretch(); form->addRow(cfg.T(label), row); return value;
     };
     auto *mentionColor = colorField("mention_color", "Mention highlight color");
+    form = settingsCard(cfg, l, w, "Alerts");
     auto *alerts = new QCheckBox(cfg.T("Highlight subscription, membership and reward alerts"), w);
     alerts->setObjectName("highlight-chat-alerts");
     alerts->setChecked(settings["alerts"].toBool(false));
     form->addRow(alerts);
     auto *alertColor = colorField("alert_color", "Alert highlight color");
-    l->addLayout(form);
     l->addWidget(action(cfg, "Apply highlights", w, [this, users, terms, mention, alerts, roleChecks, colors, mentionColor, alertColor] {
         const QColor mentionValue(mentionColor->text()), alertValue(alertColor->text());
         if (!mentionValue.isValid() || !alertValue.isValid()) {
@@ -778,6 +913,7 @@ QWidget *SettingsWindow::notificationsPage() {
     auto settings = cfg.feature("alerts");
     QVBoxLayout *l;
     auto *w = pageWidget(cfg, "Notifications", &l);
+    auto *soundForm = settingsCard(cfg, l, w, "Sounds and mentions");
     auto *enabled = new QCheckBox(cfg.T("Enable notification sounds"), w);
     enabled->setChecked(settings["enabled"].toBool(true));
     auto *mentions = new QCheckBox(cfg.T("Sound for matching mentions / highlight words"), w);
@@ -787,14 +923,11 @@ QWidget *SettingsWindow::notificationsPage() {
     auto *automaticKick = new QCheckBox(cfg.T("Notify all open Kick channels by default"), w);
     automaticKick->setObjectName("notify-open-kick");
     automaticKick->setChecked(settings["all_kick"].toBool(true));
-    l->addWidget(enabled);
-    l->addWidget(mentions);
-    l->addWidget(automatic);
-    l->addWidget(automaticKick);
-    l->addWidget(text(cfg, "Additional nicknames · separate with commas"));
+    soundForm->addRow(enabled);
+    soundForm->addRow(mentions);
     auto *names = new QLineEdit(stringList(cfg.features()["nicknames"]).join(", "), w);
-    l->addWidget(names);
-    l->addWidget(text(cfg, "Default sound: ChatternoPing.wav · Live alerts: Twitch and Kick", true));
+    soundForm->addRow(cfg.T("Additional nicknames · separate with commas"), names);
+    soundForm->addRow(text(cfg, "Default sound: ChatternoPing.wav · Live alerts: Twitch and Kick", true));
     auto *soundRow = new QHBoxLayout;
     for (const auto &pair : QList<QPair<QString, QString>>{{"sound_file", "Mention sound…"},
                                                            {"live_sound_file", "Live sound…"}}) {
@@ -808,14 +941,21 @@ QWidget *SettingsWindow::notificationsPage() {
             }
         }));
     }
-    soundRow->addWidget(action(cfg, "Test", w, [this] { main->hub.sound(false, true); }));
-    soundRow->addWidget(action(cfg, "Default", w, [this] {
+    soundRow->addStretch();
+    soundForm->addRow(soundRow);
+    auto *soundActions = new QHBoxLayout;
+    soundActions->addWidget(action(cfg, "Test", w, [this] { main->hub.sound(false, true); }));
+    soundActions->addWidget(action(cfg, "Default", w, [this] {
         auto a = main->cfg.feature("alerts");
         a.remove("sound_file");
         a.remove("live_sound_file");
         main->cfg.setFeature("alerts", a);
     }));
-    l->addLayout(soundRow);
+    soundActions->addStretch();
+    soundForm->addRow(soundActions);
+    auto *liveForm = settingsCard(cfg, l, w, "Live notifications");
+    liveForm->addRow(automatic);
+    liveForm->addRow(automaticKick);
     auto *watch = new QListWidget(w);
     watch->setObjectName("notification-watch-list");
     watch->setStyleSheet("QListWidget#notification-watch-list{background:#111;border:1px solid #333;outline:0;}"
@@ -831,8 +971,8 @@ QWidget *SettingsWindow::notificationsPage() {
         auto *row = new QListWidgetItem(platformName + QString(" · ") + str(item["id"]), watch);
         row->setData(Qt::UserRole, item);
     }
-    l->addWidget(text(cfg, "Additional channels to notify"));
-    l->addWidget(watch);
+    liveForm->addRow(text(cfg, "Additional channels to notify"));
+    liveForm->addRow(watch);
     auto *watchInput = new QLineEdit(w);
     watchInput->setObjectName("notification-watch-input");
     watchInput->setPlaceholderText(cfg.T("Channel name or link"));
@@ -864,8 +1004,8 @@ QWidget *SettingsWindow::notificationsPage() {
     addWatch->setObjectName("notification-watch-add");
     watchRow->addWidget(addWatch);
     watchRow->addWidget(action(cfg, "Remove", w, [watch] { delete watch->takeItem(watch->currentRow()); }));
-    l->addLayout(watchRow);
-    l->addWidget(text(cfg,
+    liveForm->addRow(watchRow);
+    liveForm->addRow(text(cfg,
                       "Twitch and Kick checks run once a minute while the app is open. Alerts trigger on offline → "
                       "live, with no sound on initial detection.",
                       true));
@@ -900,8 +1040,11 @@ QWidget *SettingsWindow::savedPage() {
                       "Save channels from an open chat's Channel actions. YouTube finds current streams only "
                       "when you click Open.",
                       true));
+    auto *empty = text(main->cfg, "No saved channels yet. Add one below.", true);
+    empty->setObjectName("saved-channels-empty");
+    l->addWidget(empty);
     auto *list = new QListWidget(w);
-    auto refresh = [this, list] {
+    auto refresh = [this, list, empty] {
         list->clear();
         for (const auto &v : main->cfg.data["saved_channels"].toArray()) {
             auto d = v.toObject();
@@ -909,6 +1052,7 @@ QWidget *SettingsWindow::savedPage() {
                 (str(d["platform"]) == "twitch" ? "TW · " : str(d["platform"]) == "kick" ? "K · " : "YT · ") + str(d["title"]), list);
             item->setData(Qt::UserRole, d);
         }
+        empty->setVisible(list->count() == 0);
     };
     refresh();
     l->addWidget(list, 1);
@@ -1043,9 +1187,11 @@ QWidget *SettingsWindow::quotaPage() {
     connect(&main->quota, &Quota::changed, w, refresh);
     auto *form = new QFormLayout;
     auto *limit = new QSpinBox(w);
+    limit->setObjectName("youtube-daily-limit");
     limit->setRange(1, 10000000);
     limit->setValue(main->cfg.data["youtube_daily_limit"].toInt(10000));
     auto *external = new QSpinBox(w);
+    external->setObjectName("youtube-external-usage");
     external->setRange(0, 10000000);
     auto adjustment = main->cfg.data["youtube_external_usage"].toObject();
     external->setValue(adjustment["date"].toString() == main->quota.day() ? adjustment["used"].toInt() : 0);
@@ -1134,6 +1280,8 @@ QWidget *SettingsWindow::shortcutsPage() {
         table->setItem(i, 1, new QTableWidgetItem(main->cfg.T(rows[i].second)));
     }
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setAlternatingRowColors(true);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->verticalHeader()->hide();
     table->horizontalHeader()->setStretchLastSection(true);
     table->resizeColumnToContents(0);
