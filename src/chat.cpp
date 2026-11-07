@@ -1391,6 +1391,9 @@ void Source::youtubeApiPoll() {
                             "giftMembershipReceivedEvent", "superChatEvent", "superStickerEvent", "giftEvent"}
                     .contains(type)) {
                 m.special = "alert";
+                m.alertKind = type == "membershipGiftingEvent" || type == "giftMembershipReceivedEvent" || type == "giftEvent"
+                                  ? "gift" : type == "superChatEvent" || type == "superStickerEvent"
+                                  ? "money" : "subscription";
                 if (m.name.isEmpty()) m.name = "YouTube";
                 if (type == "giftEvent" && m.text.isEmpty()) {
                     auto gift = str(at(snippet, {"giftDetails", "giftName"}));

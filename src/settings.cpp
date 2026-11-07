@@ -771,6 +771,12 @@ QWidget *SettingsWindow::messagesPage() {
     deleted->setObjectName("show-deleted-messages");
     deleted->setChecked(main->cfg.data["show_deleted_messages"].toBool(false));
     form->addRow(deleted);
+    form = settingsCard(main->cfg, l, w, "Chat behavior");
+    auto *hoverPause = new QCheckBox(main->cfg.T("Pause scrolling while hovering over chat"), w);
+    hoverPause->setObjectName("pause-on-hover");
+    hoverPause->setChecked(main->cfg.data["pause_on_hover"].toBool(false));
+    form->addRow(hoverPause);
+    form->addRow(text(main->cfg, "Messages keep arriving. Scrolling resumes on leaving unless you scroll up.", true));
     l->addWidget(text(main->cfg,
                       "Twitch history uses recent-messages.robotty.de without account tokens. Availability "
                       "varies. YouTube loads the recent messages its page provides.",
@@ -779,10 +785,11 @@ QWidget *SettingsWindow::messagesPage() {
                       "YouTube and Twitch stay connected in background tabs. Pause YouTube manually from "
                       "Channel actions when needed.",
                       true));
-    l->addWidget(action(main->cfg, "Apply message limits / history", w, [this, cap, history, deleted] {
+    l->addWidget(action(main->cfg, "Apply message limits / history", w, [this, cap, history, deleted, hoverPause] {
         main->cfg.data["message_limit"] = cap->value();
         main->cfg.data["load_twitch_history"] = history->isChecked();
         main->cfg.data["show_deleted_messages"] = deleted->isChecked();
+        main->cfg.data["pause_on_hover"] = hoverPause->isChecked();
         main->cfg.save();
         for (auto s : main->hub.sources) {
             s->trim();
