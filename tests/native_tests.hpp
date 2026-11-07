@@ -29,6 +29,9 @@ class NativeTests : public QObject {
     void deletionReasonsFromPlatforms();
     void deletionReasonsOnPhone();
     void settingsLayoutNavigationAndApply();
+    void alertIconsMatchEvents();
+    void hoverPausePreservesMessages();
+    void previewStaysVisibleOnIncomingMessages();
     void phonePairingSecurityAndMessaging();
     void alertCardsAndEventParsing();
     void savedChannelNamesWithoutAt();

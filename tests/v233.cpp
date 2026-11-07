@@ -33,7 +33,7 @@ void NativeTests::hoverHighlightedAlertImages() {
     }
     qInfo() << "HOVER_VISIBLE_PIXELS" << hits << "/" << pixels;
     QVERIFY(pixels > 10); QVERIFY(hits * 100 >= pixels * 90);
-    const auto crown = doc->resource(QTextDocument::ImageResource, QUrl("icon:prime-crown")).value<QImage>();
+    const auto crown = doc->resource(QTextDocument::ImageResource, QUrl("icon:alert-other")).value<QImage>();
     QVERIFY(!crown.isNull());
     QVERIFY(crown.pixelColor(0, 0).alpha() < 255);
 }

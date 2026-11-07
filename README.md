@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.4.5](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.5) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.4.6](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.6) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.4.5 | Instalação |
+| Sistema | Download da versão 2.4.6 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.5/YT-Chatterino-Windows11-2.4.5.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.5/yt-chatterino-2.4.5-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.6/YT-Chatterino-Windows11-2.4.6.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.6/yt-chatterino-2.4.6-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.4.5-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.4.6-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.5).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.6).
 
 ## Primeiros passos
 
@@ -51,7 +51,7 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 - **No celular:** toque no nome de uma pessoa para ver seu histórico armazenado e toque na prévia de uma resposta para abrir a conversa e em emotes ou emblemas para ampliá-los. Usuários autorizados podem moderar e editar o título ou categoria pelo celular. A atualização é enviada assim que o computador recebe mensagens.
 - **Horário:** em Configurações → Aparência, ajuste separadamente o tamanho da fonte do horário.
 - **Mensagens removidas:** mostra se foram excluídas, se o chat foi limpo ou se o autor recebeu banimento ou timeout (com duração), quando a plataforma informa esses detalhes. Sem informação suficiente, mostra apenas que foram removidas.
-- **Acompanhar mensagens:** pesquisa, filtros, destaques e sons; escolha cores separadas para alertas e menções nas configurações; histórico padrão de 2.000 mensagens por painel. Um botão aparece no cabeçalho quando há filtros ativos; clique nele para revisá-los.
+- **Acompanhar mensagens:** opção de pausar a rolagem ao passar o mouse (as mensagens continuam chegando), prévias de emotes mais estáveis, pesquisa, filtros, destaques e sons; escolha cores separadas para alertas e menções nas configurações; histórico padrão de 2.000 mensagens por painel. Um botão aparece no cabeçalho quando há filtros ativos; clique nele para revisá-los.
 - **Personalizar:** configurações organizadas por categorias, pesquisa que abre a opção encontrada e botão Aplicar sempre visível; ajuste fontes, emotes, emblemas, cores, horários e janela sempre no topo.
 - **Acompanhar a transmissão:** cabeçalho com duração e campos configuráveis; arraste o título para ajustar sua altura; avisos de inscritos, membros e recompensas reconhecidos pelo chat.
 - **Mensagens excluídas:** opção para manter visíveis, esmaecidas, as mensagens que o app recebeu antes da exclusão.

@@ -68,8 +68,11 @@ Message parseKick(const QJsonObject &o, bool historical) {
     }
     auto metadata = o["metadata"].toObject();
     if (o["metadata"].isString()) metadata = QJsonDocument::fromJson(str(o["metadata"]).toUtf8()).object();
-    if (str(o["type"]) == "celebration" && !metadata["celebration"].toObject().isEmpty())
+    if (str(o["type"]) == "celebration" && !metadata["celebration"].toObject().isEmpty()) {
         message.special = "alert";
+        const auto type = str(metadata["celebration"].toObject()["type"]).toLower();
+        message.alertKind = type.contains("gift") ? "gift" : type.contains("subscription") ? "subscription" : "other";
+    }
     const auto original = metadata["original_message"].toObject();
     const auto originalSender = metadata["original_sender"].toObject();
     if (!str(original["id"]).isEmpty()) {
@@ -448,13 +451,16 @@ void Source::kickEvent(QString event, QJsonObject data) {
     Message m; m.special = "alert"; m.stamp = QDateTime::currentDateTime();
     m.id = str(data["id"]);
     if (event.endsWith("SubscriptionEvent")) {
+        m.alertKind = "subscription";
         m.name = str(data["username"]);
         const int months = data["months"].toInt(1);
         m.text = hub->cfg->T("Subscribed for {months} months!", {{"months", QString::number(months)}});
     } else if (event.endsWith("GiftedSubscriptionsEvent")) {
+        m.alertKind = "gift";
         m.name = str(data["gifter_username"]);
         m.text = hub->cfg->T("Gifted {count} subscriptions!", {{"count", QString::number(data["gifted_usernames"].toArray().size())}});
     } else if (event.endsWith("RewardRedeemedEvent")) {
+        m.alertKind = "reward";
         m.name = str(at(data, {"user", "username"}));
         if (m.name.isEmpty()) m.name = str(data["username"]);
         m.text = str(data["reward_title"]);
@@ -462,6 +468,7 @@ void Source::kickEvent(QString event, QJsonObject data) {
         const auto input = str(data["user_input"]);
         if (!input.isEmpty()) m.text += " — " + input;
     } else if (event.endsWith("KicksGifted")) {
+        m.alertKind = "gift";
         m.id = str(data["gift_transaction_id"]); m.name = str(at(data, {"sender", "username"}));
         m.text = str(at(data, {"gift", "name"}));
         const auto body = str(data["message"]); if (!body.isEmpty()) m.text += " — " + body;

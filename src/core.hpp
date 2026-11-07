@@ -89,7 +89,7 @@ struct MentionSpan {
 struct Message {
     QString id, source, name, login, uid, text, color, avatar, special, apiId, webId;
     QString deletionReason;
-    QString alertText;
+    QString alertText, alertKind;
     int alertBodyStart = 0;
     QDateTime stamp;
     QVector<Span> emotes;
@@ -122,6 +122,7 @@ QString visibleMessageText(const Message &message, const Config &config);
 QString deletionReasonText(const Message &message, const Config &config);
 QString visibleAlertText(const Message &message, const Config &config);
 QImage primeCrown();
+QImage alertIcon(const QString &kind);
 bool accepts(const Message &m, const QJsonObject &filter, const Config *config = nullptr);
 QString threadRoot(const Message &m, const QHash<QString, Message> &messages);
 QVector<Message> collectThread(const QVector<Message> &history, const Message &selected, QString *root);

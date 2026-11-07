@@ -251,7 +251,7 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
             {"text", text}, {"time", m.stamp.isValid() ? hub->cfg->time(m.stamp) : QString()},
             {"color", userColor(m).name()}, {"system", m.system}, {"deleted", m.deleted},
             {"deletionLabel", deletionReasonText(m, *hub->cfg)},
-            {"special", m.special}, {"alert", visibleAlertText(m, *hub->cfg)}, {"alertBodyStart", m.alertBodyStart},
+            {"special", m.special}, {"alertKind", m.alertKind}, {"alert", visibleAlertText(m, *hub->cfg)}, {"alertBodyStart", m.alertBodyStart},
             {"badges", badges}, {"emotes", spans}, {"mentions", messageMentions(m)},
             {"reply", QJsonObject{{"name", m.reply["name"]}, {"login", m.reply["login"]}, {"text", m.reply["text"]}}}};
 }
@@ -309,6 +309,15 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
     if (method == "GET" && path == "/prime-crown.png") {
         QByteArray bytes; QBuffer buffer(&bytes); buffer.open(QIODevice::WriteOnly);
         primeCrown().save(&buffer, "PNG");
+        respond(socket, 200, "image/png", bytes); return;
+    }
+    if (method == "GET" && path.startsWith("/alert-icon/") && path.endsWith(".png")) {
+        const auto kind = path.mid(QString("/alert-icon/").size()).chopped(4);
+        if (!QStringList{"prime", "subscription", "reward", "money", "gift", "bits", "other"}.contains(kind)) {
+            respond(socket, 404, "text/plain", "Not found"); return;
+        }
+        QByteArray bytes; QBuffer buffer(&bytes); buffer.open(QIODevice::WriteOnly);
+        alertIcon(kind).save(&buffer, "PNG");
         respond(socket, 200, "image/png", bytes); return;
     }
     if (method == "GET" && (path == "/" || path == "/phone.js" || path == "/phone.css")) {

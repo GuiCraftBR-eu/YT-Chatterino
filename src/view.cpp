@@ -14,7 +14,7 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     latest->setFocusPolicy(Qt::NoFocus);
     connect(latest, &QPushButton::clicked, this, &ChatView::jumpLatest);
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this] {
-        hideEmoteTooltip();
+        if (!hoverSuspended) hideEmoteTooltip();
         latest->setVisible(!follow && verticalScrollBar()->maximum() > 0);
         viewport()->update();
     });
@@ -28,6 +28,7 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
         advanceAutoScroll(viewport()->mapFromGlobal(QCursor::pos()), elapsed / 1000.0);
     });
     connect(hub->cfg, &Config::appearanceChanged, this, &ChatView::invalidate);
+    connect(hub->cfg, &Config::appearanceChanged, this, &ChatView::updateHoverPause);
     connect(hub->cfg, &Config::languageChanged, this, &ChatView::invalidate);
     connect(hub->images, &Images::ready, this, [this](const QString &url) {
         if (emoteTooltip && emoteTooltip->isVisible() && tooltipUrls.value(0) == url) {
@@ -380,12 +381,13 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
     if (isAlert) {
         const QColor accent = source && source->platform == "kick" ? QColor("#53fc18")
                             : source && source->platform == "youtube" ? QColor("#ff7777") : QColor("#bf94ff");
-        const auto crown = primeCrown();
-        if (!crown.isNull()) {
+        const auto eventIcon = alertIcon(m.alertKind);
+        if (!eventIcon.isNull()) {
             const int height = qMax(14, QFontMetrics(username).height() - 2);
-            const QSize size = crown.size().scaled(height + 2, height, Qt::KeepAspectRatio);
-            doc->addResource(QTextDocument::ImageResource, QUrl("icon:prime-crown"), crown);
-            QTextImageFormat icon; icon.setName("icon:prime-crown");
+            const QSize size = eventIcon.size().scaled(height + 2, height, Qt::KeepAspectRatio);
+            const QString iconUrl = "icon:alert-" + (m.alertKind.isEmpty() ? QString("other") : m.alertKind);
+            doc->addResource(QTextDocument::ImageResource, QUrl(iconUrl), eventIcon);
+            QTextImageFormat icon; icon.setName(iconUrl);
             icon.setWidth(size.width()); icon.setHeight(size.height());
             icon.setVerticalAlignment(QTextCharFormat::AlignMiddle);
             detail.imageCodes[cursor.position()] = "[Alert]";
@@ -736,7 +738,25 @@ ChatView::Details::Mention ChatView::mentionAt(int row, QPoint point) {
     return {};
 }
 
+void ChatView::updateHoverPause() {
+    const bool pause = (hoverInside && hub->cfg->data["pause_on_hover"].toBool(false)) || previewHolding;
+    if (pause && !hoverSuspended) {
+        hoverSuspended = true;
+        hoverResumeFollow = follow;
+        follow = false;
+    } else if (!pause && hoverSuspended) {
+        hoverSuspended = false;
+        if (hoverResumeFollow) {
+            follow = true;
+            verticalScrollBar()->setValue(verticalScrollBar()->maximum());
+            latest->hide();
+        }
+        hoverResumeFollow = false;
+    }
+}
+
 void ChatView::hideEmoteTooltip() {
+    previewHolding = false;
     if (emoteTooltip) {
         emoteTooltip->hide();
     }
@@ -744,6 +764,7 @@ void ChatView::hideEmoteTooltip() {
     streamPreviewSource.clear();
     tooltipMessage = 0;
     tooltipPosition = -1;
+    updateHoverPause();
 }
 
 bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
@@ -789,6 +810,8 @@ bool ChatView::showEmoteTooltip(QPoint point, QPoint global) {
         hideEmoteTooltip();
         return false;
     }
+    previewHolding = true;
+    updateHoverPause();
     if (emoteTooltip && emoteTooltip->isVisible() && tooltipMessage == messages[row].seq &&
         tooltipPosition == position && tooltipUrls == info.value(position).second) {
         return true;
@@ -900,6 +923,14 @@ void ChatView::showImageTooltip(const QString &name, const QString &kind, const 
 }
 
 bool ChatView::viewportEvent(QEvent *event) {
+    if (event->type() == QEvent::Enter) {
+        hoverInside = true;
+        updateHoverPause();
+    } else if (event->type() == QEvent::Leave) {
+        hoverInside = false;
+    } else if (event->type() == QEvent::Wheel && hoverSuspended) {
+        hoverResumeFollow = false;
+    }
     if (event->type() == QEvent::ToolTip) {
         auto *help = static_cast<QHelpEvent *>(event);
         if (!autoScrolling && showEmoteTooltip(help->pos(), help->globalPos())) {
@@ -913,6 +944,7 @@ bool ChatView::viewportEvent(QEvent *event) {
         event->type() == QEvent::MouseButtonPress) {
         hideEmoteTooltip();
     }
+    if (event->type() == QEvent::Leave) updateHoverPause();
     return QAbstractScrollArea::viewportEvent(event);
 }
 
@@ -967,6 +999,7 @@ void ChatView::mouseMoveEvent(QMouseEvent *e) {
         return;
     }
     if (e->buttons().testFlag(Qt::LeftButton) && selectionStart.first >= 0) {
+        if (hoverSuspended) hoverResumeFollow = false;
         hideEmoteTooltip();
         dragging |= (e->position().toPoint() - pressPoint).manhattanLength() > 4;
         selectionEnd = positionAt(e->position().toPoint());
@@ -1086,10 +1119,12 @@ void ChatView::advanceAutoScroll(QPoint pointer, qreal seconds) {
     const int delta = int(autoScrollRemainder);
     autoScrollRemainder -= delta;
     if (delta) {
+        if (hoverSuspended) hoverResumeFollow = false;
         follow = false;
         verticalScrollBar()->setValue(verticalScrollBar()->value() + delta);
         if (delta > 0 && verticalScrollBar()->value() >= verticalScrollBar()->maximum()) {
-            follow = true;
+            if (hoverSuspended) hoverResumeFollow = true;
+            follow = !hoverSuspended;
             latest->hide();
         }
     }
@@ -1101,6 +1136,7 @@ void ChatView::focusOutEvent(QFocusEvent *event) {
 }
 
 void ChatView::hideEvent(QHideEvent *event) {
+    hoverInside = false;
     hideEmoteTooltip();
     stopAutoScroll();
     QAbstractScrollArea::hideEvent(event);
@@ -1171,6 +1207,7 @@ void ChatView::keyPressEvent(QKeyEvent *e) {
         selectionStart = {0, 0};
         selectionEnd = {int(messages.size()) - 1, document(messages.size() - 1)->characterCount() - 1};
         follow = false;
+        if (hoverSuspended) hoverResumeFollow = false;
         viewport()->update();
         return;
     }
@@ -1180,6 +1217,8 @@ void ChatView::keyPressEvent(QKeyEvent *e) {
     }
     if (e->key() == Qt::Key_Home) {
         follow = false;
+        if (hoverSuspended) hoverResumeFollow = false;
+        hideEmoteTooltip();
         verticalScrollBar()->setValue(0);
         return;
     }
@@ -1188,6 +1227,7 @@ void ChatView::keyPressEvent(QKeyEvent *e) {
 
 void ChatView::wheelEvent(QWheelEvent *e) {
     stopAutoScroll();
+    if (hoverSuspended) hoverResumeFollow = false;
     follow = false;
     if (!e->pixelDelta().isNull()) {
         verticalScrollBar()->setValue(verticalScrollBar()->value() - e->pixelDelta().y());
@@ -1205,14 +1245,17 @@ void ChatView::wheelEvent(QWheelEvent *e) {
     }
     e->accept();
     if (verticalScrollBar()->value() >= verticalScrollBar()->maximum() - 2) {
-        follow = true;
+        if (hoverSuspended) hoverResumeFollow = true;
+        follow = !hoverSuspended;
         latest->hide();
     }
 }
 
 void ChatView::jumpLatest() {
     stopAutoScroll();
-    follow = true;
+    hideEmoteTooltip();
+    if (hoverSuspended) hoverResumeFollow = true;
+    follow = !hoverSuspended;
     selectionStart = selectionEnd = {-1, 0};
     verticalScrollBar()->setValue(verticalScrollBar()->maximum());
     latest->hide();
@@ -1221,6 +1264,8 @@ void ChatView::jumpLatest() {
 
 void ChatView::jumpRow(int row) {
     follow = false;
+    if (hoverSuspended) hoverResumeFollow = false;
+    hideEmoteTooltip();
     verticalScrollBar()->setValue(offsets.value(row));
     viewport()->update();
 }

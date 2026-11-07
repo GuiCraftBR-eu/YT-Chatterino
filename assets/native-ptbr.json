@@ -363,5 +363,8 @@
   "Alerts": "Alertas",
   "Sounds and mentions": "Sons e menções",
   "Live notifications": "Notificações de transmissões",
-  "No saved channels yet. Add one below.": "Nenhum canal salvo ainda. Adicione um abaixo."
+  "No saved channels yet. Add one below.": "Nenhum canal salvo ainda. Adicione um abaixo.",
+  "Chat behavior": "Comportamento do chat",
+  "Pause scrolling while hovering over chat": "Pausar a rolagem ao passar o mouse sobre o chat",
+  "Messages keep arriving. Scrolling resumes on leaving unless you scroll up.": "As mensagens continuam chegando. A rolagem retorna ao sair, a menos que você role para cima."
 }

@@ -109,7 +109,9 @@ function messageRow(m, inThread = false, stripe = false) {
   }
   if (m.special) {
     const event = node('div', undefined, 'event'); const eventName = node('div', undefined, 'event-name');
-    const crown = node('img', undefined, 'event-icon'); crown.src = '/prime-crown.png'; crown.alt = '';
+    const crown = node('img', undefined, 'event-icon');
+    const kind = ['prime', 'subscription', 'reward', 'money', 'gift', 'bits'].includes(m.alertKind) ? m.alertKind : 'other';
+    crown.src = '/alert-icon/' + kind + '.png'; crown.alt = '';
     const alertName = node(m.seq ? 'button' : 'span', m.name, m.seq ? 'user-link' : '');
     if (m.seq) { alertName.type = 'button'; alertName.addEventListener('click', () => showDetail('user-history', m)); }
     eventName.append(crown, alertName); event.append(eventName);

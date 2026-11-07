@@ -522,6 +522,7 @@ QJsonObject Message::json() const {
             {"avatar", avatar},
             {"special", special},
             {"alert_text", alertText},
+            {"alert_kind", alertKind},
             {"alert_body_start", alertBodyStart},
             {"reply", reply},
             {"badge_info", badgeInfo},
@@ -552,6 +553,7 @@ Message Message::fromJson(const QJsonObject &o) {
     m.avatar = str(o["avatar"]);
     m.special = str(o["special"]);
     m.alertText = str(o["alert_text"]);
+    m.alertKind = str(o["alert_kind"]);
     m.alertBodyStart = qMax(0, o["alert_body_start"].toInt());
     m.reply = o["reply"].toObject();
     m.badgeInfo = str(o["badge_info"]);
@@ -741,6 +743,13 @@ ParsedIrc parseIrc(QString line) {
                    {"thread_login", p.tags["reply-thread-parent-user-login"]}};
     }
     if (p.command == "USERNOTICE") {
+        const QString noticeType = str(p.tags.value("msg-id")).toLower();
+        const QString plan = str(p.tags.value("msg-param-sub-plan"));
+        if (noticeType.contains("gift")) m.alertKind = "gift";
+        else if ((noticeType == "sub" || noticeType == "resub") && plan.compare("Prime", Qt::CaseInsensitive) == 0)
+            m.alertKind = "prime";
+        else if (noticeType == "sub" || noticeType == "resub") m.alertKind = "subscription";
+        else m.alertKind = "other";
         const QString notice = str(p.tags["system-msg"]);
         if (!notice.isEmpty()) {
             const QString prefix = notice + (m.text.isEmpty() ? QString() : " — ");
@@ -757,11 +766,13 @@ ParsedIrc parseIrc(QString line) {
     } else if (!str(p.tags["custom-reward-id"]).isEmpty() ||
                !str(p.tags["bits"]).isEmpty() || str(p.tags["msg-id"]) == "highlighted-message") {
         m.special = "alert";
-        if (!str(p.tags["bits"]).isEmpty())
+        if (!str(p.tags["bits"]).isEmpty()) {
+            m.alertKind = "bits";
             m.alertText = "Cheered " + str(p.tags["bits"]) + " Bits";
-        else if (!str(p.tags["custom-reward-id"]).isEmpty())
+        } else if (!str(p.tags["custom-reward-id"]).isEmpty()) {
+            m.alertKind = "reward";
             m.alertText = "Redeemed a channel reward";
-        else m.alertText = "Highlighted a message";
+        } else { m.alertKind = "other"; m.alertText = "Highlighted a message"; }
     }
     return p;
 }
@@ -812,6 +823,9 @@ Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical)
     qint64 micro = str(o["timestampUsec"]).toLongLong();
     m.stamp = micro ? QDateTime::fromMSecsSinceEpoch(micro / 1000) : QDateTime::currentDateTime();
     appendRuns(m, o.contains("message") ? o["message"] : o["headerSubtext"]);
+    if (kind.contains("Gift", Qt::CaseInsensitive)) m.alertKind = "gift";
+    else if (kind.contains("Paid")) m.alertKind = "money";
+    else if (kind.contains("Membership") || kind.contains("Sponsorship")) m.alertKind = "subscription";
     if (kind.contains("Paid")) {
         m.special = "super";
         if (m.text.isEmpty() && kind.contains("Sticker")) {
@@ -951,6 +965,51 @@ QImage primeCrown() {
         return right >= left ? image.copy(left, top, right-left+1, bottom-top+1) : QImage();
     }();
     return crown;
+}
+
+QImage alertIcon(const QString &kind) {
+    if (kind == "prime") return primeCrown();
+    const QString key = QStringList{"subscription", "reward", "money", "gift", "bits"}.contains(kind) ? kind : "other";
+    static QHash<QString, QImage> cache;
+    if (cache.contains(key)) return cache.value(key);
+    QImage image(64, 64, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter p(&image); p.setRenderHint(QPainter::Antialiasing);
+    const QColor ink("#b784ff");
+    p.setPen(Qt::NoPen); p.setBrush(ink);
+    if (key == "subscription") {
+        QPolygonF star;
+        constexpr qreal pi = 3.14159265358979323846;
+        for (int i = 0; i < 10; ++i) {
+            const qreal a = -pi / 2 + i * pi / 5, r = i % 2 ? 14 : 29;
+            star << QPointF(32 + r * qCos(a), 32 + r * qSin(a));
+        }
+        p.drawPolygon(star);
+    } else if (key == "reward") {
+        p.drawEllipse(QRectF(4, 4, 56, 56));
+        p.setPen(QPen(QColor("#21132e"), 3)); p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QRectF(12, 12, 40, 40));
+        p.setPen(Qt::NoPen); p.setBrush(QColor("#21132e")); p.drawEllipse(QRectF(26, 26, 12, 12));
+    } else if (key == "money") {
+        p.drawRoundedRect(QRectF(3, 12, 58, 40), 5, 5);
+        p.setBrush(QColor("#21132e")); p.drawEllipse(QRectF(24, 20, 16, 24));
+        p.drawRoundedRect(QRectF(8, 19, 10, 3), 1, 1); p.drawRoundedRect(QRectF(46, 42, 10, 3), 1, 1);
+    } else if (key == "gift") {
+        p.drawRoundedRect(QRectF(7, 24, 50, 34), 3, 3); p.drawRoundedRect(QRectF(4, 19, 56, 10), 3, 3);
+        p.setBrush(Qt::NoBrush); p.setPen(QPen(ink, 5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        QPainterPath bow; bow.moveTo(32, 20); bow.cubicTo(13, 21, 14, 5, 23, 8); bow.cubicTo(28, 9, 31, 16, 32, 20);
+        bow.cubicTo(33, 16, 36, 9, 41, 8); bow.cubicTo(50, 5, 51, 21, 32, 20); p.drawPath(bow);
+        p.setPen(QPen(QColor("#21132e"), 4)); p.drawLine(QPointF(32, 25), QPointF(32, 58));
+    } else if (key == "bits") {
+        p.drawPolygon(QPolygonF{QPointF(32, 3), QPointF(56, 25), QPointF(32, 61), QPointF(8, 25)});
+        p.setPen(QPen(QColor("#21132e"), 3)); p.drawLine(QPointF(8, 25), QPointF(56, 25));
+        p.drawLine(QPointF(32, 3), QPointF(32, 61));
+    } else {
+        QPainterPath spark; spark.moveTo(32, 3); spark.quadTo(37, 26, 60, 32);
+        spark.quadTo(37, 38, 32, 61); spark.quadTo(27, 38, 4, 32); spark.quadTo(27, 26, 32, 3);
+        p.drawPath(spark);
+    }
+    p.end(); cache.insert(key, image); return image;
 }
 
 QString visibleAlertText(const Message &m, const Config &cfg) {

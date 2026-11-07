@@ -31,6 +31,7 @@ class ChatView : public QAbstractScrollArea {
 
     QHash<qint64, Details> details;
     bool follow = true, mixed = false, threadMode = false;
+    bool hoverInside = false, previewHolding = false, hoverSuspended = false, hoverResumeFollow = false;
     int messageCap = 2000;
     QString query;
     QPushButton *latest;
@@ -70,6 +71,7 @@ class ChatView : public QAbstractScrollArea {
                           const QImage &image, QPoint global, QSize previewSize = QSize(112, 112));
     Details::Mention mentionAt(int row, QPoint point);
     void hideEmoteTooltip();
+    void updateHoverPause();
     QSharedPointer<QTextDocument> document(int row);
     void jumpLatest();
     void jumpRow(int row);
