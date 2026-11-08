@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.4.6](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.6) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.4.7](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.7) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.4.6 | Instalação |
+| Sistema | Download da versão 2.4.7 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.6/YT-Chatterino-Windows11-2.4.6.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.6/yt-chatterino-2.4.6-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.7/YT-Chatterino-Windows11-2.4.7.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.7/yt-chatterino-2.4.7-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.4.6-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.4.7-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.6).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.7).
 
 ## Primeiros passos
 
@@ -35,7 +35,7 @@ Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os ar
 3. Para abrir um chat da Kick, cole o link ou selecione Kick e digite o nome do canal. Para enviar ou moderar, crie seu aplicativo em [Kick Developer](https://kick.com/settings/developer) e siga o **guia ilustrado da Kick** em Configurações → Tutorial. O endereço de redirecionamento é `http://localhost:37365/callback`. Em **Configurações → Contas**, conecte sua conta e autorize as permissões desejadas.
 4. Para enviar mensagens, moderar ou editar títulos no YouTube, ative a **YouTube Data API v3** no Google Cloud, crie um cliente **OAuth para computador** e selecione o JSON em **Contas**. Depois, conecte sua conta.
 
-A leitura pública do YouTube não exige login nem chave de API e não usa unidades da API oficial. Envio e moderação usam a API oficial e suas cotas; moderar ou editar uma transmissão exige as permissões correspondentes no canal. Se o YouTube retornar HTTP 429, você pode ativar por chat a alternativa pela API oficial no menu do canal. Ela exige a conta conectada, consome 5 unidades por solicitação e usa aproximadamente 986 unidades por hora por chat no intervalo padrão de 18,25 segundos; vários chats consomem mais. A cota exibida é uma estimativa, e a API também pode impor limites ou negar acesso.
+A leitura pública do YouTube não exige login nem chave de API e não usa unidades da API oficial. Os lotes chegam mais rapidamente quando possível e são distribuídos na tela; após limitação, o app respeita temporariamente o intervalo mais conservador informado pelo YouTube. Envio e moderação usam a API oficial e suas cotas; moderar ou editar uma transmissão exige as permissões correspondentes no canal. Se o YouTube retornar HTTP 429, você pode ativar por chat a alternativa pela API oficial no menu do canal. Ela exige a conta conectada, consome 5 unidades por solicitação e usa aproximadamente 986 unidades por hora por chat no intervalo padrão de 18,25 segundos; vários chats consomem mais. A cota exibida é uma estimativa, e a API também pode impor limites ou negar acesso.
 
 O **Tutorial**, nas configurações, explica as conexões e os recursos. Para conectar o YouTube, abra o **guia com imagens** em Configurações → Contas ou no tutorial. As credenciais usam o armazenamento protegido do sistema; não compartilhe tokens, perfis ou seu JSON OAuth. No Arch, salvar acessos exige um [chaveiro compatível](docs/ARCH-LINUX.md).
 
@@ -45,7 +45,7 @@ O **Tutorial**, nas configurações, explica as conexões e os recursos. Para co
 
 - **Organizar os chats:** abas, painéis lado a lado ou empilhados e painel misto com ícones de canais.
 - **Alertas:** canais abertos da Twitch e Kick podem avisar quando entram ao vivo; é possível adicionar outros canais nas configurações.
-- **Conversar:** respostas na Twitch, preenchimento de nomes de exibição, histórico de mensagens enviadas e seletor de emotes nativos, BTTV e 7TV.
+- **Conversar:** respostas na Twitch, preenchimento de nomes de exibição, histórico de mensagens enviadas e seletor de emotes nativos, BTTV e 7TV. O cartão de usuário mostra a data de seguimento quando a plataforma permite: na Twitch, a consulta de outras pessoas exige ser dono ou moderador e autorizar a leitura de seguidores; no YouTube, só funciona para inscrições públicas com conta conectada. A API pública da Kick não fornece essa data.
 - **Abrir no celular:** clique com o botão direito na aba, escolha o painel e **Abrir no celular**. Inicie na rede local e leia o QR code ou informe o endereço e código no navegador do celular. Computador e celular precisam estar na mesma rede, com o app aberto. A janela do QR code pode ser fechada; clique em **Celular** no painel para reabri-la ou encerrar o acesso. A versão para celular oferece leitura, envio, respostas, emotes e moderação disponível no painel; não inclui todos os recursos do aplicativo. A conexão usa HTTP local: use uma rede confiável e pressione **Parar** para encerrar o acesso. Se o Windows solicitar acesso pela rede, permita-o apenas em redes privadas; o firewall pode bloquear a conexão até ser configurado.
 - **Modos do chat:** a barra abaixo do canal mostra os modos da Twitch e do Kick quando disponíveis, incluindo o tempo mínimo para seguidores e o intervalo do modo lento. No YouTube, mostra o último aviso de modo recebido; a plataforma nem sempre fornece o estado atual.
 - **No celular:** toque no nome de uma pessoa para ver seu histórico armazenado e toque na prévia de uma resposta para abrir a conversa e em emotes ou emblemas para ampliá-los. Usuários autorizados podem moderar e editar o título ou categoria pelo celular. A atualização é enviada assim que o computador recebe mensagens.

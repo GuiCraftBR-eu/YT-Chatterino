@@ -1829,6 +1829,7 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
     auto *header = new QHBoxLayout;
     auto *avatar = new QLabel(d);
     avatar->setFixedSize(80, 80);
+    avatar->setAlignment(Qt::AlignCenter);
     header->addWidget(avatar);
     auto *info = new QVBoxLayout;
     auto *name = label(cfg, message.name);
@@ -1836,6 +1837,14 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
     info->addWidget(name);
     auto *details = label(cfg, "Loading public profile…", true);
     info->addWidget(details);
+    auto *followDetails = label(cfg, "", true);
+    followDetails->setObjectName("user-card-follow-date");
+    followDetails->setWordWrap(true);
+    info->addWidget(followDetails);
+    auto *followButton = button(cfg, "Enable follow dates", d, [] {});
+    followButton->setObjectName("user-card-follow-permission");
+    followButton->hide();
+    info->addWidget(followButton, 0, Qt::AlignLeft);
     info->addWidget(label(cfg, "ID: " + message.uid, true));
     header->addLayout(info, 1);
     layout->addLayout(header);
@@ -1935,13 +1944,19 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
         count->setText(cfg.T("{count} retained messages · up to 500 shown",
                              {{"count", QString::number(qMin(500, int(list.size())))}}));
     };
-    connect(source, &Source::message, d, [refresh](Message) { refresh(); });
-    connect(source, &Source::changed, d, refresh);
-    connect(&cfg, &Config::appearanceChanged, d, refresh);
+    auto *refreshTimer = new QTimer(d);
+    refreshTimer->setObjectName("user-card-history-refresh");
+    refreshTimer->setSingleShot(true);
+    refreshTimer->setInterval(150);
+    connect(refreshTimer, &QTimer::timeout, d, refresh);
+    auto scheduleRefresh = [refreshTimer] { if (!refreshTimer->isActive()) refreshTimer->start(); };
+    connect(source, &Source::message, d, [scheduleRefresh](Message) { scheduleRefresh(); });
+    connect(source, &Source::changed, d, scheduleRefresh);
+    connect(&cfg, &Config::appearanceChanged, d, scheduleRefresh);
     refresh();
     QPointer<QDialog> safe(d);
     hub.profile(source, message,
-                [this, safe, details, bio, avatar, source = QPointer<Source>(source),
+                [this, safe, details, bio, avatar, followDetails, followButton, source = QPointer<Source>(source),
                  message](QJsonObject data, QString e) {
                     if (!safe) {
                         return;
@@ -1970,6 +1985,52 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
                     }
                     details->setText(lines.isEmpty() ? cfg.T(e.isEmpty() ? "Public details unavailable" : e)
                                                      : lines.join('\n'));
+                    const QString profileId = !str(data["id"]).isEmpty() ? str(data["id"]) : message.uid;
+                    auto refreshFollow = [this, safe, source, followDetails, followButton, profileId] {
+                        if (!safe || !source) return;
+                        followButton->hide();
+                        followDetails->setText(cfg.T("Checking follow date…"));
+                        hub.followSince(source, profileId, [this, safe, source, followDetails, followButton](QJsonObject result, QString) {
+                            if (!safe || !source) return;
+                            const QString status = str(result["status"]);
+                            const bool youtube = source->platform == "youtube";
+                            if (status == "following") {
+                                followDetails->setText(cfg.T(youtube ? "Subscribed since: {date}" : "Following since: {date}",
+                                                             {{"date", cfg.date(str(result["date"]))}}));
+                            } else if (status == "not_following") {
+                                followDetails->setText(cfg.T("Not following this channel"));
+                            } else if (status == "broadcaster") {
+                                followDetails->setText(cfg.T("Channel owner"));
+                            } else if (status == "permission") {
+                                followDetails->setText(cfg.T(result["own"].toBool()
+                                    ? "Enable permission to see your follow date."
+                                    : "Follow dates are available to this channel's owner and moderators."));
+                                followButton->setProperty("scope", result["scope"].toString());
+                                followButton->show();
+                            } else if (status == "moderator_only") {
+                                followDetails->setText(cfg.T("Follow dates are available to this channel's owner and moderators."));
+                            } else if (status == "sign_in") {
+                                followDetails->setText(cfg.T(youtube ? "Sign in to YouTube to check public subscription dates."
+                                                                    : "Sign in to Twitch to check follow dates."));
+                            } else {
+                                followDetails->setText(cfg.T(youtube ? "Subscription date unavailable" : "Follow date unavailable"));
+                            }
+                        });
+                    };
+                    connect(followButton, &QPushButton::clicked, safe, [this, safe, followButton, followDetails, refreshFollow] {
+                        const QString scope = followButton->property("scope").toString();
+                        if (scope.isEmpty()) return;
+                        followButton->setEnabled(false);
+                        QSet<QString> requested{scope};
+                        if (scope == "moderator:read:followers") requested.insert("user:read:moderated_channels");
+                        accounts.requireTwitch(requested, [this, safe, followButton, followDetails, refreshFollow](QString, QString error) {
+                            if (!safe) return;
+                            followButton->setEnabled(true);
+                            if (!error.isEmpty()) { followDetails->setText(cfg.T(error)); return; }
+                            refreshFollow();
+                        });
+                    });
+                    refreshFollow();
                     QString url = str(data["profile_image_url"]);
                     if (url.isEmpty()) {
                         url = message.avatar;

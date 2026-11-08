@@ -37,6 +37,9 @@ class Source : public QObject {
     QString continuation, visitor;
     QJsonObject context;
     QTimer poll, metadataTimer, badgeRetry, decorationTimer, historyRetry, pollResultTimer;
+    QTimer youtubeDisplayTimer;
+    QQueue<Message> youtubePending;
+    int youtubeDisplayChunk = 1;
     int historyRetryMs = 30000;
     QString kickChannelId, kickRoomId, kickLastPollId, kickPollHead, kickSocketToken;
     QWebSocket kickSocket;
@@ -112,6 +115,9 @@ class Source : public QObject {
     void youtubePopout(QJsonObject chat, QJsonObject config);
     void youtubePoll();
     void youtubeActions(const QJsonArray &actions, bool historical = false);
+    void queueYoutubeMessages(const QVector<Message> &messages);
+    void flushYoutubeMessages();
+    int youtubeWebDelay() const;
     void youtubeContinue(QJsonObject chat, QJsonObject config);
     void youtubeError(const QString &error, int delay = 0);
     bool deferYouTubeForCooldown();
@@ -180,7 +186,7 @@ class Hub : public QObject {
     QTemporaryDir soundFiles;
     bool testMode = false;
     QElapsedTimer youtubeClock;
-    qint64 youtubeCooldownUntil = 0;
+    qint64 youtubeCooldownUntil = 0, youtubeConservativeUntil = 0;
     int youtubeRateDelay = 120000;
     int youtubeCooldownRemaining() const;
     Source *source(QString platform, QString id);
@@ -199,6 +205,7 @@ class Hub : public QObject {
     void youtubeMessageId(Source *source, Message message, std::function<void(QString, QString)> done);
     void editChannel(Source *source, QString title, QString categoryId, JsonCallback done);
     void profile(Source *source, Message message, JsonCallback done);
+    void followSince(Source *source, QString userId, JsonCallback done);
     void savedStreams(QJsonObject saved, JsonCallback done);
     void youtubeChannelByName(QString name, JsonCallback done);
     void sound(bool live = false, bool force = false);

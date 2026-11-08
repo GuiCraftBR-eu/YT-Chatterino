@@ -12,6 +12,11 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     latest = new QPushButton(hub->cfg->T("↓ Latest"), viewport());
     latest->hide();
     latest->setFocusPolicy(Qt::NoFocus);
+    pauseIndicator = new QLabel(viewport());
+    pauseIndicator->setObjectName("hover-paused-indicator");
+    pauseIndicator->setAttribute(Qt::WA_TransparentForMouseEvents);
+    pauseIndicator->setStyleSheet("QLabel { background: #242424; color: #c7c7cd; border: 1px solid #454545; border-radius: 3px; padding: 2px 6px; }");
+    pauseIndicator->hide();
     connect(latest, &QPushButton::clicked, this, &ChatView::jumpLatest);
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this] {
         if (!hoverSuspended) hideEmoteTooltip();
@@ -712,6 +717,7 @@ void ChatView::resizeEvent(QResizeEvent *e) {
     latest->adjustSize();
     latest->move(qMax(0, viewport()->width() - latest->width() - 12),
                  qMax(0, viewport()->height() - latest->height() - 8));
+    pauseIndicator->move(qMax(0, viewport()->width() - pauseIndicator->width() - 8), 6);
 }
 
 QPair<int, int> ChatView::positionAt(QPoint point) {
@@ -753,6 +759,12 @@ void ChatView::updateHoverPause() {
         }
         hoverResumeFollow = false;
     }
+    const bool showIndicator = hoverSuspended && hoverInside && hub->cfg->data["pause_on_hover"].toBool(false);
+    pauseIndicator->setText(hub->cfg->T("Paused"));
+    pauseIndicator->adjustSize();
+    pauseIndicator->move(qMax(0, viewport()->width() - pauseIndicator->width() - 8), 6);
+    pauseIndicator->setVisible(showIndicator);
+    if (showIndicator) pauseIndicator->raise();
 }
 
 void ChatView::hideEmoteTooltip() {
