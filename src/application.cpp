@@ -478,18 +478,24 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     }
     auto *vods = new QListWidget(dialog);
     vods->setObjectName("add-chat-vods");
-    for (auto *source : hub.sources) {
-        if (!source->isVod || !source->header["vod_shown"].toBool()) continue;
+    auto *vodLabel = label(cfg, "Select open VOD chats");
+    layout->addWidget(vodLabel);
+    layout->addWidget(vods);
+    auto addVod = [this, vods, vodLabel](Source *source) {
+        if (!source->isVod || (!source->header["vod_shown"].toBool() &&
+            !(vodBridge && vodBridge->owners.contains(source->key) && source->vodReplay && source->vodReplay->announced))) return;
+        for (int i = 0; i < vods->count(); ++i)
+            if (vods->item(i)->data(Qt::UserRole).toString() == source->vodUrl.toString()) return;
         auto *row = new QListWidgetItem(source->name() + " · VOD", vods);
         row->setFlags(row->flags() | Qt::ItemIsUserCheckable);
         row->setCheckState(Qt::Unchecked);
         row->setData(Qt::UserRole, source->vodUrl.toString());
-    }
-    if (vods->count()) {
         vods->setFixedHeight(qMin(150, 6 + 27 * vods->count()));
-        layout->addWidget(label(cfg, "Select open VOD chats"));
-        layout->addWidget(vods);
-    } else vods->hide();
+        vodLabel->show(); vods->show();
+    };
+    vodLabel->hide(); vods->hide();
+    for (auto *source : hub.sources) addVod(source);
+    if (vodBridge) connect(vodBridge, &VodBridge::discovered, dialog, addVod);
     auto *lookupStatus = new QLabel(cfg.T("Looking for live broadcasts…"), dialog);
     lookupStatus->setObjectName("add-chat-status"); lookupStatus->hide();
     layout->addWidget(lookupStatus);
@@ -967,23 +973,15 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
 void MainWindow::startVodBridge(quint16 port) {
     if (vodBridge) return;
     vodBridge = new VodBridge(&hub, this, port);
-    connect(vodBridge, &VodBridge::discovered, this, [this](Source *source) {
-        for (int i = 0; i < tabs->count(); ++i)
-            if (auto *workspace = qobject_cast<Workspace *>(tabs->widget(i)))
-                for (auto *pane : workspace->panes()) if (pane->sources.contains(source)) return;
-        addWorkspace({source});
-        source->header["vod_shown"] = true;
-        sessionTimer.start();
-    });
     if (!vodBridge->server.isListening()) statusBar()->showMessage(cfg.T("VOD browser connection is unavailable."), 10000);
 }
 
 void MainWindow::showVod() {
     QMessageBox box(QMessageBox::Information, cfg.T("VOD extension setup"),
-        cfg.T("Install the included browser extension. Open a VOD in the browser and its chat will appear automatically.\n\n"
+        cfg.T("Install the included browser extension. Open a VOD in the browser, then select its chat with the + button.\n\n"
               "Chrome/Edge: open Extensions, enable Developer mode, choose Load unpacked and select the extension folder.\n\n"
-              "Firefox: open about:debugging → This Firefox → Load Temporary Add-on and select manifest.json. Repeat after restarting Firefox.\n\n"
-              "If updating from 2.4.8, reload the extension once in your browser."), QMessageBox::Close, this);
+              "Firefox: download the signed XPI from the GitHub release. In about:addons, use the gear menu → Install Add-on From File.\n\n"
+              "After updating the app, reload the unpacked Chrome/Edge extension."), QMessageBox::Close, this);
     auto *folder = box.addButton(cfg.T("Extension folder"), QMessageBox::ActionRole);
     box.exec();
     if (box.clickedButton() == folder) {
@@ -1573,7 +1571,14 @@ void MainWindow::pruneSources() {
     }
     for (auto s : hub.sources) {
         if (!needed.contains(s->key)) {
-            if (s->isVod && !s->header["vod_shown"].toBool() && vodBridge && vodBridge->owners.contains(s->key)) continue;
+            if (s->isVod && vodBridge && vodBridge->owners.contains(s->key)) {
+                if (s->header["vod_shown"].toBool()) {
+                    s->header["vod_shown"] = false;
+                    if (s->vodReplay) s->vodReplay->disconnectPlayback();
+                    s->history.clear(); s->seen.clear(); s->seenOrder.clear();
+                }
+                continue;
+            }
             if (s->isVod && vodBridge) vodBridge->suppress(s->key);
             hub.remove(s);
         }

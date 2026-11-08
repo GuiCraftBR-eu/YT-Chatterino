@@ -5,8 +5,8 @@ const translations = {"Waiting for the app":"Aguardando o aplicativo", "Connecti
   "Connected":"Conectado", "Waiting for a VOD":"Aguardando uma VOD"};
 if (pt) {
   document.documentElement.lang = "pt-BR";
-  document.getElementById("intro").textContent = "Abra o YT-Chatterino e uma VOD compatível. O chat aparece automaticamente no aplicativo.";
-  document.getElementById("privacy").textContent = "Somente o endereço e a posição da VOD são enviados ao aplicativo no seu computador.";
+  document.getElementById("intro").textContent = "Abra uma VOD compatível no navegador e selecione o chat pelo botão + no YT-Chatterino.";
+  document.getElementById("privacy").textContent = "Os endereços e o estado de reprodução são enviados apenas ao aplicativo neste computador. Páginas de vídeo do YouTube são verificadas para identificar replays.";
 }
 async function refresh() {
   const result = await api.runtime.sendMessage({type:"vod-status"});

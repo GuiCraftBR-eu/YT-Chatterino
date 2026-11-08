@@ -26,6 +26,27 @@ QString continuation(const QJsonObject &root, const QString &type) {
     });
     return found;
 }
+
+// Twitch's public replay query omits USERNOTICE tags. Recognize only its known,
+// complete English system-message forms; arbitrary chatter must remain ordinary text.
+void classifyTwitchReplayAlert(Message &m) {
+    if (m.name.isEmpty() || !m.emotes.isEmpty()) return;
+    const QString text = m.text.trimmed();
+    const QString prefix = m.name + ' ';
+    if (!text.startsWith(prefix, Qt::CaseInsensitive)) return;
+    const QString notice = text.mid(prefix.size());
+    static const QRegularExpression subscription(
+        R"(^subscribed (with Prime|at Tier [123])\.(?: They've subscribed for \d+ months?(?:, currently on a \d+ month streak)?!)?$)",
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression gift(
+        R"(^(?:is gifting \d+ Tier [123] Subs to .+ community!|gifted a Tier [123] sub to [^\s!]+!)(?: They've gifted a total of \d+ in the channel!)?$)",
+        QRegularExpression::CaseInsensitiveOption);
+    const auto sub = subscription.match(notice);
+    if (sub.hasMatch()) m.alertKind = sub.captured(1).compare("with Prime", Qt::CaseInsensitive) == 0 ? "prime" : "subscription";
+    else if (gift.match(notice).hasMatch()) m.alertKind = "gift";
+    else return;
+    m.special = "alert"; m.alertText = notice; m.alertBodyStart = m.text.size();
+}
 QDateTime iso(const QJsonValue &value) {
     auto d = QDateTime::fromString(str(value), Qt::ISODateWithMs);
     if (!d.isValid()) d = QDateTime::fromString(str(value), Qt::ISODate);
@@ -100,6 +121,7 @@ void VodReplay::disconnectPlayback() {
     ++epoch;
     retry.stop();
     loading = false;
+    initialized = false;
 }
 
 void VodReplay::fail(const QString &error) {
@@ -250,6 +272,7 @@ void VodReplay::fetch() {
                     if (badge.id == "moderator") badge.role = "moderator";
                     if (!badge.id.isEmpty() && !badge.version.isEmpty()) m.badges << badge;
                 }
+                classifyTwitchReplayAlert(m);
                 const qint64 offset = qMax<qint64>(0, qint64(node["contentOffsetSeconds"].toDouble() * 1000));
                 m.replayOffsetMs = offset; last = qMax(last, offset);
                 if (!m.id.isEmpty() && !m.name.isEmpty()) items << Item{offset, m};
@@ -494,7 +517,10 @@ void VodBridge::hook(Source *source) {
     const QString key = source->key; hooked.insert(key);
     connect(source, &QObject::destroyed, this, [this, key] { hooked.remove(key); });
     connect(source->vodReplay, &VodReplay::available, source, [this, source] {
-        if (!source->closed && !suppressed.contains(source->key)) emit discovered(source);
+        if (!source->closed && !suppressed.contains(source->key)) {
+            if (!source->header["vod_shown"].toBool()) source->vodReplay->disconnectPlayback();
+            emit discovered(source);
+        }
     });
     connect(source->vodReplay, &VodReplay::unavailable, source, [this, source] {
         if (source->viewCaps.isEmpty()) { suppressed.insert(source->key); hub->remove(source); }
@@ -515,6 +541,10 @@ void VodBridge::removePlayer(const QString &player, bool navigation) {
             if (source->vodReplay) source->vodReplay->disconnectPlayback();
             emit source->headerChanged();
         }
+    }
+    if (!players.values().contains(key)) {
+        auto *source = hub->sources.value(key);
+        if (source && source->isVod && !source->header["vod_shown"].toBool()) hub->remove(source);
     }
     if (navigation && !players.values().contains(key)) suppressed.remove(key);
 }
@@ -544,6 +574,8 @@ void VodBridge::processState(const QString &client, const QJsonObject &data) {
     if (!source->header["vod_connected"].toBool()) {
         source->header["vod_connected"] = true; emit source->headerChanged();
     }
+    // Discover a replay once, then fetch messages only while a pane displays it.
+    if (source->vodReplay->announced && !source->header["vod_shown"].toBool()) return;
     source->vodReplay->playback(url, qint64(seconds * 1000), data["paused"].toBool(), data["seek"].toBool());
 }
 
