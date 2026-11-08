@@ -395,5 +395,15 @@
   "Open a supported VOD in the selected browser tab.": "Abra uma VOD compatível na aba selecionada do navegador.",
   "Installation help": "Como instalar",
   "Connected to Twitch VOD replay.": "Conectado ao replay da VOD da Twitch.",
-  "Chrome/Edge: open the browser's Extensions page, enable Developer mode, choose Load unpacked and select the extension folder.\n\nFirefox: open about:debugging, choose This Firefox and Load Temporary Add-on, then select manifest.json. Firefox removes temporary add-ons when it closes.\n\nOpen a VOD, click the extension icon, paste the pairing code and connect this tab.": "Chrome/Edge: abra a página Extensões, ative o modo de desenvolvedor, escolha Carregar sem compactação e selecione a pasta da extensão.\n\nFirefox: abra about:debugging, escolha Este Firefox e Carregar extensão temporária, depois selecione manifest.json. O Firefox remove extensões temporárias ao fechar.\n\nAbra uma VOD, clique no ícone da extensão, cole o código de pareamento e conecte esta aba."
+  "Chrome/Edge: open the browser's Extensions page, enable Developer mode, choose Load unpacked and select the extension folder.\n\nFirefox: open about:debugging, choose This Firefox and Load Temporary Add-on, then select manifest.json. Firefox removes temporary add-ons when it closes.\n\nOpen a VOD, click the extension icon, paste the pairing code and connect this tab.": "Chrome/Edge: abra a página Extensões, ative o modo de desenvolvedor, escolha Carregar sem compactação e selecione a pasta da extensão.\n\nFirefox: abra about:debugging, escolha Este Firefox e Carregar extensão temporária, depois selecione manifest.json. O Firefox remove extensões temporárias ao fechar.\n\nAbra uma VOD, clique no ícone da extensão, cole o código de pareamento e conecte esta aba.",
+  "VOD link": "Link de VOD",
+  "Select open VOD chats": "Selecionar chats de VOD abertos",
+  "Waiting for browser": "Aguardando navegador",
+  "VOD extension setup…": "Configurar extensão de VOD…",
+  "VOD extension setup": "Configuração da extensão de VOD",
+  "Open VOD in browser": "Abrir VOD no navegador",
+  "Copy VOD link": "Copiar link da VOD",
+  "VOD browser connection is unavailable.": "Conexão de VOD com o navegador indisponível.",
+  "VOD replay is read-only.": "O replay de VOD é somente leitura.",
+  "Install the included browser extension. Open a VOD in the browser and its chat will appear automatically.\n\nChrome/Edge: open Extensions, enable Developer mode, choose Load unpacked and select the extension folder.\n\nFirefox: open about:debugging → This Firefox → Load Temporary Add-on and select manifest.json. Repeat after restarting Firefox.\n\nIf updating from 2.4.8, reload the extension once in your browser.": "Instale a extensão incluída. Abra uma VOD no navegador e o chat aparecerá automaticamente.\n\nChrome/Edge: abra Extensões, ative o modo de desenvolvedor, escolha Carregar sem compactação e selecione a pasta da extensão.\n\nFirefox: abra about:debugging → Este Firefox → Carregar extensão temporária e selecione manifest.json. Repita depois de reiniciar o Firefox.\n\nSe estiver atualizando da versão 2.4.8, recarregue a extensão uma vez no navegador."
 }

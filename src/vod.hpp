@@ -17,7 +17,7 @@ class VodReplay : public QObject {
     qint64 position = 0, nextOffset = 0;
     quint64 epoch = 0;
     bool loading = false, ready = false, ended = false, paused = true;
-    bool initialized = false;
+    bool initialized = false, announced = false;
     QElapsedTimer wall;
     QTimer retry;
     QVector<Item> pending;
@@ -25,7 +25,9 @@ class VodReplay : public QObject {
     QString lastCursor;
     int failures = 0;
     static bool identify(const QUrl &url, QString *platform, QString *video, QString *channel);
+    static QString sourceKey(const QUrl &url);
     void playback(const QUrl &url, qint64 offsetMs, bool paused, bool seek);
+    void disconnectPlayback();
     void loadMetadata();
     void fetch();
     void process(QVector<Item> items);
@@ -35,21 +37,29 @@ class VodReplay : public QObject {
     void cleared();
     void message(yc::Message message);
     void status(QString message);
+    void available();
+    void unavailable();
+    void metadata(QJsonObject data);
 };
 
-class VodWindow : public QDialog {
+class VodBridge : public QObject {
     Q_OBJECT
   public:
-    explicit VodWindow(Hub *hub, QWidget *parent = nullptr);
-    ~VodWindow() override;
+    explicit VodBridge(Hub *hub, QObject *parent = nullptr, quint16 port = 37367, bool listen = true);
     Hub *hub;
-    VodReplay replay;
     QWebSocketServer server;
-    QPointer<QWebSocket> peer;
-    QString secret;
-    QLabel *state;
-    QLineEdit *pairing;
-    ChatView *view;
+    QHash<QWebSocket *, QString> clients;
+    QHash<QString, QString> players, owners;
+    QSet<QString> suppressed, hooked;
+    static bool allowedOrigin(const QString &origin);
     void acceptConnection();
+    void processState(const QString &client, const QJsonObject &data);
+    void removePlayer(const QString &player, bool navigation = false);
+    void disconnectClient(const QString &client);
+    void suppress(const QString &key);
+    void allow(const QString &key);
+    void hook(Source *source);
+  signals:
+    void discovered(yc::Source *source);
 };
 } // namespace yc

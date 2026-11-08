@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.9
+
+- Replay de VOD em abas e chats misturados, com detecção automática no navegador e sem códigos de conexão.
+- Carregamento dos distintivos globais e do canal em VODs da Twitch.
+- Sincronização independente de cada vídeo, incluindo pausa e saltos, mantendo os replays somente para leitura.
+
 ## 2.4.8
 
 - Replay de chat de VOD da Twitch, YouTube e Kick em beta, sincronizado com o navegador por uma extensão local.

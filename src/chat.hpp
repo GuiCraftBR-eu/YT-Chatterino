@@ -4,13 +4,18 @@
 
 namespace yc {
 class Hub;
+class VodReplay;
 
 class Source : public QObject {
     Q_OBJECT
   public:
-    Source(Hub *hub, QString platform, QString id);
+    Source(Hub *hub, QString platform, QString id, bool vod = false);
     Hub *hub;
     QString platform, id, key;
+    bool isVod = false;
+    quint32 vodRevision = 0;
+    QUrl vodUrl;
+    QPointer<VodReplay> vodReplay;
     QJsonObject header;
     QJsonObject pinned, activePoll, activePrediction;
     QJsonObject chatModes;
@@ -168,9 +173,15 @@ class Hub : public QObject {
     Images *images;
     Quota *quota;
     QHash<QString, Source *> sources;
+    QHash<QString, QUrl> knownVodUrls;
     TwitchConnection twitch;
     qint64 sequence = 0;
     QHash<QString, Span> globals;
+    QHash<QString, Badge> vodGlobalBadges;
+    QHash<QString, QHash<QString, Badge>> vodChannelBadges;
+    QHash<QString, QJsonObject> vodBadgeProfiles;
+    QSet<QString> vodBadgePending;
+    bool vodGlobalBadgesReady = false, vodGlobalBadgesPending = false;
     QHash<QString, QString> twitchAvatarUrls;
     QHash<QString, qint64> twitchAvatarRetry;
     QSet<QString> twitchAvatarPending;
@@ -190,6 +201,9 @@ class Hub : public QObject {
     int youtubeRateDelay = 120000;
     int youtubeCooldownRemaining() const;
     Source *source(QString platform, QString id);
+    Source *vodSource(const QUrl &url);
+    void loadVodBadges(Source *source);
+    void applyVodBadges(Source *source);
     void remove(Source *source);
     void globalEmotes();
     void requestTwitchAvatars(const QStringList &logins);

@@ -1,12 +1,9 @@
 {
   "manifest_version": 3,
   "name": "YT-Chatterino VOD Sync",
-  "version": "2.4.8",
+  "version": "2.4.9",
   "description": "Synchronize local YT-Chatterino VOD chat with the video in this browser tab.",
-  "permissions": [
-    "activeTab",
-    "storage"
-  ],
+  "permissions": [],
   "host_permissions": [
     "http://127.0.0.1/*"
   ],

@@ -156,7 +156,7 @@ class Pane : public QWidget {
     QList<QPointer<Source>> sources;
     QString uid;
     bool detached;
-    QWidget *header, *replyBar, *searchBar, *decorations, *headerResize;
+    QWidget *header, *replyBar, *searchBar, *decorations, *headerResize, *composer;
     QLabel *headerText, *headerIcon, *replyLabel, *countLabel, *searchCount;
     QLabel *chatModesLabel;
     QWidget *mixedHeader;

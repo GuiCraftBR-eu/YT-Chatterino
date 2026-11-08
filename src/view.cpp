@@ -481,6 +481,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
                 badge = full;
             }
         }
+        if (source && source->isVod && badge.urls.isEmpty() && badge.role != "owner" &&
+            badge.role != "moderator" && badge.role != "subscriber" && badge.role != "vip") continue;
         QString label = badge.label;
         if (label.isEmpty() || (label.startsWith('[') && label.endsWith(']'))) {
             if (badge.role == "owner") label = hub->cfg->T(source && source->platform == "twitch" ? "Broadcaster" : "Owner");
@@ -1105,7 +1107,7 @@ void ChatView::contextMenuEvent(QContextMenuEvent *e) {
 
 bool ChatView::canReply(const Message &message) const {
     auto *source = hub->sources.value(message.source);
-    return source && (source->platform == "twitch" || source->platform == "kick") && !message.id.isEmpty() && !message.system &&
+    return source && !source->isVod && (source->platform == "twitch" || source->platform == "kick") && !message.id.isEmpty() && !message.system &&
            !message.deleted;
 }
 
@@ -1756,7 +1758,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     layout->addWidget(replyBar);
     replyBar->hide();
     connect(cancel, &QToolButton::clicked, this, &Pane::cancelReply);
-    auto *composer = new QWidget(this);
+    composer = new QWidget(this);
     composer->setStyleSheet("background:#111111;");
     auto *cl = new QHBoxLayout(composer);
     cl->setContentsMargins(4, 3, 4, 3);
@@ -1937,8 +1939,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
 }
 
 Source *Pane::targetSource() const {
-    int i = target->currentIndex();
-    return i >= 0 && i < sources.size() ? sources[i].data() : nullptr;
+    return hub->sources.value(target->currentData().toString());
 }
 
 Pane::~Pane() {
@@ -1975,7 +1976,7 @@ void Pane::setSources(QList<Source *> list) {
         }
         sources << s;
         s->viewCaps[reinterpret_cast<quintptr>(this)] = hub->cfg->cap(key());
-        target->addItem((s->platform == "twitch" ? "TW · " : s->platform == "kick" ? "K · " : "YT · ") + s->name(), s->key);
+        if (!s->isVod) target->addItem((s->platform == "twitch" ? "TW · " : s->platform == "kick" ? "K · " : "YT · ") + s->name(), s->key);
         connect(s, &Source::message, this, [this, s](Message m) { incoming(s, m); });
         connect(s, &Source::changed, this, [this] {
             refresh();
@@ -2001,7 +2002,8 @@ void Pane::setSources(QList<Source *> list) {
             }
         });
     }
-    target->setVisible(!detached && sources.size() > 1);
+    target->setVisible(!detached && target->count() > 1);
+    composer->setVisible(target->count() > 0);
     filter = hub->cfg->data["chat_filters"].toObject()[key()].toObject();
     view->messageCap = hub->cfg->cap(key());
     view->mixed = sources.size() > 1;
@@ -2020,7 +2022,7 @@ void Pane::setSources(QList<Source *> list) {
 void Pane::refreshChatModes() {
     QStringList labels;
     for (auto source : sources) {
-        if (!source || source->closed) continue;
+        if (!source || source->closed || source->isVod) continue;
         const auto label = source->chatModeSummary();
         labels << (sources.size() > 1 ? source->name() + ": " + label : label);
     }
@@ -2087,6 +2089,15 @@ void Pane::refresh() {
     const auto appearance = hub->cfg->appearance();
     for (auto source : sources) {
         if (source) {
+            if (source->isVod) {
+                QStringList parts{hub->cfg->T("VOD")};
+                const auto title = str(source->header["title"]);
+                if (!title.isEmpty() && title != "VOD") parts << title;
+                if (!source->header["vod_connected"].toBool()) parts << hub->cfg->T("Waiting for browser");
+                titles << parts.join(" - ");
+                fullTitles << source->name() + " — " + parts.join(" - ");
+                continue;
+            }
             QString count;
             if (source->header.contains("live") && !source->header["live"].toBool()) {
                 count = hub->cfg->T("Offline");
@@ -2175,11 +2186,10 @@ void Pane::refresh() {
         headerIcon->setPixmap(QPixmap::fromImage(channelIcon(sources[0], hub->images, 20)));
     }
     int selected = target->currentIndex();
-    for (int i = 0; i < sources.size(); ++i) {
-        if (sources[i]) {
-            target->setItemText(i,
-                                (sources[i]->platform == "twitch" ? "TW · " : sources[i]->platform == "kick" ? "K · " : "YT · ") + sources[i]->name());
-        }
+    for (int i = 0; i < target->count(); ++i) {
+        auto *source = hub->sources.value(target->itemData(i).toString());
+        if (source) target->setItemText(i,
+            (source->platform == "twitch" ? "TW · " : source->platform == "kick" ? "K · " : "YT · ") + source->name());
     }
     if (selected >= 0) {
         target->setCurrentIndex(selected);
@@ -2205,12 +2215,11 @@ void Pane::reload() {
 }
 
 void Pane::incoming(Source *s, Message m) {
-    Q_UNUSED(s)
     if (detached && !threadId.isEmpty()) {
         return;
     }
     if (accepts(m, filter, hub->cfg) && (!extraFilter || extraFilter(m))) {
-        if (m.history) historyReload.start(0);
+        if (m.history && (!s || !s->isVod)) historyReload.start(0);
         else view->append(m);
     }
 }
@@ -2250,10 +2259,10 @@ void Pane::send() {
 
 void Pane::startReply(Message m) {
     auto s = hub->sources.value(m.source);
-    if (!s || (s->platform != "twitch" && s->platform != "kick") || m.id.isEmpty() || m.deleted) {
+    if (!s || s->isVod || (s->platform != "twitch" && s->platform != "kick") || m.id.isEmpty() || m.deleted) {
         return;
     }
-    target->setCurrentIndex(sources.indexOf(s));
+    target->setCurrentIndex(target->findData(s->key));
     reply = m;
     replyLabel->setText(
         hub->cfg->T("Replying to @{name}: {body}",
@@ -2821,6 +2830,8 @@ QWidget *Workspace::restoreNode(const QJsonObject &node, int depth) {
                     hub->source("twitch", key.mid(7));
                 } else if (key.startsWith("kick:") && kickLogin(key) == key.mid(5)) {
                     hub->source("kick", key.mid(5));
+                } else if (key.startsWith("vod:") && hub->knownVodUrls.contains(key)) {
+                    hub->vodSource(hub->knownVodUrls.value(key));
                 } else if (videoId(key) == key) {
                     hub->source("youtube", key);
                 }

@@ -128,7 +128,7 @@ function messageRow(m, inThread = false, stripe = false) {
     if (m.seq) { name.type = 'button'; name.addEventListener('click', () => showDetail('user-history', m)); }
     body.append(name); content(body, m, offset);
     if (m.deletionLabel) body.append(node('span', ' · ' + m.deletionLabel, 'deletion-reason'));
-    if (m.seq && source && (source.platform === 'twitch' || source.platform === 'kick') && !m.deleted) {
+    if (m.seq && source && !source.readOnly && (source.platform === 'twitch' || source.platform === 'kick') && !m.deleted) {
       const reply = node('button', '↩', 'action'); reply.type = 'button'; reply.title = t('Reply');
       reply.addEventListener('click', () => { closeDetail(); selectChannel(m.source); replySeq = m.seq; $('reply-text').textContent = t('Replying to ') + m.name + ': ' + m.text.slice(offset, 120); $('reply').hidden = false; $('message').focus(); }); body.append(reply);
     }
@@ -149,11 +149,12 @@ function messageRow(m, inThread = false, stripe = false) {
 }
 function updateSources(next) {
   const select = $('channel'), old = select.value;
-  const signature = JSON.stringify(next.map(s => [s.key,s.name,s.platform,s.avatar,s.moderate,s.canBan,s.canDelete,s.editable,s.title,s.category,s.modes]));
-  if (signature === JSON.stringify(sources.map(s => [s.key,s.name,s.platform,s.avatar,s.moderate,s.canBan,s.canDelete,s.editable,s.title,s.category,s.modes]))) return;
+  const signature = JSON.stringify(next.map(s => [s.key,s.name,s.platform,s.avatar,s.readOnly,s.moderate,s.canBan,s.canDelete,s.editable,s.title,s.category,s.modes]));
+  if (signature === JSON.stringify(sources.map(s => [s.key,s.name,s.platform,s.avatar,s.readOnly,s.moderate,s.canBan,s.canDelete,s.editable,s.title,s.category,s.modes]))) return;
   sources = next; select.replaceChildren();
-  for (const source of sources) { const option = node('option', source.name); option.value = source.key; select.append(option); }
-  select.hidden = sources.length <= 1; selectChannel(old);
+  const writable = sources.filter(source => !source.readOnly);
+  for (const source of writable) { const option = node('option', source.name); option.value = source.key; select.append(option); }
+  select.hidden = writable.length <= 1; $('send-form').hidden = writable.length === 0; selectChannel(old);
 }
 async function poll() {
   if (polling || $('chat').hidden) return;
