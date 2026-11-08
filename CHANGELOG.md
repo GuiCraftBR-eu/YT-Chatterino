@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.0
+
+- VODs detectadas podem ser abertas e reabertas pelo botão +, sem criar abas automaticamente.
+- Inscrições e presentes reconhecidos no replay da Twitch aparecem como alertas, com limites das informações fornecidas pela plataforma.
+- Extensão do Firefox assinada, com suporte a atualizações futuras; o replay sai da fase beta.
+
 ## 2.4.9
 
 - Replay de VOD em abas e chats misturados, com detecção automática no navegador e sem códigos de conexão.

@@ -52,17 +52,20 @@ void NativeTests::vodAutomaticTabsMixAndBadges() {
         app->vodBridge->processState(client, {{"tab",tab},{"url","https://www.twitch.tv/videos/"+video},
                                              {"seconds",seconds},{"paused",true},{"seek",seek}});
     };
+    const int initialTabs = app->tabs->count();
     state(1,"111",12.5); state(2,"222",12.5);
     auto *first = app->hub.sources.value("vod:twitch:111");
     auto *second = app->hub.sources.value("vod:twitch:222");
-    QVERIFY(first && second && first != second); QCOMPARE(app->tabs->count(), 2);
+    QVERIFY(first && second && first != second); QCOMPARE(app->tabs->count(), initialTabs);
     QCOMPARE(globalRequests, 1); QCOMPARE(channelRequests, 2);
     QCOMPARE(first->name(), "Channel 101"); QCOMPARE(second->name(), "Channel 202");
+    QVERIFY(first->history.isEmpty()); QVERIFY(second->history.isEmpty());
+    auto *mixed = app->addWorkspace({first, second})->focusedPane.data();
+    state(1,"111",12.5); state(2,"222",12.5);
     QCOMPARE(first->history.size(), 1); QCOMPARE(second->history.size(), 1);
     QCOMPARE(first->history[0].badges.size(), 2);
     QCOMPARE(first->badges.value("premium/1").urls.value(0), "https://static-cdn.jtvnw.net/badges/v1/global/2");
     QCOMPARE(first->badges.value("subscriber/1").urls.value(0), "https://static-cdn.jtvnw.net/badges/v1/101/2");
-    auto *mixed = app->addWorkspace({first, second})->focusedPane.data();
     QVERIFY(mixed && mixed->view->mixed); QCOMPARE(mixed->view->messages.size(), 2);
     QVERIFY(mixed->composer->isHidden()); QCOMPARE(mixed->target->count(), 0);
     auto *withLive = app->addWorkspace({first, twitch, second})->focusedPane.data();

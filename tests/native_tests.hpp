@@ -30,6 +30,8 @@ class NativeTests : public QObject {
     void deletionReasonsOnPhone();
     void settingsLayoutNavigationAndApply();
     void notificationIconsAreCenteredAndConsistent();
+    void replayAlertsUseEventCards();
+    void detectedVodCanBeReopened();
     void vodAutomaticTabsMixAndBadges();
     void vodSessionRestoreAndSuppression();
     void vodBrowserOriginsAndReadOnlyModes();

@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.4.9 — WINDOWS 11 x64
+YT-CHATTERINO 2.5.0 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.4.9.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.5.0.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -38,20 +38,21 @@ JSON, then Sign in to YouTube. The illustrated guide is in Settings > Accounts. 
 You must have the channel's actual moderation/owner permission. More steps are in Tutorial.
 Do not share your JSON, account tokens or profile with friends. Share only this clean ZIP.
 
-VOD CHAT REPLAY (BETA)
+VOD CHAT REPLAY
 1. In the app, click + > VOD extension setup and open the extension folder.
 2. In Chrome/Edge, open Extensions, enable Developer mode and Load unpacked, selecting
-   the browser-extension folder. In Firefox open about:debugging, select This Firefox >
-   Load Temporary Add-on and choose manifest.json. Firefox removes temporary add-ons when
-   the browser closes, so repeat the installation after restarting it.
-3. Play a supported VOD. With the app open, its chat appears automatically as a normal tab,
-   without a code. Pausing and seeking keep chat synchronized. To mix chats, play the VODs,
+   the browser-extension folder. For Firefox, download the signed XPI from the GitHub
+   release and use about:addons > gear > Install Add-on From File. Install this version
+   once to receive future signed updates automatically.
+3. Play a supported VOD. In the app, click +, select the detected VOD and click Open. Closing
+   the chat leaves it available to reopen while the video stays open. Pausing and seeking keep
+   chat synchronized. To mix chats, play the VODs,
    click +, choose Mixed feed and select the open VOD chats. You can also select VOD link
    and add links manually. After upgrading from the previous version, reload the updated
    extension folder in your browser.
 Replay is read-only and depends on the platform retaining and exposing the chat. It uses
 unofficial public interfaces and may fail, be rate-limited or omit messages/emotes.
-The extension sends detected VOD URLs and playback state only to the local app.
+The extension sends YouTube watch-page and Twitch/Kick VOD URLs and playback state to the local app.
 
 OPEN ON PHONE
 Right-click the tab, select the pane and Open on phone. Choose the local network,

@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.4.9 — WINDOWS 11 x64
+YT-CHATTERINO 2.5.0 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.4.9.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.5.0.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -39,20 +39,22 @@ o JSON e clique em Entrar no YouTube. O guia com imagens fica em Configurações
 Você precisa ter permissão real de moderador/dono no canal. Há mais instruções no Tutorial.
 Não compartilhe seu JSON, tokens nem perfil com amigos. Compartilhe somente este ZIP limpo.
 
-REPLAY DE CHAT DE VOD (BETA)
+REPLAY DE CHAT DE VOD
 1. No app, clique em + > Configurar extensão de VOD e abra a pasta da extensão.
 2. No Chrome/Edge, abra Extensões, ative o modo de desenvolvedor e use Carregar sem
-   compactação para selecionar a pasta browser-extension. No Firefox, abra about:debugging,
-   escolha Este Firefox > Carregar extensão temporária e selecione manifest.json. No Firefox,
-   a instalação temporária precisa ser repetida ao fechar o navegador.
-3. Abra e reproduza uma VOD compatível. Com o app aberto, o chat aparece automaticamente
-   em uma aba normal, sem código. Pause ou avance o vídeo e o chat acompanha. Para misturar,
+   compactação para selecionar a pasta browser-extension. Para Firefox, baixe o XPI assinado
+   na release do GitHub; em about:addons, clique na engrenagem > Instalar extensão de arquivo.
+   Instale essa versão uma vez para receber automaticamente as próximas versões assinadas.
+3. Abra e reproduza uma VOD compatível. No app, clique em +, selecione a VOD detectada
+   e clique em Abrir. Ao fechar o chat, a VOD ainda pode ser selecionada enquanto o vídeo
+   estiver aberto. Pause ou avance o vídeo e o chat acompanha. Para misturar,
    abra as VODs no navegador, clique em +, escolha Chat misturado e marque as VODs abertas.
    Também é possível selecionar Link de VOD e adicionar links manualmente. Na primeira
    atualização a partir da versão anterior, carregue novamente a pasta da extensão atualizada.
 O replay é somente leitura e depende de a plataforma ter guardado e disponibilizado o chat.
 Usa interfaces públicas não oficiais e pode falhar, ser limitado ou omitir mensagens/emotes.
-A extensão envia os endereços das VODs detectadas e o estado de reprodução ao app local.
+A extensão envia os endereços de páginas de vídeo do YouTube e VODs da Twitch/Kick e o
+estado da reprodução ao app local, para identificar e sincronizar replays.
 
 ABRIR NO CELULAR
 Clique com o direito na aba, escolha o painel e Abrir no celular. Selecione
