@@ -177,7 +177,7 @@ void VodReplay::fetch() {
     };
     if (platform == "twitch") {
         QJsonObject vars{{"videoID", video}};
-        if (cursor.isEmpty()) vars["contentOffsetSeconds"] = double(nextOffset) / 1000.0;
+        if (cursor.isEmpty()) vars["contentOffsetSeconds"] = int(nextOffset / 1000);
         else vars["cursor"] = cursor;
         QJsonObject body{{"operationName", "VideoCommentsByOffsetOrCursor"}, {"variables", vars},
                          {"extensions", QJsonObject{{"persistedQuery", QJsonObject{{"version", 1}, {"sha256Hash", twitchQuery}}}}}};

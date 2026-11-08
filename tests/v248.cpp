@@ -22,6 +22,7 @@ void NativeTests::vodTwitchPlaybackAndSeek() {
         QVERIFY(headers.contains("Client-ID")); QVERIFY(!headers.contains("Authorization"));
         auto vars = QJsonDocument::fromJson(body).object()["variables"].toObject();
         QCOMPARE(str(vars["videoID"]), QString("12345")); ++requests;
+        QCOMPARE(vars["contentOffsetSeconds"].toDouble(), double(vars["contentOffsetSeconds"].toInt()));
         const int start = vars["contentOffsetSeconds"].toInt();
         QJsonArray edges;
         for (int offset : (start < 30 ? QList<int>{11,13} : QList<int>{49,51})) {
@@ -37,10 +38,10 @@ void NativeTests::vodTwitchPlaybackAndSeek() {
     VodReplay vod(&app->hub);
     QSignalSpy messages(&vod, &VodReplay::message), cleared(&vod, &VodReplay::cleared);
     const QUrl url("https://www.twitch.tv/videos/12345");
-    vod.playback(url, 12000, true, false);
+    vod.playback(url, 12037, true, false);
     QCOMPARE(cleared.size(), 1); QCOMPARE(messages.size(), 1); QCOMPARE(requests, 1);
     auto first = qvariant_cast<Message>(messages[0][0]); QCOMPARE(first.text, "at 11"); QCOMPARE(first.replayOffsetMs, 11000);
-    vod.playback(url, 12000, true, false); QCOMPARE(messages.size(), 1);
+    vod.playback(url, 12037, true, false); QCOMPARE(messages.size(), 1);
     vod.playback(url, 13000, false, false); QCOMPARE(messages.size(), 2);
     vod.playback(url, 50000, true, true); QCOMPARE(cleared.size(), 2); QCOMPARE(messages.size(), 3);
     QCOMPARE(qvariant_cast<Message>(messages[2][0]).text, "at 49");
