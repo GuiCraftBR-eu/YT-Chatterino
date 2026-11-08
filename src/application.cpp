@@ -1,5 +1,6 @@
 #include "application.hpp"
 #include "phone.hpp"
+#include "vod.hpp"
 #include "vendor/qrcodegen.hpp"
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -469,6 +470,10 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Open | QDialogButtonBox::Cancel, dialog);
     buttons->button(QDialogButtonBox::Open)->setText(cfg.T("Open"));
     buttons->button(QDialogButtonBox::Cancel)->setText(cfg.T("Cancel"));
+    auto *vod = new QPushButton(cfg.T("Open VOD chat replay (Beta)…"), dialog);
+    vod->setObjectName("add-vod-replay");
+    layout->addWidget(vod);
+    connect(vod, &QPushButton::clicked, dialog, [this, dialog] { dialog->accept(); showVod(); });
     layout->addWidget(buttons);
     QPointer<Pane> safe(anchor);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
@@ -828,6 +833,8 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     menu.addSeparator();
     menu.addAction(cfg.T("Search messages…") + "\tCtrl+F", p, &Pane::showSearch);
     auto *historyMenu = menu.addMenu(cfg.T("Filters and history"));
+    auto *vod = historyMenu->addAction(cfg.T("Open VOD chat replay (Beta)…"), this, &MainWindow::showVod);
+    vod->setObjectName("open-vod-replay");
     auto *layoutMenu = menu.addMenu(cfg.T("Layout"));
     menu.addAction(cfg.T("Rename tab…"), this, [this] {
         if (auto *w = current()) {
@@ -905,6 +912,11 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
         }
         QTimer::singleShot(0, this, &MainWindow::pruneSources);
     });
+}
+
+void MainWindow::showVod() {
+    auto *window = new VodWindow(&hub, this);
+    window->show();
 }
 
 void MainWindow::showPhone(Pane *target) {
@@ -1841,6 +1853,7 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
     followDetails->setObjectName("user-card-follow-date");
     followDetails->setWordWrap(true);
     info->addWidget(followDetails);
+    followDetails->hide();
     auto *followButton = button(cfg, "Enable follow dates", d, [] {});
     followButton->setObjectName("user-card-follow-permission");
     followButton->hide();
@@ -1989,31 +2002,18 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
                     auto refreshFollow = [this, safe, source, followDetails, followButton, profileId] {
                         if (!safe || !source) return;
                         followButton->hide();
-                        followDetails->setText(cfg.T("Checking follow date…"));
+                        followDetails->hide();
                         hub.followSince(source, profileId, [this, safe, source, followDetails, followButton](QJsonObject result, QString) {
                             if (!safe || !source) return;
                             const QString status = str(result["status"]);
-                            const bool youtube = source->platform == "youtube";
-                            if (status == "following") {
+                            if (status == "following" && !str(result["date"]).isEmpty()) {
+                                const bool youtube = source->platform == "youtube";
                                 followDetails->setText(cfg.T(youtube ? "Subscribed since: {date}" : "Following since: {date}",
                                                              {{"date", cfg.date(str(result["date"]))}}));
-                            } else if (status == "not_following") {
-                                followDetails->setText(cfg.T("Not following this channel"));
-                            } else if (status == "broadcaster") {
-                                followDetails->setText(cfg.T("Channel owner"));
+                                followDetails->show();
                             } else if (status == "permission") {
-                                followDetails->setText(cfg.T(result["own"].toBool()
-                                    ? "Enable permission to see your follow date."
-                                    : "Follow dates are available to this channel's owner and moderators."));
                                 followButton->setProperty("scope", result["scope"].toString());
                                 followButton->show();
-                            } else if (status == "moderator_only") {
-                                followDetails->setText(cfg.T("Follow dates are available to this channel's owner and moderators."));
-                            } else if (status == "sign_in") {
-                                followDetails->setText(cfg.T(youtube ? "Sign in to YouTube to check public subscription dates."
-                                                                    : "Sign in to Twitch to check follow dates."));
-                            } else {
-                                followDetails->setText(cfg.T(youtube ? "Subscription date unavailable" : "Follow date unavailable"));
                             }
                         });
                     };
@@ -2026,7 +2026,7 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
                         accounts.requireTwitch(requested, [this, safe, followButton, followDetails, refreshFollow](QString, QString error) {
                             if (!safe) return;
                             followButton->setEnabled(true);
-                            if (!error.isEmpty()) { followDetails->setText(cfg.T(error)); return; }
+                            if (!error.isEmpty()) { followDetails->setText(cfg.T(error)); followDetails->show(); return; }
                             refreshFollow();
                         });
                     });

@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.4.7 — WINDOWS 11 x64
+YT-CHATTERINO 2.4.8 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.4.7.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.4.8.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -37,6 +37,19 @@ create an OAuth client of type Desktop app; download its JSON. In Accounts choos
 JSON, then Sign in to YouTube. The illustrated guide is in Settings > Accounts. If the OAuth app is in Testing, add the exact Google account used to sign in under Audience > Test users; this is required.
 You must have the channel's actual moderation/owner permission. More steps are in Tutorial.
 Do not share your JSON, account tokens or profile with friends. Share only this clean ZIP.
+
+VOD CHAT REPLAY (BETA)
+1. In the app, click + > Open VOD chat replay (Beta). Open the extension folder.
+2. In Chrome/Edge, open Extensions, enable Developer mode and Load unpacked, selecting
+   the browser-extension folder. In Firefox open about:debugging, select This Firefox >
+   Load Temporary Add-on and choose manifest.json. Firefox removes temporary add-ons when
+   the browser closes, so repeat the installation after restarting it.
+3. Open a supported VOD. Click the extension icon, paste the code from the app and connect
+   this tab. Leave the replay window open. Pause or seek the video normally; chat follows it.
+   A new replay window uses a new pairing code.
+Replay is read-only and depends on the platform retaining and exposing the chat. It uses
+unofficial public interfaces and may fail, be rate-limited or omit messages/emotes.
+The extension sends only the selected tab's URL and video position to the local app.
 
 OPEN ON PHONE
 Right-click the tab, select the pane and Open on phone. Choose the local network,

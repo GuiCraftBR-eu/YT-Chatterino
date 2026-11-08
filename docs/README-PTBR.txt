@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.4.7 — WINDOWS 11 x64
+YT-CHATTERINO 2.4.8 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.4.7.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.4.8.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -38,6 +38,19 @@ crie um cliente OAuth do tipo Aplicativo para computador; baixe o JSON. Em Conta
 o JSON e clique em Entrar no YouTube. O guia com imagens fica em Configurações > Contas. Se o app OAuth estiver em teste, adicione obrigatoriamente a conta Google exata usada no login em Público-alvo > Usuários de teste.
 Você precisa ter permissão real de moderador/dono no canal. Há mais instruções no Tutorial.
 Não compartilhe seu JSON, tokens nem perfil com amigos. Compartilhe somente este ZIP limpo.
+
+REPLAY DE CHAT DE VOD (BETA)
+1. No app, clique em + > Abrir replay do chat de VOD (Beta). Abra a pasta da extensão.
+2. No Chrome/Edge, abra Extensões, ative o modo de desenvolvedor e use Carregar sem
+   compactação para selecionar a pasta browser-extension. No Firefox, abra about:debugging,
+   escolha Este Firefox > Carregar extensão temporária e selecione manifest.json. No Firefox,
+   a instalação temporária precisa ser repetida ao fechar o navegador.
+3. Abra uma VOD compatível no navegador. Clique no ícone da extensão, cole o código da janela
+   do app e escolha Conectar esta aba. Mantenha a janela de replay aberta. Pause ou mova
+   o vídeo normalmente; o chat acompanha. Para outra janela de replay, use o novo código.
+O replay é somente leitura e depende de a plataforma ter guardado e disponibilizado o chat.
+Usa interfaces públicas não oficiais e pode falhar, ser limitado ou omitir mensagens/emotes.
+A extensão envia somente o endereço da aba selecionada e a posição do vídeo ao app local.
 
 ABRIR NO CELULAR
 Clique com o direito na aba, escolha o painel e Abrir no celular. Selecione

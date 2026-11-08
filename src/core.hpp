@@ -97,7 +97,7 @@ struct Message {
     QVector<MentionSpan> mentions;
     QJsonObject reply;
     QString badgeInfo;
-    qint64 seq = 0, deletionDuration = 0;
+    qint64 seq = 0, deletionDuration = 0, replayOffsetMs = -1;
     bool history = false, deleted = false, own = false, system = false;
     QJsonObject json() const;
     static Message fromJson(const QJsonObject &o);

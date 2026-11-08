@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.8
+
+- Replay de chat de VOD da Twitch, YouTube e Kick em beta, sincronizado com o navegador por uma extensão local.
+- Oculta datas de seguimento indisponíveis e padroniza o tamanho e alinhamento dos ícones de notificações.
+
 ## 2.2.4
 
 - Corrige reconexões repetidas e deixa o chat ao vivo independente do carregamento do histórico da Twitch.

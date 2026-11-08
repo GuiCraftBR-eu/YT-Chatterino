@@ -531,6 +531,7 @@ QJsonObject Message::json() const {
             {"mentions", ms},
             {"sent_at", stamp.isValid() ? stamp.toMSecsSinceEpoch() / 1000.0 : 0},
             {"_seq", seq},
+            {"replay_offset_ms", double(replayOffsetMs)},
             {"deleted", deleted},
             {"deletion_reason", deletionReason},
             {"deletion_duration", double(deletionDuration)},
@@ -558,6 +559,7 @@ Message Message::fromJson(const QJsonObject &o) {
     m.reply = o["reply"].toObject();
     m.badgeInfo = str(o["badge_info"]);
     m.seq = o["_seq"].toInteger();
+    m.replayOffsetMs = o.contains("replay_offset_ms") ? o["replay_offset_ms"].toInteger(-1) : -1;
     m.deleted = o["deleted"].toBool();
     m.deletionReason = str(o["deletion_reason"]);
     m.deletionDuration = qMax<qint64>(0, o["deletion_duration"].toInteger());
@@ -967,11 +969,35 @@ QImage primeCrown() {
     return crown;
 }
 
+static QImage centeredAlertIcon(const QImage &source) {
+    if (source.isNull()) return {};
+    int left = source.width(), top = source.height(), right = -1, bottom = -1;
+    for (int y = 0; y < source.height(); ++y) {
+        for (int x = 0; x < source.width(); ++x) {
+            if (qAlpha(source.pixel(x, y)) < 3) continue;
+            left = qMin(left, x); top = qMin(top, y);
+            right = qMax(right, x); bottom = qMax(bottom, y);
+        }
+    }
+    if (right < left) return {};
+    const auto cropped = source.copy(left, top, right - left + 1, bottom - top + 1);
+    const auto fitted = cropped.scaled(54, 54, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QImage canvas(64, 64, QImage::Format_ARGB32_Premultiplied);
+    canvas.fill(Qt::transparent);
+    QPainter painter(&canvas);
+    painter.drawImage((64 - fitted.width()) / 2, (64 - fitted.height()) / 2, fitted);
+    return canvas;
+}
+
 QImage alertIcon(const QString &kind) {
-    if (kind == "prime") return primeCrown();
-    const QString key = QStringList{"subscription", "reward", "money", "gift", "bits"}.contains(kind) ? kind : "other";
+    const QString key = QStringList{"prime", "subscription", "reward", "money", "gift", "bits"}.contains(kind) ? kind : "other";
     static QHash<QString, QImage> cache;
     if (cache.contains(key)) return cache.value(key);
+    if (key == "prime") {
+        const auto icon = centeredAlertIcon(primeCrown());
+        cache.insert(key, icon);
+        return icon;
+    }
     QImage image(64, 64, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
     QPainter p(&image); p.setRenderHint(QPainter::Antialiasing);
@@ -1009,7 +1035,10 @@ QImage alertIcon(const QString &kind) {
         spark.quadTo(37, 38, 32, 61); spark.quadTo(27, 38, 4, 32); spark.quadTo(27, 26, 32, 3);
         p.drawPath(spark);
     }
-    p.end(); cache.insert(key, image); return image;
+    p.end();
+    const auto icon = centeredAlertIcon(image);
+    cache.insert(key, icon);
+    return icon;
 }
 
 QString visibleAlertText(const Message &m, const Config &cfg) {

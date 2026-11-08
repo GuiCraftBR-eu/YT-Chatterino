@@ -43,6 +43,7 @@ class MainWindow : public QMainWindow {
     void gearMenu();
     void paneMenu(Pane *pane, QPoint position);
     void showPhone(Pane *pane);
+    void showVod();
     void populatePaneMenu(QMenu &menu, Pane *pane);
     void tabMenu(int index, QPoint position);
     void messageMenu(Pane *pane, Message message, QPoint position);

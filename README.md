@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.4.7](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.7) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.4.8](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.8) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.4.7 | Instalação |
+| Sistema | Download da versão 2.4.8 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.7/YT-Chatterino-Windows11-2.4.7.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.7/yt-chatterino-2.4.7-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.8/YT-Chatterino-Windows11-2.4.8.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.4.8/yt-chatterino-2.4.8-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.4.7-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.4.8-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.7).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.4.8).
 
 ## Primeiros passos
 
@@ -64,6 +64,12 @@ Mensagens fixadas do YouTube usam os dados disponíveis no chat do site; a API o
 Quando a Kick está offline, a API pode ocultar o título atual. Ao alterar só a categoria, deixe o título em branco para preservá-lo.
 
 Os controles de moderação aparecem quando o app identifica seu cargo no canal. No YouTube de outra pessoa, isso depende de o app receber uma mensagem recente da sua conta com o emblema de moderador. O histórico recente da Twitch depende de um serviço externo e pode estar indisponível; o chat ao vivo continua independente dele.
+
+### Replay de chat de VOD (Beta)
+
+O chat acompanha a posição, a pausa e os saltos da VOD aberta no navegador. Clique em **+ → Abrir replay do chat de VOD (Beta)** e depois em **Como instalar**. No Chrome/Edge, carregue a pasta `browser-extension` sem compactação em Extensões com o modo de desenvolvedor ativo. No Firefox, abra `about:debugging` → **Este Firefox → Carregar extensão temporária** e selecione `manifest.json`; repita a instalação após fechar o navegador. Abra a VOD, clique no ícone da extensão, cole o código da janela do app e conecte a aba.
+
+O replay é somente leitura e depende do chat estar disponível na Twitch, no YouTube ou na Kick. As interfaces públicas não oficiais podem mudar ou limitar o acesso; mensagens ou emotes podem faltar. A extensão envia ao app local somente o endereço da aba selecionada e a posição do vídeo.
 
 ### Controles essenciais
 

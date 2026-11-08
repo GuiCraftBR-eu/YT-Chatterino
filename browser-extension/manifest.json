@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "YT-Chatterino VOD Sync",
+  "version": "2.4.8",
+  "description": "Synchronize local YT-Chatterino VOD chat with the video in this browser tab.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "YT-Chatterino VOD Sync",
+    "default_icon": {
+      "128": "icon.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://www.twitch.tv/*",
+        "https://m.twitch.tv/*",
+        "https://kick.com/*",
+        "https://www.kick.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "vod-sync@yt-chatterino.local",
+      "strict_min_version": "121.0"
+    }
+  },
+  "icons": {
+    "128": "icon.png"
+  }
+}
