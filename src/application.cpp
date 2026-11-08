@@ -141,7 +141,7 @@ MainWindow::MainWindow(QString profile, bool testing)
             [this](const QString &text) { statusBar()->showMessage(cfg.T(text), 12000); });
     connect(&accounts, &Accounts::ready, this, [this] {
         for (auto s : hub.sources) {
-            if (s->platform == "twitch") {
+            if (s->platform == "twitch" && !s->isVod) {
                 s->emoteLoaded.clear();
                 s->globalBadgesLoaded = s->channelBadgesLoaded = 0;
                 s->refreshHeader();
@@ -263,6 +263,7 @@ MainWindow::MainWindow(QString profile, bool testing)
         });
     }
     restoreSession();
+    if (!testMode) startVodBridge();
     applyTopmost();
     refreshLanguage();
     if (!testMode) {
@@ -318,6 +319,17 @@ Workspace *MainWindow::addWorkspace(QList<Source *> sources, QString title) {
 }
 
 void MainWindow::attachPane(Pane *p) {
+    auto markVodSources = [this, p] {
+        for (auto source : p->sources) if (source && source->isVod) {
+            source->header["vod_shown"] = true;
+            if (vodBridge) vodBridge->allow(source->key);
+        }
+    };
+    markVodSources();
+    connect(p, &Pane::sourcesChanged, this, [this, markVodSources] {
+        markVodSources();
+        if (!restoring) { sessionTimer.start(); refreshTabs(); QTimer::singleShot(0, this, &MainWindow::pruneSources); }
+    });
     connect(p, &Pane::headerLinesChanged, this, [this] { sessionTimer.start(); });
     connect(p, &Pane::focused, this, [this](Pane *pane) {
         if (current()) {
@@ -372,7 +384,7 @@ void MainWindow::refreshQuota() {
     bool yt = false;
     if (auto *p = currentPane()) {
         for (auto s : p->sources) {
-            if (s && s->platform == "youtube") {
+            if (s && s->platform == "youtube" && !s->isVod) {
                 yt = true;
             }
         }
@@ -422,7 +434,7 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     auto *entry = new QHBoxLayout;
     auto *platform = new QComboBox(dialog);
     platform->setObjectName("add-chat-platform");
-    platform->addItems({cfg.T("Auto"), "Twitch", "Kick", "YouTube"});
+    platform->addItems({cfg.T("Auto"), "Twitch", "Kick", "YouTube", cfg.T("VOD link")});
     auto *input = new QLineEdit(dialog);
     input->setObjectName("add-chat-input");
     input->setPlaceholderText(cfg.T("Link or name · separate chats with space"));
@@ -464,20 +476,34 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     } else {
         saved->hide();
     }
+    auto *vods = new QListWidget(dialog);
+    vods->setObjectName("add-chat-vods");
+    for (auto *source : hub.sources) {
+        if (!source->isVod || !source->header["vod_shown"].toBool()) continue;
+        auto *row = new QListWidgetItem(source->name() + " · VOD", vods);
+        row->setFlags(row->flags() | Qt::ItemIsUserCheckable);
+        row->setCheckState(Qt::Unchecked);
+        row->setData(Qt::UserRole, source->vodUrl.toString());
+    }
+    if (vods->count()) {
+        vods->setFixedHeight(qMin(150, 6 + 27 * vods->count()));
+        layout->addWidget(label(cfg, "Select open VOD chats"));
+        layout->addWidget(vods);
+    } else vods->hide();
     auto *lookupStatus = new QLabel(cfg.T("Looking for live broadcasts…"), dialog);
     lookupStatus->setObjectName("add-chat-status"); lookupStatus->hide();
     layout->addWidget(lookupStatus);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Open | QDialogButtonBox::Cancel, dialog);
     buttons->button(QDialogButtonBox::Open)->setText(cfg.T("Open"));
     buttons->button(QDialogButtonBox::Cancel)->setText(cfg.T("Cancel"));
-    auto *vod = new QPushButton(cfg.T("Open VOD chat replay (Beta)…"), dialog);
+    auto *vod = new QPushButton(cfg.T("VOD extension setup…"), dialog);
     vod->setObjectName("add-vod-replay");
     layout->addWidget(vod);
     connect(vod, &QPushButton::clicked, dialog, [this, dialog] { dialog->accept(); showVod(); });
     layout->addWidget(buttons);
     QPointer<Pane> safe(anchor);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-    auto open = [this, input, combo, modes, dialog, safe, platform, saved, buttons, lookupStatus] {
+    auto open = [this, input, combo, modes, dialog, safe, platform, saved, vods, buttons, lookupStatus] {
         if (!buttons->button(QDialogButtonBox::Open)->isEnabled()) return;
         QList<QJsonObject> selections;
         QStringList entries;
@@ -492,7 +518,11 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
             const auto video = videoId(entry);
             // An explicit live/video URL always wins over the selected platform and never
             // goes through channel search. Bare 11-character names remain ambiguous.
-            if (!video.isEmpty() && entry != video) { kind = "video"; id = video; }
+            QString vodPlatform, vodId, vodChannel;
+            const bool vodLink = VodReplay::identify(QUrl(entry), &vodPlatform, &vodId, &vodChannel);
+            if (vodLink && (choice == 4 || vodPlatform != "youtube")) { kind = "vod"; id = entry; }
+            else if (choice == 4) { kind = "vod"; id.clear(); }
+            else if (!video.isEmpty() && entry != video) { kind = "video"; id = video; }
             else if (choice == 3) {
                 kind = "youtube"; id = entry;
             } else if (choice == 2) {
@@ -520,6 +550,9 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
         for (int i = 0; i < saved->count(); ++i)
             if (saved->item(i)->checkState() == Qt::Checked)
                 selections << saved->item(i)->data(Qt::UserRole).toJsonObject();
+        for (int i = 0; i < vods->count(); ++i)
+            if (vods->item(i)->checkState() == Qt::Checked)
+                selections << QJsonObject{{"platform", "vod"}, {"channel_id", vods->item(i)->data(Qt::UserRole).toString()}};
         if (selections.isEmpty()) { input->setFocus(); return; }
         if (selections.size() > 32) {
             QMessageBox::warning(dialog, cfg.T("Add chats"), cfg.T("Choose at most 32 chats at a time."));
@@ -538,7 +571,8 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
             while (!state->pending.isEmpty()) {
                 const auto item = state->pending.takeFirst();
                 const auto kind = str(item["platform"]), id = str(item["channel_id"]);
-                if (kind == "twitch") state->links << "twitch:" + id;
+                if (kind == "vod") state->links << "vod|" + id;
+                else if (kind == "twitch") state->links << "twitch:" + id;
                 else if (kind == "kick") state->links << "kick:" + id;
                 else if (kind == "video") state->links << "https://www.youtube.com/watch?v=" + id;
                 else if (kind == "youtube") {
@@ -615,6 +649,13 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
     QList<Source *> list;
     QStringList invalid;
     for (const auto &link : links) {
+        if (link.startsWith("vod|")) {
+            auto *source = hub.vodSource(QUrl(link.mid(4)));
+            if (source) { if (vodBridge) vodBridge->allow(source->key); list << source; }
+            else invalid << link;
+            if (list.size() >= 32) break;
+            continue;
+        }
         QString kick = kickLogin(link), tw = twitchLogin(link), yt = videoId(link);
         if (!kick.isEmpty()) {
             list << hub.source("kick", kick);
@@ -717,7 +758,7 @@ void MainWindow::gearMenu() {
 
 void MainWindow::allPause(bool pause) {
     for (auto s : hub.sources) {
-        if (s->platform == "youtube") {
+        if (s->platform == "youtube" && !s->isVod) {
             s->setPaused(pause);
         }
     }
@@ -738,6 +779,15 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
         if (source) {
             auto *channel = menu.addMenu(QIcon(QPixmap::fromImage(channelIcon(source, &images, 20))),
                                          source->name());
+            if (source->isVod) {
+                channel->addAction(cfg.T("Open VOD in browser"), source, [source] { QDesktopServices::openUrl(source->vodUrl); });
+                channel->addAction(cfg.T("Copy VOD link"), source, [source] { QGuiApplication::clipboard()->setText(source->vodUrl.toString()); });
+                if (p->sources.size() > 1) channel->addAction(cfg.T("Remove from mixed feed"), p, [p, source] {
+                    QList<Source *> keep; for (auto s : p->sources) if (s && s != source) keep << s;
+                    p->setSources(keep);
+                });
+                continue;
+            }
             auto *openStream = channel->addAction(cfg.T("Open stream in browser"), source, [source] {
                 QDesktopServices::openUrl(QUrl(browserUrl(source->platform, source->id, "stream")));
             });
@@ -833,7 +883,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     menu.addSeparator();
     menu.addAction(cfg.T("Search messages…") + "\tCtrl+F", p, &Pane::showSearch);
     auto *historyMenu = menu.addMenu(cfg.T("Filters and history"));
-    auto *vod = historyMenu->addAction(cfg.T("Open VOD chat replay (Beta)…"), this, &MainWindow::showVod);
+    auto *vod = historyMenu->addAction(cfg.T("VOD extension setup…"), this, &MainWindow::showVod);
     vod->setObjectName("open-vod-replay");
     auto *layoutMenu = menu.addMenu(cfg.T("Layout"));
     menu.addAction(cfg.T("Rename tab…"), this, [this] {
@@ -914,9 +964,37 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     });
 }
 
+void MainWindow::startVodBridge(quint16 port) {
+    if (vodBridge) return;
+    vodBridge = new VodBridge(&hub, this, port);
+    connect(vodBridge, &VodBridge::discovered, this, [this](Source *source) {
+        for (int i = 0; i < tabs->count(); ++i)
+            if (auto *workspace = qobject_cast<Workspace *>(tabs->widget(i)))
+                for (auto *pane : workspace->panes()) if (pane->sources.contains(source)) return;
+        addWorkspace({source});
+        source->header["vod_shown"] = true;
+        sessionTimer.start();
+    });
+    if (!vodBridge->server.isListening()) statusBar()->showMessage(cfg.T("VOD browser connection is unavailable."), 10000);
+}
+
 void MainWindow::showVod() {
-    auto *window = new VodWindow(&hub, this);
-    window->show();
+    QMessageBox box(QMessageBox::Information, cfg.T("VOD extension setup"),
+        cfg.T("Install the included browser extension. Open a VOD in the browser and its chat will appear automatically.\n\n"
+              "Chrome/Edge: open Extensions, enable Developer mode, choose Load unpacked and select the extension folder.\n\n"
+              "Firefox: open about:debugging → This Firefox → Load Temporary Add-on and select manifest.json. Repeat after restarting Firefox.\n\n"
+              "If updating from 2.4.8, reload the extension once in your browser."), QMessageBox::Close, this);
+    auto *folder = box.addButton(cfg.T("Extension folder"), QMessageBox::ActionRole);
+    box.exec();
+    if (box.clickedButton() == folder) {
+        const QDir app(QCoreApplication::applicationDirPath());
+#ifdef Q_OS_WIN
+        const auto path = app.filePath("browser-extension");
+#else
+        const auto path = app.filePath("../share/yt-chatterino/browser-extension");
+#endif
+        QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::cleanPath(path)));
+    }
 }
 
 void MainWindow::showPhone(Pane *target) {
@@ -1495,6 +1573,8 @@ void MainWindow::pruneSources() {
     }
     for (auto s : hub.sources) {
         if (!needed.contains(s->key)) {
+            if (s->isVod && !s->header["vod_shown"].toBool() && vodBridge && vodBridge->owners.contains(s->key)) continue;
+            if (s->isVod && vodBridge) vodBridge->suppress(s->key);
             hub.remove(s);
         }
     }
@@ -1515,7 +1595,7 @@ void MainWindow::saveSession() {
     }
     QJsonArray sources, workspaces;
     for (auto s : hub.sources) {
-        sources.append(s->spec());
+        if (!s->isVod || s->header["vod_shown"].toBool()) sources.append(s->spec());
     }
     for (int i = 0; i < tabs->count(); ++i) {
         if (auto *w = qobject_cast<Workspace *>(tabs->widget(i))) {
@@ -1552,17 +1632,21 @@ void MainWindow::restoreSession() {
         }
         auto spec = v.toObject();
         QString p = str(spec["platform"]), id = str(spec["id"]);
-        if (p == "twitch" && twitchLogin('@' + id) == id) {
-            hub.source(p, id);
-        } else if (p == "kick" && kickLogin("kick:" + id) == id) {
-            hub.source(p, id);
-        } else if (p == "youtube" && videoId(id) == id) {
-            hub.source(p, id);
-        }
-        auto source = hub.sources.value(p == "youtube" ? id : p + ":" + id);
-        if (source) {
-            source->paused = spec["paused"].toBool();
-        }
+        Source *source = nullptr;
+        if (spec["vod"].toBool()) {
+            const QUrl url(str(spec["url"]));
+            auto *candidate = hub.vodSource(url);
+            if (candidate && candidate->platform == p && candidate->id == id) {
+                source = candidate;
+                const auto name = str(spec["channel"]).left(200), title = str(spec["title"]).left(500);
+                if (!name.isEmpty()) source->header["channel"] = name;
+                if (!title.isEmpty()) source->header["title"] = title;
+                source->header["vod_shown"] = true;
+            } else if (candidate) hub.remove(candidate);
+        } else if (p == "twitch" && twitchLogin('@' + id) == id) source = hub.source(p, id);
+        else if (p == "kick" && kickLogin("kick:" + id) == id) source = hub.source(p, id);
+        else if (p == "youtube" && videoId(id) == id) source = hub.source(p, id);
+        if (source && !source->isVod) source->paused = spec["paused"].toBool();
     }
     count = 0;
     for (const auto &v : session["tabs"].toArray()) {

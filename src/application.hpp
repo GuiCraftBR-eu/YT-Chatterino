@@ -6,6 +6,7 @@ namespace yc {
 class SettingsWindow;
 class ThreadWindow;
 class PhoneServer;
+class VodBridge;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -24,6 +25,7 @@ class MainWindow : public QMainWindow {
     QToolButton *updateArrow, *gear, *addButton;
     QPointer<SettingsWindow> settings;
     QPointer<PhoneServer> phoneServer;
+    VodBridge *vodBridge = nullptr;
     QPointer<QDialog> phoneDialog;
     QPointer<Pane> phoneTarget;
     QTranslator *standardTranslator = nullptr;
@@ -44,6 +46,7 @@ class MainWindow : public QMainWindow {
     void paneMenu(Pane *pane, QPoint position);
     void showPhone(Pane *pane);
     void showVod();
+    void startVodBridge(quint16 port = 37367);
     void populatePaneMenu(QMenu &menu, Pane *pane);
     void tabMenu(int index, QPoint position);
     void messageMenu(Pane *pane, Message message, QPoint position);

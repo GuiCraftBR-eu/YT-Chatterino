@@ -98,20 +98,26 @@ void NativeTests::vodKickReplayParsing() {
 }
 
 void NativeTests::vodPairingRejectsInvalidToken() {
-    VodWindow window(&app->hub); QVERIFY(window.server.isListening());
-    QCOMPARE(window.server.serverAddress(), QHostAddress(QHostAddress::LocalHost));
-    QWebSocket bad; QSignalSpy rejected(&bad, &QWebSocket::disconnected);
-    const QUrl endpoint(QString("ws://127.0.0.1:%1").arg(window.server.serverPort()));
-    bad.open(endpoint); QTRY_COMPARE(bad.state(), QAbstractSocket::ConnectedState);
-    bad.sendTextMessage(R"({"type":"hello","token":"wrong"})");
-    QTRY_VERIFY(rejected.size() > 0); QVERIFY(!window.peer);
-    QWebSocket good; QSignalSpy connected(&good, &QWebSocket::textMessageReceived);
-    good.open(endpoint); QTRY_COMPARE(good.state(), QAbstractSocket::ConnectedState);
-    good.sendTextMessage(QString::fromUtf8(QJsonDocument(QJsonObject{{"type","hello"},{"token",window.secret}}).toJson(QJsonDocument::Compact)));
-    QTRY_COMPARE(connected.size(), 1); QVERIFY(window.peer);
-    good.sendTextMessage(R"({"type":"state","url":"https://www.youtube.com.evil.test/watch?v=wXspodtIxYU","seconds":20,"paused":true})");
-    QTest::qWait(30); QVERIFY(!window.replay.initialized);
-    good.close(); QTRY_VERIFY(!window.peer);
+    QVERIFY(VodBridge::allowedOrigin("chrome-extension://abcdefghijklmnopabcdefghijklmnop"));
+    QVERIFY(VodBridge::allowedOrigin("moz-extension://a5b27e91-a65a-4e23-85d6-d298f4c1ac12"));
+    QVERIFY(!VodBridge::allowedOrigin("https://example.com"));
+    QVERIFY(!VodBridge::allowedOrigin("null"));
+    VodBridge bridge(&app->hub, nullptr, 0);
+    QVERIFY(bridge.server.isListening());
+    QCOMPARE(bridge.server.serverAddress(), QHostAddress(QHostAddress::LocalHost));
+    const QUrl endpoint(QString("ws://127.0.0.1:%1").arg(bridge.server.serverPort()));
+    QNetworkRequest badRequest(endpoint); badRequest.setRawHeader("Origin", "https://example.com");
+    QWebSocket bad; bad.open(badRequest);
+    QTRY_VERIFY_WITH_TIMEOUT(bad.state() == QAbstractSocket::UnconnectedState, 3000);
+    QVERIFY(bridge.clients.isEmpty());
+    QNetworkRequest request(endpoint); request.setRawHeader("Origin", "chrome-extension://abcdefghijklmnopabcdefghijklmnop");
+    QWebSocket good; QSignalSpy ready(&good, &QWebSocket::textMessageReceived);
+    good.open(request); QTRY_COMPARE(good.state(), QAbstractSocket::ConnectedState);
+    good.sendTextMessage(R"({"type":"hello","client":"a5b27e91-a65a-4e23-85d6-d298f4c1ac12"})");
+    QTRY_COMPARE(ready.size(), 1); QCOMPARE(bridge.clients.size(), 1);
+    good.sendTextMessage(R"({"type":"state","tab":1,"url":"https://www.youtube.com.evil.test/watch?v=wXspodtIxYU","seconds":20,"paused":true})");
+    QTest::qWait(30); QVERIFY(bridge.players.isEmpty());
+    good.close(); QTRY_VERIFY(bridge.clients.isEmpty());
 }
 
 void NativeTests::unavailableFollowDateIsHidden() {

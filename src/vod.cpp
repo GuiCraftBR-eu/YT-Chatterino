@@ -1,6 +1,7 @@
 #include "vod.hpp"
 #include <cmath>
 #include <algorithm>
+#include <QtWebSockets/QWebSocketCorsAuthenticator>
 
 namespace yc {
 namespace {
@@ -60,6 +61,12 @@ bool VodReplay::identify(const QUrl &u, QString *p, QString *v, QString *c) {
     return true;
 }
 
+QString VodReplay::sourceKey(const QUrl &url) {
+    QString platform, video, channel;
+    if (!identify(url, &platform, &video, &channel)) return {};
+    return "vod:" + platform + ':' + video;
+}
+
 void VodReplay::playback(const QUrl &url, qint64 offsetMs, bool isPaused, bool seek) {
     QString p, v, c;
     if (!identify(url, &p, &v, &c) || offsetMs < 0 || offsetMs > 7LL * 24 * 3600 * 1000) {
@@ -87,6 +94,12 @@ void VodReplay::playback(const QUrl &url, qint64 offsetMs, bool isPaused, bool s
     if (!loading && !retry.isActive()) {
         if (!ready) loadMetadata(); else fetch();
     }
+}
+
+void VodReplay::disconnectPlayback() {
+    ++epoch;
+    retry.stop();
+    loading = false;
 }
 
 void VodReplay::fail(const QString &error) {
@@ -121,7 +134,19 @@ void VodReplay::loadMetadata() {
                 replay = true;
                 if (token.isEmpty()) token = continuation(chat, "reloadContinuationData");
             });
-            if (!replay || token.isEmpty()) { self->fail("YouTube chat replay is not available for this video."); return; }
+            if (!replay || token.isEmpty()) {
+                self->loading = false; self->ended = true;
+                emit self->status("YouTube chat replay is not available for this video.");
+                emit self->unavailable(); return;
+            }
+            const auto videoDetails = embeddedJson(html, "ytInitialPlayerResponse")["videoDetails"].toObject();
+            QJsonObject metadata{{"channel", videoDetails["author"]}, {"channel_id", videoDetails["channelId"]},
+                                 {"title", videoDetails["title"]}};
+            walk(data, [&](const QJsonObject &node) {
+                const auto owner = node["videoOwnerRenderer"].toObject();
+                if (!owner.isEmpty() && str(metadata["avatar"]).isEmpty()) metadata["avatar"] = imageUrls(owner["thumbnail"]).value(0);
+            });
+            emit self->metadata(metadata);
             const auto page = Network::query("https://www.youtube.com/live_chat_replay", {{"continuation", token}});
             self->hub->net->bytes(page, [self, request](QByteArray raw, QString pageError) {
                 if (!self || self->epoch != request) return;
@@ -135,6 +160,7 @@ void VodReplay::loadMetadata() {
                 }
                 self->loading = false; self->ready = true; self->failures = 0;
                 emit self->status("Connected to YouTube VOD replay.");
+                if (!self->announced) { self->announced = true; emit self->available(); }
                 self->fetch();
             }, "GET", {}, headers);
           }, "GET", {}, headers);
@@ -144,6 +170,9 @@ void VodReplay::loadMetadata() {
             if (!self || self->epoch != request) return;
             if (!error.isEmpty()) { self->fail(error); return; }
             self->kickChannel = str(data["id"]).toLongLong();
+            const auto user = data["user"].toObject();
+            emit self->metadata(QJsonObject{{"channel_id", user["id"]}, {"channel", user["username"]},
+                                            {"avatar", user["profile_pic"]}, {"kick_badges", data["subscriber_badges"]}});
             if (self->kickChannel <= 0) { self->fail("Kick channel was not found."); return; }
             const QUrl videos(QString("https://web.kick.com/api/v1/channels/%1/videos/%2").arg(self->kickChannel).arg(self->video));
             self->hub->net->json(videos, [self, request](QJsonObject result, QString videoError) {
@@ -153,10 +182,12 @@ void VodReplay::loadMetadata() {
                 if (str(item["id"]).compare(self->video, Qt::CaseInsensitive) == 0) {
                     self->kickStart = iso(item["start_time"]);
                     self->kickDuration = qint64(item["duration"].toDouble()) * 1000;
+                    emit self->metadata(QJsonObject{{"title", item["title"]}});
                 }
                 if (!self->kickStart.isValid()) { self->fail("Kick did not return this VOD's start time."); return; }
                 self->loading = false; self->ready = true; self->failures = 0;
                 emit self->status("Connected to Kick VOD replay.");
+                if (!self->announced) { self->announced = true; emit self->available(); }
                 self->fetch();
             }, "GET", {}, headers);
         }, "GET", {}, headers);
@@ -187,6 +218,9 @@ void VodReplay::fetch() {
             if (!data["errors"].toArray().isEmpty()) { finished({}, "Twitch did not provide this replay."); return; }
             const auto vod = at(data, {"data", "video"}).toObject();
             if (vod.isEmpty()) { finished({}, "Twitch VOD or chat replay not found."); return; }
+            const auto creator = vod["creator"].toObject();
+            if (!str(creator["id"]).isEmpty()) emit self->metadata(QJsonObject{{"channel_id", creator["id"]}});
+            if (!self->announced) { self->announced = true; emit self->available(); }
             const auto comments = vod["comments"].toObject();
             QVector<Item> items;
             qint64 last = self->nextOffset;
@@ -214,7 +248,7 @@ void VodReplay::fetch() {
                     badge.id = str(b["setID"]); badge.version = str(b["version"]); badge.role = badge.id;
                     if (badge.id == "broadcaster") badge.role = "owner";
                     if (badge.id == "moderator") badge.role = "moderator";
-                    m.badges << badge;
+                    if (!badge.id.isEmpty() && !badge.version.isEmpty()) m.badges << badge;
                 }
                 const qint64 offset = qMax<qint64>(0, qint64(node["contentOffsetSeconds"].toDouble() * 1000));
                 m.replayOffsetMs = offset; last = qMax(last, offset);
@@ -304,102 +338,239 @@ void VodReplay::deliver() {
     if (count) pending.remove(0, count);
 }
 
-VodWindow::VodWindow(Hub *h, QWidget *parent)
-    : QDialog(parent), hub(h), replay(h, this), server("YT-Chatterino VOD", QWebSocketServer::NonSecureMode, this) {
-    setAttribute(Qt::WA_DeleteOnClose);
-    setWindowTitle(hub->cfg->T("VOD chat replay (Beta)"));
-    setObjectName("vod-replay-window");
-    resize(520, 620);
-    auto *layout = new QVBoxLayout(this);
-    auto *instructions = new QLabel(hub->cfg->T("Install the browser extension, open a VOD, and paste this code into the extension."), this);
-    instructions->setWordWrap(true);
-    layout->addWidget(instructions);
-    auto *pairRow = new QHBoxLayout;
-    pairing = new QLineEdit(this); pairing->setObjectName("vod-pairing-code"); pairing->setReadOnly(true);
-    auto *copy = new QPushButton(hub->cfg->T("Copy code"), this);
-    auto *folder = new QPushButton(hub->cfg->T("Extension folder"), this);
-    auto *help = new QPushButton(hub->cfg->T("Installation help"), this);
-    pairRow->addWidget(pairing, 1); pairRow->addWidget(copy); pairRow->addWidget(folder); pairRow->addWidget(help);
-    layout->addLayout(pairRow);
-    state = new QLabel(hub->cfg->T("Waiting for the browser extension…"), this);
-    state->setObjectName("vod-status"); state->setWordWrap(true); state->setTextFormat(Qt::PlainText);
-    layout->addWidget(state);
-    view = new ChatView(hub, this); view->setObjectName("vod-chat");
-    view->messageCap = hub->cfg->cap();
-    layout->addWidget(view, 1);
-    auto *hint = new QLabel(hub->cfg->T("Read-only beta: replay availability depends on the platform and the VOD."), this);
-    hint->setWordWrap(true); hint->setStyleSheet("color:#999;"); layout->addWidget(hint);
-    connect(&replay, &VodReplay::cleared, this, [this] { view->setMessages({}); });
-    connect(&replay, &VodReplay::message, view, &ChatView::append);
-    connect(&replay, &VodReplay::status, this, [this](const QString &text) { state->setText(hub->cfg->T(text)); });
-    connect(copy, &QPushButton::clicked, this, [this] { QGuiApplication::clipboard()->setText(pairing->text()); });
-    connect(help, &QPushButton::clicked, this, [this] {
-        QMessageBox::information(this, hub->cfg->T("Installation help"), hub->cfg->T(
-            "Chrome/Edge: open the browser's Extensions page, enable Developer mode, choose Load unpacked and select the extension folder.\n\n"
-            "Firefox: open about:debugging, choose This Firefox and Load Temporary Add-on, then select manifest.json. Firefox removes temporary add-ons when it closes.\n\n"
-            "Open a VOD, click the extension icon, paste the pairing code and connect this tab."));
-    });
-    connect(folder, &QPushButton::clicked, this, [] {
-        const QDir app(QCoreApplication::applicationDirPath());
-#ifdef Q_OS_WIN
-        const auto path = app.filePath("browser-extension");
-#else
-        const auto path = app.filePath("../share/yt-chatterino/browser-extension");
-#endif
-        QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::cleanPath(path)));
-    });
-    QByteArray random;
-    for (int i = 0; i < 8; ++i) {
-        const quint32 n = QRandomGenerator::system()->generate();
-        for (int shift = 0; shift < 32; shift += 8) random.append(char((n >> shift) & 0xff));
+
+namespace {
+QHash<QString, Badge> replayBadgeMap(const QJsonArray &items) {
+    QHash<QString, Badge> result;
+    for (const auto &value : items) {
+        const auto data = value.toObject();
+        Badge badge; badge.id = str(data["setID"]); badge.version = str(data["version"]);
+        badge.label = str(data["title"]); badge.role = badge.id == "broadcaster" ? "owner" : badge.id;
+        const QString url = str(data["imageURL"]);
+        if (!badge.id.isEmpty() && !badge.version.isEmpty() && Images::allowed(QUrl(url))) {
+            badge.urls << url;
+            result.insert(badge.id + '/' + badge.version, badge);
+        }
     }
-    secret = QString::fromLatin1(random.toHex());
+    return result;
+}
+QMap<QByteArray,QByteArray> twitchReplayHeaders() {
+    return {{"Client-ID", twitchWebClient.toUtf8()}, {"Origin", "https://www.twitch.tv"}, {"User-Agent", browserAgent}};
+}
+} // namespace
+
+void Hub::applyVodBadges(Source *source) {
+    if (!source || source->closed || !source->isVod || source->platform != "twitch") return;
+    const QString room = source->room();
+    source->badges = vodGlobalBadges;
+    const auto channelBadges = vodChannelBadges.value(room);
+    for (auto it = channelBadges.cbegin(); it != channelBadges.cend(); ++it) source->badges[it.key()] = it.value();
+    const auto profile = vodBadgeProfiles.value(room);
+    if (!str(profile["displayName"]).isEmpty()) source->header["channel"] = profile["displayName"];
+    if (!str(profile["profileImageURL"]).isEmpty()) source->header["avatar"] = profile["profileImageURL"];
+    emit source->changed();
+}
+
+void Hub::loadVodBadges(Source *source) {
+    if (!source || source->closed || !source->isVod || source->platform != "twitch") return;
+    QPointer<Hub> self(this); QPointer<Source> safe(source);
+    auto retry = [self, safe] {
+        if (self && safe && !safe->closed) QTimer::singleShot(30000, safe, [self, safe] {
+            if (self && safe && !safe->closed) self->loadVodBadges(safe);
+        });
+    };
+    if (!vodGlobalBadgesReady && !vodGlobalBadgesPending) {
+        vodGlobalBadgesPending = true;
+        QJsonObject body{{"query", "query{badges{imageURL(size:DOUBLE),title,setID,version}}"}};
+        net->json(QUrl("https://gql.twitch.tv/gql"), [self, retry](QJsonObject data, QString error) {
+            if (!self) return;
+            self->vodGlobalBadgesPending = false;
+            const auto values = at(data, {"data", "badges"});
+            if (!error.isEmpty() || !values.isArray()) { retry(); return; }
+            self->vodGlobalBadges = replayBadgeMap(values.toArray()); self->vodGlobalBadgesReady = true;
+            for (auto *candidate : self->sources) self->applyVodBadges(candidate);
+        }, "POST", body, twitchReplayHeaders());
+    }
+    const QString room = source->room();
+    if (room.isEmpty() || vodChannelBadges.contains(room) || vodBadgePending.contains(room)) {
+        applyVodBadges(source); return;
+    }
+    vodBadgePending.insert(room);
+    QJsonObject body{{"query", "query($id:ID!){user(id:$id){id,login,displayName,profileImageURL(width:70),broadcastBadges{imageURL(size:DOUBLE),title,setID,version}}}"},
+                     {"variables", QJsonObject{{"id", room}}}};
+    net->json(QUrl("https://gql.twitch.tv/gql"), [self, room, retry](QJsonObject data, QString error) {
+        if (!self) return;
+        self->vodBadgePending.remove(room);
+        const auto user = at(data, {"data", "user"}).toObject();
+        const auto badges = user["broadcastBadges"];
+        if (!error.isEmpty() || !badges.isArray()) { retry(); return; }
+        self->vodChannelBadges.insert(room, replayBadgeMap(badges.toArray()));
+        self->vodBadgeProfiles.insert(room, user);
+        for (auto *candidate : self->sources)
+            if (candidate->isVod && candidate->room() == room) self->applyVodBadges(candidate);
+    }, "POST", body, twitchReplayHeaders());
+}
+
+Source *Hub::vodSource(const QUrl &url) {
+    QString platform, video, channel;
+    if (!VodReplay::identify(url, &platform, &video, &channel)) return nullptr;
+    const QString key = VodReplay::sourceKey(url);
+    if (sources.contains(key)) return sources.value(key);
+    auto *source = new Source(this, platform, video, true);
+    source->vodUrl = platform == "youtube" ? Network::query("https://www.youtube.com/watch", {{"v", video}})
+                      : platform == "twitch" ? QUrl("https://www.twitch.tv/videos/" + video)
+                      : QUrl("https://kick.com/" + channel + "/videos/" + video);
+    knownVodUrls.insert(key, source->vodUrl);
+    source->header = {{"channel", channel.isEmpty() ? video : channel}, {"title", "VOD"},
+                      {"vod_connected", false}};
+    source->vodReplay = new VodReplay(this, source);
+    sources.insert(key, source);
+    connect(source, &Source::changed, this, [this, source] { emit sourceChanged(source); });
+    connect(source, &Source::headerChanged, this, [this, source] { emit sourceChanged(source); });
+    connect(source->vodReplay, &VodReplay::cleared, source, [source] {
+        source->history.clear(); source->seen.clear(); source->seenOrder.clear(); ++source->vodRevision; emit source->changed();
+    });
+    connect(source->vodReplay, &VodReplay::message, source, [source](Message message) {
+        message.history = true;
+        // Mixed replays from different dates should appear in playback-arrival order.
+        message.stamp = QDateTime::currentDateTime();
+        source->publish(message);
+    });
+    connect(source->vodReplay, &VodReplay::status, source, [source](const QString &message) {
+        if (str(source->header["vod_status"]) == message) return;
+        source->header["vod_status"] = message; emit source->headerChanged();
+    });
+    connect(source->vodReplay, &VodReplay::metadata, source, [this, source](const QJsonObject &data) {
+        const QString oldRoom = source->room();
+        bool changed = false;
+        for (const auto &key : QStringList{"channel", "channel_id", "title", "avatar"}) {
+            const auto value = str(data[key]);
+            if (!value.isEmpty() && str(source->header[key]) != value) { source->header[key] = value; changed = true; }
+        }
+        if (data["kick_badges"].isArray()) {
+            for (const auto &value : data["kick_badges"].toArray()) {
+                const auto badge = value.toObject(); const int months = badge["months"].toInt();
+                const auto image = str(at(badge, {"badge_image", "src"}));
+                if (months > 0 && Images::allowed(QUrl(image))) source->kickSubscriberBadges[months] = image;
+            }
+        }
+        if (changed) emit source->headerChanged();
+        if (source->platform == "twitch" && !source->room().isEmpty() && oldRoom != source->room()) {
+            loadVodBadges(source);
+            source->loadEmotes(source->room());
+            const auto video = source->id; QPointer<Source> safe(source);
+            const QJsonObject body{{"query", "query($id:ID!){video(id:$id){title}}"}, {"variables", QJsonObject{{"id", video}}}};
+            net->json(QUrl("https://gql.twitch.tv/gql"), [safe](QJsonObject result, QString error) {
+                if (!safe || !error.isEmpty()) return;
+                const auto title = str(at(result, {"data", "video", "title"}));
+                if (!title.isEmpty()) { safe->header["title"] = title; emit safe->headerChanged(); }
+            }, "POST", body, twitchReplayHeaders());
+        }
+    });
+    return source;
+}
+
+VodBridge::VodBridge(Hub *h, QObject *parent, quint16 port, bool listen)
+    : QObject(parent), hub(h), server("YT-Chatterino VOD Sync", QWebSocketServer::NonSecureMode, this) {
     server.setMaxPendingConnections(8);
-    connect(&server, &QWebSocketServer::newConnection, this, &VodWindow::acceptConnection);
-    if (server.listen(QHostAddress::LocalHost, 0)) {
-        pairing->setText(QString::number(server.serverPort()) + ':' + secret);
-    } else {
-        pairing->setText(hub->cfg->T("Local connection unavailable"));
-        copy->setEnabled(false);
+    connect(&server, &QWebSocketServer::originAuthenticationRequired, this, [](QWebSocketCorsAuthenticator *auth) {
+        auth->setAllowed(allowedOrigin(auth->origin()));
+    });
+    connect(&server, &QWebSocketServer::newConnection, this, &VodBridge::acceptConnection);
+    if (listen) server.listen(QHostAddress::LocalHost, port);
+}
+
+bool VodBridge::allowedOrigin(const QString &origin) {
+    const QUrl url(origin);
+    if (!url.isValid() || !url.userInfo().isEmpty() || url.port(-1) != -1 ||
+        (!url.path().isEmpty() && url.path() != "/") || url.hasQuery() || url.hasFragment()) return false;
+    if (url.scheme() == "chrome-extension") return QRegularExpression("^[a-p]{32}$").match(url.host()).hasMatch();
+    if (url.scheme() == "moz-extension") return !QUuid(url.host()).isNull();
+    return false;
+}
+
+void VodBridge::hook(Source *source) {
+    if (!source || hooked.contains(source->key)) return;
+    const QString key = source->key; hooked.insert(key);
+    connect(source, &QObject::destroyed, this, [this, key] { hooked.remove(key); });
+    connect(source->vodReplay, &VodReplay::available, source, [this, source] {
+        if (!source->closed && !suppressed.contains(source->key)) emit discovered(source);
+    });
+    connect(source->vodReplay, &VodReplay::unavailable, source, [this, source] {
+        if (source->viewCaps.isEmpty()) { suppressed.insert(source->key); hub->remove(source); }
+    });
+}
+
+void VodBridge::suppress(const QString &key) { suppressed.insert(key); }
+void VodBridge::allow(const QString &key) { suppressed.remove(key); }
+
+void VodBridge::removePlayer(const QString &player, bool navigation) {
+    const auto key = players.take(player);
+    if (key.isEmpty()) return;
+    if (owners.value(key) == player) {
+        owners.remove(key);
+        if (auto *source = hub->sources.value(key); source && source->isVod) {
+            source->header["vod_connected"] = false;
+            source->header["vod_status"] = "Waiting for the VOD in your browser…";
+            if (source->vodReplay) source->vodReplay->disconnectPlayback();
+            emit source->headerChanged();
+        }
     }
-    darkTitlebar(this);
+    if (navigation && !players.values().contains(key)) suppressed.remove(key);
 }
 
-VodWindow::~VodWindow() {
-    if (peer) peer->close();
-    server.close();
+void VodBridge::disconnectClient(const QString &client) {
+    const auto prefix = client + ':';
+    const auto keys = players.keys();
+    for (const auto &key : keys) if (key.startsWith(prefix)) removePlayer(key, false);
 }
 
-void VodWindow::acceptConnection() {
+void VodBridge::processState(const QString &client, const QJsonObject &data) {
+    if (!data["tab"].isDouble() || !data["seconds"].isDouble() || !data["paused"].isBool()) return;
+    const double tabValue = data["tab"].toDouble(-1), seconds = data["seconds"].toDouble(-1);
+    if (!std::isfinite(tabValue) || tabValue < 0 || tabValue > 2147483647 || std::floor(tabValue) != tabValue ||
+        !std::isfinite(seconds) || seconds < 0 || seconds > 7 * 24 * 3600) return;
+    const QString player = client + ':' + QString::number(int(tabValue));
+    const QUrl url(str(data["url"])); const QString key = VodReplay::sourceKey(url);
+    if (key.isEmpty()) { removePlayer(player, true); return; }
+    if (!players.contains(player) && players.size() >= 32) return;
+    if (players.contains(player) && players.value(player) != key) removePlayer(player, true);
+    players[player] = key;
+    if (suppressed.contains(key)) return;
+    if (owners.contains(key) && owners.value(key) != player) return;
+    auto *source = hub->vodSource(url);
+    if (!source || !source->vodReplay) return;
+    owners[key] = player; hook(source);
+    if (!source->header["vod_connected"].toBool()) {
+        source->header["vod_connected"] = true; emit source->headerChanged();
+    }
+    source->vodReplay->playback(url, qint64(seconds * 1000), data["paused"].toBool(), data["seek"].toBool());
+}
+
+void VodBridge::acceptConnection() {
     while (server.hasPendingConnections()) {
-        auto *socket = server.nextPendingConnection();
-        if (!socket) continue;
+        auto *socket = server.nextPendingConnection(); if (!socket) continue;
         socket->setParent(this);
-        if (!socket->peerAddress().isLoopback() || peer) { socket->close(); socket->deleteLater(); continue; }
-        socket->setMaxAllowedIncomingFrameSize(8192);
-        socket->setMaxAllowedIncomingMessageSize(8192);
-        auto authenticated = QSharedPointer<bool>::create(false);
-        QTimer::singleShot(5000, socket, [socket, authenticated] { if (!*authenticated) socket->close(); });
-        connect(socket, &QWebSocket::textMessageReceived, this, [this, socket, authenticated](const QString &text) {
+        if (!socket->peerAddress().isLoopback() || !allowedOrigin(socket->origin()) || clients.size() >= 8) {
+            socket->close(); socket->deleteLater(); continue;
+        }
+        socket->setMaxAllowedIncomingFrameSize(8192); socket->setMaxAllowedIncomingMessageSize(8192);
+        QTimer::singleShot(5000, socket, [this, socket] { if (!clients.contains(socket)) socket->close(); });
+        connect(socket, &QWebSocket::textMessageReceived, this, [this, socket](const QString &text) {
             if (text.size() > 8192) { socket->close(); return; }
             const auto data = QJsonDocument::fromJson(text.toUtf8()).object();
-            if (!*authenticated) {
-                if (peer || str(data["type"]) != "hello" || str(data["token"]) != secret) { socket->close(); return; }
-                *authenticated = true; peer = socket;
-                socket->sendTextMessage(QStringLiteral("{\"type\":\"ready\"}"));
-                state->setText(hub->cfg->T("Browser connected; waiting for a VOD…"));
-                return;
+            if (!clients.contains(socket)) {
+                const QString id = str(data["client"]);
+                if (str(data["type"]) != "hello" || QUuid(id).isNull() || clients.values().contains(id)) { socket->close(); return; }
+                clients.insert(socket, id); socket->sendTextMessage(QStringLiteral("{\"type\":\"ready\"}")); return;
             }
-            if (str(data["type"]) != "state" || !data["seconds"].isDouble() || !data["paused"].isBool()) return;
-            const double seconds = data["seconds"].toDouble(-1);
-            if (!std::isfinite(seconds) || seconds < 0 || seconds > 7 * 24 * 3600) return;
-            replay.playback(QUrl(str(data["url"])), qint64(seconds * 1000), data["paused"].toBool(), data["seek"].toBool());
+            const auto client = clients.value(socket), type = str(data["type"]);
+            if (type == "state") processState(client, data);
+            else if (type == "closed" && data["tab"].isDouble())
+                removePlayer(client + ':' + QString::number(data["tab"].toInt(-1)), true);
         });
         connect(socket, &QWebSocket::disconnected, this, [this, socket] {
-            if (peer == socket) {
-                peer = nullptr;
-                state->setText(hub->cfg->T("Browser disconnected. Reconnect using the extension."));
-            }
+            const auto client = clients.take(socket); if (!client.isEmpty()) disconnectClient(client);
             socket->deleteLater();
         });
     }

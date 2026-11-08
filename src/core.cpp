@@ -632,8 +632,10 @@ QVector<Badge> parseTwitchBadges(const QString &tags) {
 }
 
 bool messageOrder(const Message &a, const Message &b) {
-    if (a.history != b.history) return a.history;
-    if (a.history) {
+    const bool aHistory = a.history && a.replayOffsetMs < 0;
+    const bool bHistory = b.history && b.replayOffsetMs < 0;
+    if (aHistory != bHistory) return aHistory;
+    if (aHistory) {
         if (a.stamp.isValid() != b.stamp.isValid()) return a.stamp.isValid();
         if (a.stamp.isValid() && a.stamp != b.stamp) return a.stamp < b.stamp;
     }

@@ -247,8 +247,13 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
         spans.append(QJsonObject{{"start", span.start}, {"end", span.end}, {"name", span.code}, {"url", url}});
         last = span.end;
     }
+    QString timestamp = m.stamp.isValid() ? hub->cfg->time(m.stamp) : QString();
+    if (m.replayOffsetMs >= 0) {
+        const qint64 seconds = m.replayOffsetMs / 1000;
+        timestamp = QString("%1:%2:%3").arg(seconds / 3600).arg((seconds / 60) % 60, 2, 10, QChar('0')).arg(seconds % 60, 2, 10, QChar('0'));
+    }
     return {{"seq", double(m.seq)}, {"source", m.source}, {"name", m.name}, {"login", m.login},
-            {"text", text}, {"time", m.stamp.isValid() ? hub->cfg->time(m.stamp) : QString()},
+            {"text", text}, {"time", timestamp},
             {"color", userColor(m).name()}, {"system", m.system}, {"deleted", m.deleted},
             {"deletionLabel", deletionReasonText(m, *hub->cfg)},
             {"special", m.special}, {"alertKind", m.alertKind}, {"alert", visibleAlertText(m, *hub->cfg)}, {"alertBodyStart", m.alertBodyStart},
@@ -268,7 +273,7 @@ QJsonObject PhoneServer::state(qint64 after, quint32 clientRevision) const {
         const bool canDelete = moderate && (source->platform != "kick" || hub->accounts->kickAllows({"moderation:chat_message:manage"}));
         const auto modes = source->chatModeSummary();
         sources.append(QJsonObject{{"key", source->key}, {"name", source->name()}, {"platform", source->platform},
-                                   {"avatar", avatar}, {"moderate", moderate}, {"canBan", canBan}, {"canDelete", canDelete},
+                                   {"avatar", avatar}, {"readOnly", source->isVod}, {"moderate", moderate}, {"canBan", canBan}, {"canDelete", canDelete},
                                    {"editable", editable}, {"title", source->header["title"]},
                                    {"category", source->header["category"]}, {"modes", modes}});
         sourceRevision = (sourceRevision ^ quint32(qHash(source->key, 0))) * 16777619u;
@@ -276,7 +281,7 @@ QJsonObject PhoneServer::state(qint64 after, quint32 clientRevision) const {
         sourceRevision = (sourceRevision ^ quint32(qHash(avatar, 0)) ^ quint32(moderate)) * 16777619u;
         sourceRevision = (sourceRevision ^ quint32(editable) ^ (quint32(canBan) << 1) ^ (quint32(canDelete) << 2)) * 16777619u;
         sourceRevision = (sourceRevision ^ quint32(qHash(str(source->header["title"]), 0)) ^ quint32(qHash(str(source->header["category"]), 0))) * 16777619u;
-        sourceRevision = (sourceRevision ^ quint32(qHash(modes, 0))) * 16777619u;
+        sourceRevision = (sourceRevision ^ quint32(qHash(modes, 0)) ^ source->vodRevision) * 16777619u;
     }
     const auto &all = pane->view->messages;
     const int first = qMax(0, int(all.size()) - 250);

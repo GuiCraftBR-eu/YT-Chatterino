@@ -81,9 +81,9 @@ static QJsonObject metadata(const QString &html, const QString &id, QString *err
             {"viewers", double(viewers)}};
 }
 
-Source::Source(Hub *h, QString p, QString value)
-    : QObject(h), hub(h), platform(std::move(p)), id(std::move(value)) {
-    key = platform == "youtube" ? id : platform + ":" + id;
+Source::Source(Hub *h, QString p, QString value, bool vod)
+    : QObject(h), hub(h), platform(std::move(p)), id(std::move(value)), isVod(vod) {
+    key = isVod ? "vod:" + platform + ':' + id : (platform == "youtube" ? id : platform + ":" + id);
     auto settings = hub->cfg->data["chat_settings"].toObject()[key].toObject();
     interval = qMax(4.0, settings["web_poll_interval_seconds"].toDouble(4));
     apiFallbackEnabled = settings["youtube_api_fallback"].toBool(false);
@@ -109,6 +109,7 @@ Source::Source(Hub *h, QString p, QString value)
         if (activePoll.value("ended").toBool()) setDecorations(pinned, {});
     });
     connect(hub->accounts, &Accounts::changed, this, [this] {
+        if (isVod) return;
         if (platform == "twitch" && !ownTwitchUserId.isEmpty() &&
             ownTwitchUserId != str(hub->accounts->twitch["user_id"])) resetTwitchUserState();
         if (platform == "youtube" && !youtubeRoleUserId.isEmpty() &&
@@ -164,10 +165,13 @@ QString Source::room() const {
 }
 
 QJsonObject Source::spec() const {
+    if (isVod) return {{"platform", platform}, {"id", id}, {"vod", true},
+                       {"url", vodUrl.toString()}, {"channel", header["channel"]}, {"title", header["title"]}};
     return {{"platform", platform}, {"id", id}, {"paused", paused}};
 }
 
 void Source::start() {
+    if (isVod) return;
     if (closed || hub->testMode) {
         return;
     }
@@ -201,12 +205,13 @@ void Source::stop() {
     kickSocketRetry.stop(); kickSocketWatchdog.stop(); kickSocketRenew.stop();
     kickModesTimer.stop(); kickModesPending = false;
     kickSocket.abort();
-    if (platform == "twitch") {
+    if (platform == "twitch" && !isVod) {
         hub->twitch.part(this);
     }
 }
 
 void Source::reconnect() {
+    if (isVod) return;
     if (closed) {
         return;
     }
@@ -297,7 +302,7 @@ void Source::publish(Message m) {
         }
     }
     const auto googleId = str(hub->accounts->google["channel_id"]);
-    if (platform == "youtube" && !googleId.isEmpty() && m.uid == googleId && !m.system &&
+    if (!isVod && platform == "youtube" && !googleId.isEmpty() && m.uid == googleId && !m.system &&
         (!m.own || !m.badges.isEmpty()) &&
         (!youtubeRoleStamp.isValid() || !m.stamp.isValid() || m.stamp >= youtubeRoleStamp)) {
         const auto userRoles = roles(m);
@@ -341,7 +346,7 @@ void Source::publish(Message m) {
         seen.insert(m.id);
         seenOrder.enqueue(m.id);
     }
-    if (!m.system && platform == "youtube" && !m.own) {
+    if (!isVod && !m.system && platform == "youtube" && !m.own) {
         for (int i = history.size() - 1; i >= qMax(0, history.size() - 128); --i) {
             auto &old = history[i];
             if (old.own && old.webId.isEmpty() && old.uid == m.uid && old.text == m.text &&
@@ -1950,6 +1955,7 @@ void Hub::youtubeChatId(Source *s, std::function<void(QString, QString)> done) {
 }
 
 void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
+    if (s && s->isVod) { done({}, "VOD replay is read-only."); return; }
     if (!reply.id.isEmpty()) {
         bool deleted = reply.deleted;
         for (const auto &m : s->history) {
@@ -2123,6 +2129,7 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
 }
 
 bool Hub::canEditChannel(const Source *s) const {
+    if (s && s->isVod) return false;
     if (!s) return false;
     if (s->platform == "kick") {
         const auto uid = str(accounts->kick["user_id"]);
@@ -2141,6 +2148,7 @@ bool Hub::canEditChannel(const Source *s) const {
 }
 
 bool Hub::hasModerationRole(const Source *s) const {
+    if (s && s->isVod) return false;
     if (!s) return false;
     if (s->platform == "kick") {
         const auto uid = str(accounts->kick["user_id"]);
@@ -2170,6 +2178,7 @@ bool Hub::hasModerationRole(const Source *s) const {
 }
 
 void Hub::canModerate(Source *s, std::function<void(bool, QString)> done) {
+    if (s && s->isVod) { done(false, {}); return; }
     if (!s) { done(false, "The channel was closed."); return; }
     const QString uid = str(accounts->twitch["user_id"]);
     if (uid.isEmpty() || s->room().isEmpty()) {
@@ -2255,6 +2264,7 @@ void Hub::youtubeMessageId(Source *s, Message m, std::function<void(QString, QSt
 }
 
 void Hub::moderate(Source *s, const Message &m, QString action, int duration, JsonCallback done) {
+    if (s && s->isVod) { done({}, "VOD replay is read-only."); return; }
     if (s->platform == "kick") {
         if (!hasModerationRole(s)) { done({}, "Kick moderation requires the channel owner or moderator role and permissions."); return; }
         const auto scope = action == "delete" ? QString("moderation:chat_message:manage") : QString("moderation:ban");
@@ -2688,6 +2698,7 @@ void Hub::messageAlert(Source *s, const Message &m) {
 }
 
 void Hub::liveChange(Source *s, bool live) {
+    if (s->isVod) return;
     if (s->platform != "twitch" && s->platform != "kick") {
         return;
     }
@@ -2734,7 +2745,7 @@ void Hub::pollLive() {
     }
     QSet<QString> logins;
     for (auto s : sources) {
-        if (s->platform == "twitch") {
+        if (s->platform == "twitch" && !s->isVod) {
             logins.insert(s->id);
         }
     }
@@ -2799,7 +2810,7 @@ void Hub::pollKickLive() {
     QSet<QString> logins;
     if (alerts["all_kick"].toBool(true)) {
         for (auto *source : sources)
-            if (source->platform == "kick" && !source->closed && !source->kickConnecting) logins.insert(source->id);
+            if (source->platform == "kick" && !source->isVod && !source->closed && !source->kickConnecting) logins.insert(source->id);
     }
     for (const auto &value : alerts["watch"].toArray()) {
         const auto item = value.toObject();
