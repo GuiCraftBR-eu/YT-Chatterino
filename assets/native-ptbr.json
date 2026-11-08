@@ -366,5 +366,18 @@
   "No saved channels yet. Add one below.": "Nenhum canal salvo ainda. Adicione um abaixo.",
   "Chat behavior": "Comportamento do chat",
   "Pause scrolling while hovering over chat": "Pausar a rolagem ao passar o mouse sobre o chat",
-  "Messages keep arriving. Scrolling resumes on leaving unless you scroll up.": "As mensagens continuam chegando. A rolagem retorna ao sair, a menos que você role para cima."
+  "Messages keep arriving. Scrolling resumes on leaving unless you scroll up.": "As mensagens continuam chegando. A rolagem retorna ao sair, a menos que você role para cima.",
+  "Paused": "Pausado",
+  "Enable follow dates": "Ativar data de seguimento",
+  "Checking follow date…": "Consultando data de seguimento…",
+  "Subscribed since: {date}": "Inscrito desde: {date}",
+  "Following since: {date}": "Segue desde: {date}",
+  "Not following this channel": "Não segue este canal",
+  "Channel owner": "Dono do canal",
+  "Enable permission to see your follow date.": "Ative a permissão para ver quando começou a seguir.",
+  "Follow dates are available to this channel's owner and moderators.": "As datas de seguimento estão disponíveis para o dono e os moderadores deste canal.",
+  "Sign in to YouTube to check public subscription dates.": "Entre no YouTube para consultar datas de inscrições públicas.",
+  "Sign in to Twitch to check follow dates.": "Entre na Twitch para consultar datas de seguimento.",
+  "Subscription date unavailable": "Data de inscrição indisponível",
+  "Follow date unavailable": "Data de seguimento indisponível"
 }

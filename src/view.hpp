@@ -35,6 +35,7 @@ class ChatView : public QAbstractScrollArea {
     int messageCap = 2000;
     QString query;
     QPushButton *latest;
+    QLabel *pauseIndicator;
     QTimer resizeTimer;
     QTimer autoScrollTimer;
     QElapsedTimer autoScrollClock;

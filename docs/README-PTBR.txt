@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.4.6 — WINDOWS 11 x64
+YT-CHATTERINO 2.4.7 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.4.6.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.4.7.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -64,10 +64,14 @@ Clique com a roda no chat e mova o ponteiro para rolar automaticamente. Clique n
 A roda física usa velocidade 2× por padrão; ajuste em Aparência. O touchpad mantém a rolagem em pixels.
 No seletor, Inscritos, Canal, Globais e Emojis têm listas separadas. A busca filtra a aba atual.
 Clique com o esquerdo em um nome para abrir o perfil; em uma resposta da Twitch para abrir a conversa retida.
+O cartão pode mostrar desde quando a pessoa segue o canal: na Twitch, para outros usuários,
+é necessário ser dono ou moderador e autorizar a leitura de seguidores; para a própria
+conta é solicitada outra permissão. No YouTube, é necessário entrar e a inscrição precisa
+ser pública. A API pública da Kick não informa essa data.
 
 CONFIGURAÇÕES
 Aparência: idioma, fontes das mensagens/nomes, tamanho de distintivos/emotes, velocidade da roda, datas, horários e sempre no topo.
-Mensagens: histórico e limite de mensagens (padrão: 2000 por painel; permitido: 100-20000).
+Mensagens: histórico, limite de mensagens (padrão: 2000 por painel; permitido: 100-20000) e pausa de rolagem ao passar o mouse, indicada discretamente no chat.
 Destaques: usuários, cargos e frases. Notificações: sons de menções e alertas de lives da Twitch.
 Canais salvos: salvar/abrir canais. O YouTube só procura lives atuais ao abrir um canal salvo.
 YouTube e Twitch continuam lendo nas abas em segundo plano. Pause o YouTube manualmente se quiser.

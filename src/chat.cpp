@@ -89,6 +89,13 @@ Source::Source(Hub *h, QString p, QString value)
     apiFallbackEnabled = settings["youtube_api_fallback"].toBool(false);
     apiInterval = qBound(18.25, settings["youtube_api_interval_seconds"].toDouble(18.25), 600.0);
     poll.setSingleShot(true);
+    youtubeDisplayTimer.setTimerType(Qt::PreciseTimer);
+    connect(&youtubeDisplayTimer, &QTimer::timeout, this, [this] {
+        if (youtubePending.isEmpty() || closed) { youtubeDisplayTimer.stop(); return; }
+        for (int i = 0; i < youtubeDisplayChunk && !youtubePending.isEmpty(); ++i)
+            publish(youtubePending.dequeue());
+        if (youtubePending.isEmpty()) youtubeDisplayTimer.stop();
+    });
     badgeRetry.setSingleShot(true);
     badgeRetry.setInterval(30000);
     connect(&badgeRetry, &QTimer::timeout, this, &Source::loadBadges);
@@ -183,6 +190,8 @@ void Source::start() {
 void Source::stop() {
     ++generation;
     closed = true;
+    youtubeDisplayTimer.stop();
+    youtubePending.clear();
     poll.stop();
     metadataTimer.stop();
     badgeRetry.stop();
@@ -201,6 +210,7 @@ void Source::reconnect() {
     if (closed) {
         return;
     }
+    flushYoutubeMessages();
     ++generation;
     chatModes = {}; chatModesKnown = false; youtubeModeNotice.clear();
     emit chatModesChanged();
@@ -247,6 +257,7 @@ void Source::setPaused(bool value) {
     }
     paused = value;
     if (paused) {
+        flushYoutubeMessages();
         poll.stop();
     } else if (!requesting) {
         poll.start(0);
@@ -480,6 +491,7 @@ void Source::youtubeModeNotices(const QJsonValue &data) {
 }
 
 void Source::redact(const QJsonObject &target) {
+    if (platform == "youtube" && !youtubePending.isEmpty()) flushYoutubeMessages();
     const auto userLogin = stripAt(str(target["user_login"]));
     QString reason = str(target["reason"]);
     if (reason.isEmpty()) reason = target["all"].toBool() ? "clear"
@@ -1123,9 +1135,40 @@ void Source::youtubeContinue(QJsonObject chat, QJsonObject config) {
     }
 }
 
+void Source::queueYoutubeMessages(const QVector<Message> &messages) {
+    if (messages.isEmpty() || closed) return;
+    for (const auto &message : messages) youtubePending.enqueue(message);
+    // Publish the first message immediately, then spread the remaining burst for at most 1.5 s.
+    if (!youtubeDisplayTimer.isActive() && !youtubePending.isEmpty()) publish(youtubePending.dequeue());
+    if (!youtubePending.isEmpty()) {
+        youtubeDisplayChunk = qMax(1, (int(youtubePending.size()) + 299) / 300);
+        youtubeDisplayTimer.start(qBound(5, 1500 * youtubeDisplayChunk / int(youtubePending.size()), 100));
+    }
+}
+
+void Source::flushYoutubeMessages() {
+    youtubeDisplayTimer.stop();
+    while (!youtubePending.isEmpty() && !closed) publish(youtubePending.dequeue());
+    if (closed) youtubePending.clear();
+}
+
+int Source::youtubeWebDelay() const {
+    int delay = recommendedMs;
+    // A shared cooldown switches all chats back to YouTube's suggested pace after a rate limit.
+    if (recommendedMs > 5000 && recommendedMs <= 10000 &&
+        hub->youtubeClock.elapsed() >= hub->youtubeConservativeUntil) delay = 5000;
+    return qMax(qRound(interval * 1000), delay);
+}
+
 void Source::youtubeActions(const QJsonArray &actions, bool historical) {
     youtubeModeNotices(actions);
     youtubeBannerActions(actions);
+    QVector<Message> batch;
+    auto flushBatch = [this, historical, &batch] {
+        if (historical) for (const auto &message : std::as_const(batch)) publish(message);
+        else queueYoutubeMessages(batch);
+        batch.clear();
+    };
     for (const auto &v : actions) {
         auto a = v.toObject();
         auto item = at(a, {"addChatItemAction", "item"}).toObject();
@@ -1140,20 +1183,25 @@ void Source::youtubeActions(const QJsonArray &actions, bool historical) {
                         emotes[e.code] = e;
                     }
                 }
-                publish(m);
+                batch.append(m);
             }
         }
         for (const auto &key : QStringList{"markChatItemAsDeletedAction", "removeChatItemAction"}) {
             auto target = str(at(a, {key, "targetItemId"}));
             if (!target.isEmpty()) {
+                flushBatch();
+                flushYoutubeMessages();
                 redact({{"message_id", target}});
             }
         }
         auto uid = str(at(a, {"markChatItemsByAuthorAsDeletedAction", "externalChannelId"}));
         if (!uid.isEmpty()) {
+            flushBatch();
+            flushYoutubeMessages();
             redact({{"user_id", uid}});
         }
     }
+    flushBatch();
 }
 
 void Source::youtubePoll() {
@@ -1211,7 +1259,7 @@ void Source::youtubePoll() {
                 return;
             }
             if (!self->paused) {
-                self->poll.start(qMax(int(self->interval * 1000), self->recommendedMs));
+                self->poll.start(self->youtubeWebDelay());
             }
         },
         "POST", {{"context", context}, {"continuation", continuation}}, headers);
@@ -1224,6 +1272,7 @@ void Source::youtubeError(const QString &error, int delay) {
     if (rateLimited) {
         wait = qMax(qMax(delay, hub->youtubeRateDelay), hub->youtubeCooldownRemaining());
         hub->youtubeCooldownUntil = hub->youtubeClock.elapsed() + wait;
+        hub->youtubeConservativeUntil = hub->youtubeClock.elapsed() + 3600000;
         hub->youtubeRateDelay = qMin(1800000, hub->youtubeRateDelay * 2);
     }
     if (rateLimited && apiFallbackEnabled && !closed && !paused) {
@@ -2401,6 +2450,68 @@ void Hub::profile(Source *s, Message m, JsonCallback done) {
     accounts->youtube("channels",
                       [done](QJsonObject d, QString e) { done(first(d["items"].toArray()).toObject(), e); },
                       "GET", {{"part", "snippet,statistics"}, {"id", m.uid}});
+}
+
+void Hub::followSince(Source *source, QString userId, JsonCallback done) {
+    if (!source || userId.isEmpty() || source->room().isEmpty()) {
+        done({{"status", "unavailable"}}, {}); return;
+    }
+    QPointer<Source> safe(source);
+    const QString room = source->room();
+    if (source->platform == "twitch") {
+        const QString account = str(accounts->twitch["user_id"]);
+        if (account.isEmpty() || !accounts->connected("twitch")) {
+            done({{"status", "sign_in"}}, {}); return;
+        }
+        if (userId == room) { done({{"status", "broadcaster"}}, {}); return; }
+        const bool own = userId == account;
+        const QString scope = own ? "user:read:follows" : "moderator:read:followers";
+        const QSet<QString> required = own ? QSet<QString>{scope}
+                                          : QSet<QString>{scope, "user:read:moderated_channels"};
+        if (!accounts->twitchAllows(required)) {
+            done({{"status", "permission"}, {"scope", scope}, {"own", own}}, {}); return;
+        }
+        auto lookup = [this, safe, room, account, userId, own, done] {
+            if (!safe || safe->room() != room || str(accounts->twitch["user_id"]) != account) return;
+            const auto endpoint = own ? QString("channels/followed") : QString("channels/followers");
+            const QMap<QString, QString> params = own
+                ? QMap<QString, QString>{{"user_id", account}, {"broadcaster_id", room}}
+                : QMap<QString, QString>{{"user_id", userId}, {"broadcaster_id", room}};
+            accounts->helix(endpoint, [this, safe, room, account, done](QJsonObject data, QString error) {
+                if (!safe || safe->room() != room || str(accounts->twitch["user_id"]) != account) return;
+                if (!error.isEmpty() || !data["data"].isArray()) {
+                    done({{"status", "unavailable"}}, {}); return;
+                }
+                const auto items = data["data"].toArray();
+                if (items.isEmpty()) { done({{"status", "not_following"}}, {}); return; }
+                const auto date = str(items[0].toObject()["followed_at"]);
+                done({{"status", date.isEmpty() ? "unavailable" : "following"}, {"date", date}}, {});
+            }, "GET", params);
+        };
+        if (own) { lookup(); return; }
+        canModerate(source, [safe, lookup, done](bool allowed, QString error) {
+            if (!safe) return;
+            if (!error.isEmpty() || !allowed) { done({{"status", "moderator_only"}}, {}); return; }
+            lookup();
+        });
+        return;
+    }
+    if (source->platform == "youtube") {
+        if (!accounts->googleCanReadChat()) { done({{"status", "sign_in"}}, {}); return; }
+        if (quota->remaining() < 1) { done({{"status", "unavailable"}}, {}); return; }
+        const QString account = str(accounts->google["channel_id"]);
+        accounts->youtube("subscriptions", [this, safe, room, account, done](QJsonObject data, QString error) {
+            if (!safe || safe->room() != room || str(accounts->google["channel_id"]) != account) return;
+            const auto items = data["items"].toArray();
+            const QString date = items.isEmpty() ? QString() : str(at(items[0].toObject(), {"snippet", "publishedAt"}));
+            if (!error.isEmpty() || date.isEmpty()) {
+                done({{"status", "unavailable"}}, {}); return;
+            }
+            done({{"status", "following"}, {"date", date}}, {});
+        }, "GET", {{"part", "snippet"}, {"channelId", userId}, {"forChannelId", room}}, {}, 1);
+        return;
+    }
+    done({{"status", "unavailable"}}, {});
 }
 
 void Hub::youtubeChannelByName(QString name, JsonCallback done) {

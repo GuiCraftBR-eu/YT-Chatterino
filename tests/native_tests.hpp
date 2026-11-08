@@ -29,6 +29,10 @@ class NativeTests : public QObject {
     void deletionReasonsFromPlatforms();
     void deletionReasonsOnPhone();
     void settingsLayoutNavigationAndApply();
+    void youtubePacingAndRateLimitFallback();
+    void youtubeBurstKeepsOrderAndModeration();
+    void followDatesAndPermissions();
+    void followDateUserCardAndPauseIndicator();
     void alertIconsMatchEvents();
     void hoverPausePreservesMessages();
     void previewStaysVisibleOnIncomingMessages();
