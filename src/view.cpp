@@ -414,8 +414,13 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         }
         cursor.insertText("\n", normalFormat);
     }
-    if (a["show_timestamps"].toBool(true) && m.stamp.isValid()) {
-        cursor.insertText(hub->cfg->time(m.stamp) + ' ', format(hub->cfg->timestampFont(), dim));
+    if (a["show_timestamps"].toBool(true) && (m.stamp.isValid() || m.replayOffsetMs >= 0)) {
+        QString timestamp;
+        if (m.replayOffsetMs >= 0) {
+            const qint64 seconds = m.replayOffsetMs / 1000;
+            timestamp = QString("%1:%2:%3").arg(seconds / 3600).arg((seconds / 60) % 60, 2, 10, QChar('0')).arg(seconds % 60, 2, 10, QChar('0'));
+        } else timestamp = hub->cfg->time(m.stamp);
+        cursor.insertText(timestamp + ' ', format(hub->cfg->timestampFont(), dim));
     }
     if (m.system) {
         cursor.insertText(hub->cfg->T(m.text), format(normal, dim));

@@ -27,6 +27,7 @@ subprocess.run(['windeployqt', '--release', '--no-opengl-sw', '--no-system-d3d-c
 for name in ('README.txt', 'README-PTBR.txt'):
     shutil.copy2(root / 'docs' / name, stage / name)
 shutil.copytree(root / 'Licenses', stage / 'Licenses')
+shutil.copytree(root / 'browser-extension', stage / 'browser-extension')
 (stage / 'qt.conf').write_text('[Paths]\nPrefix=.\nPlugins=.\n', encoding='utf-8')
 
 # The 1.x Windows updater checks for these files before installing a native release.

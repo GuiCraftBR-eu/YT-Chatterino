@@ -29,6 +29,13 @@ class NativeTests : public QObject {
     void deletionReasonsFromPlatforms();
     void deletionReasonsOnPhone();
     void settingsLayoutNavigationAndApply();
+    void notificationIconsAreCenteredAndConsistent();
+    void vodAddressValidation();
+    void vodTwitchPlaybackAndSeek();
+    void vodYouTubeReplayParsing();
+    void vodKickReplayParsing();
+    void vodPairingRejectsInvalidToken();
+    void unavailableFollowDateIsHidden();
     void youtubePacingAndRateLimitFallback();
     void youtubeBurstKeepsOrderAndModeration();
     void followDatesAndPermissions();

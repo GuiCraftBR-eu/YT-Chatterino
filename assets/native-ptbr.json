@@ -379,5 +379,21 @@
   "Sign in to YouTube to check public subscription dates.": "Entre no YouTube para consultar datas de inscrições públicas.",
   "Sign in to Twitch to check follow dates.": "Entre na Twitch para consultar datas de seguimento.",
   "Subscription date unavailable": "Data de inscrição indisponível",
-  "Follow date unavailable": "Data de seguimento indisponível"
+  "Follow date unavailable": "Data de seguimento indisponível",
+  "Open VOD chat replay (Beta)…": "Abrir replay do chat de VOD (Beta)…",
+  "VOD chat replay (Beta)": "Replay do chat de VOD (Beta)",
+  "Install the browser extension, open a VOD, and paste this code into the extension.": "Instale a extensão no navegador, abra uma VOD e cole este código na extensão.",
+  "Copy code": "Copiar código",
+  "Extension folder": "Pasta da extensão",
+  "Waiting for the browser extension…": "Aguardando a extensão do navegador…",
+  "Read-only beta: replay availability depends on the platform and the VOD.": "Beta somente leitura: a disponibilidade do replay depende da plataforma e da VOD.",
+  "Local connection unavailable": "Conexão local indisponível",
+  "Browser connected; waiting for a VOD…": "Navegador conectado; aguardando uma VOD…",
+  "Browser disconnected. Reconnect using the extension.": "Navegador desconectado. Reconecte pela extensão.",
+  "Connected to YouTube VOD replay.": "Conectado ao replay da VOD do YouTube.",
+  "Connected to Kick VOD replay.": "Conectado ao replay da VOD da Kick.",
+  "Open a supported VOD in the selected browser tab.": "Abra uma VOD compatível na aba selecionada do navegador.",
+  "Installation help": "Como instalar",
+  "Connected to Twitch VOD replay.": "Conectado ao replay da VOD da Twitch.",
+  "Chrome/Edge: open the browser's Extensions page, enable Developer mode, choose Load unpacked and select the extension folder.\n\nFirefox: open about:debugging, choose This Firefox and Load Temporary Add-on, then select manifest.json. Firefox removes temporary add-ons when it closes.\n\nOpen a VOD, click the extension icon, paste the pairing code and connect this tab.": "Chrome/Edge: abra a página Extensões, ative o modo de desenvolvedor, escolha Carregar sem compactação e selecione a pasta da extensão.\n\nFirefox: abra about:debugging, escolha Este Firefox e Carregar extensão temporária, depois selecione manifest.json. O Firefox remove extensões temporárias ao fechar.\n\nAbra uma VOD, clique no ícone da extensão, cole o código de pareamento e conecte esta aba."
 }
