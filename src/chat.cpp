@@ -931,31 +931,86 @@ void Source::loadEmotes(QString channelId) {
         return;
     }
     QPointer<Source> self(this);
+    const auto epoch = emoteRefreshEpoch;
     hub->net->json(QUrl("https://api.betterttv.net/3/cached/users/" + platform + '/' + channelId),
-                   [self](QJsonObject d, QString e) {
-                       if (!self || !e.isEmpty()) {
+                   [self, epoch](QJsonObject d, QString e) {
+                       if (!self || self->emoteRefreshEpoch != epoch || !e.isEmpty()) {
                            return;
                        }
                        self->hub->provider(self, d["channelEmotes"], "bttv", "channel");
                        self->hub->provider(self, d["sharedEmotes"], "bttv", "channel");
                    });
     hub->net->json(QUrl("https://7tv.io/v3/users/" + platform + '/' + channelId),
-                   [self](QJsonObject d, QString e) {
-                       if (!self || !e.isEmpty()) {
+                   [self, epoch](QJsonObject d, QString e) {
+                       if (!self || self->emoteRefreshEpoch != epoch || !e.isEmpty()) {
                            return;
                        }
                        self->hub->provider(self, at(d, {"emote_set", "emotes"}), "7tv", "channel");
                    });
     if (platform == "twitch") {
         hub->accounts->helix("chat/emotes",
-                             [self](QJsonObject d, QString e) {
-                                 if (!self || !e.isEmpty()) {
+                             [self, epoch](QJsonObject d, QString e) {
+                                 if (!self || self->emoteRefreshEpoch != epoch || !e.isEmpty()) {
                                      return;
                                  }
                                  self->hub->provider(self, d["data"], "twitch", "channel");
                              },
                              "GET", {{"broadcaster_id", channelId}});
     }
+}
+
+void Source::clearChannelEmotes(const QString &provider) {
+    auto matches = [provider](const Span &emote) {
+        const auto host=QUrl(emote.urls.value(0)).host().toLower();
+        if (provider=="bttv") return host=="betterttv.net" || host.endsWith(".betterttv.net");
+        if (provider=="7tv") return host=="7tv.app" || host.endsWith(".7tv.app") || host=="7tv.io" || host.endsWith(".7tv.io");
+        if (provider=="twitch") return host=="jtvnw.net" || host.endsWith(".jtvnw.net");
+        return false;
+    };
+    for(auto it=channelEmotes.begin();it!=channelEmotes.end();) {
+        if(!matches(it.value())) { ++it; continue; }
+        const auto code=it.key(); it=channelEmotes.erase(it);
+        if(emotes.contains(code) && matches(emotes.value(code))) {
+            emotes.remove(code);
+            if(kickGlobalEmotes.contains(code)) emotes[code]=kickGlobalEmotes.value(code);
+            else if(hub->globals.contains(code)) emotes[code]=hub->globals.value(code);
+        }
+    }
+}
+
+void Source::reloadChannelEmotes() {
+    if (closed) return;
+    const auto serial=++emoteRefreshEpoch, sourceGeneration=generation;
+    QPointer<Source> self(this); emit emoteRefreshRequested();
+    if(platform=="kick") kickLoadEmotes(true);
+    const QString channelId=room();
+    if(channelId.isEmpty()) { status("Channel emotes are unavailable until channel information loads."); return; }
+    emoteLoaded[channelId]=QDateTime::currentSecsSinceEpoch();
+    auto valid=[self,serial,sourceGeneration] { return self && !self->closed && self->generation==sourceGeneration && self->emoteRefreshEpoch==serial; };
+    hub->net->json(QUrl("https://api.betterttv.net/3/cached/users/"+platform+'/'+channelId),
+        [self,valid](QJsonObject d,QString error) {
+            if(!valid())return;
+            if(!error.isEmpty() && !error.contains("404")) { self->status("Could not reload BetterTTV channel emotes.");return; }
+            if(error.isEmpty() && !d["channelEmotes"].isArray() && !d["sharedEmotes"].isArray()) { self->status("Could not reload BetterTTV channel emotes.");return; }
+            self->clearChannelEmotes("bttv"); QJsonArray emotes=d["channelEmotes"].toArray();
+            for(const auto &item:d["sharedEmotes"].toArray()) emotes.append(item);
+            self->hub->provider(self,emotes,"bttv","channel");
+            self->status("BetterTTV channel emotes reloaded.");
+        });
+    hub->net->json(QUrl("https://7tv.io/v3/users/"+platform+'/'+channelId), [self,valid](QJsonObject d,QString error) {
+        if(!valid())return;
+        if(!error.isEmpty() && !error.contains("404")) { self->status("Could not reload 7TV channel emotes.");return; }
+        const auto values=at(d,{"emote_set","emotes"});
+        if(error.isEmpty() && !values.isArray() && !d["emote_set"].isNull()) { self->status("Could not reload 7TV channel emotes.");return; }
+        self->clearChannelEmotes("7tv"); self->hub->provider(self,values.toArray(),"7tv","channel");
+        self->status(values.toArray().isEmpty() ? "This channel has no 7TV emotes." : "7TV channel emotes reloaded.");
+    });
+    if(platform=="twitch") hub->accounts->helix("chat/emotes", [self,valid](QJsonObject d,QString error) {
+        if(!valid())return;
+        if(!error.isEmpty() || !d["data"].isArray()) { self->status("Could not reload Twitch channel emotes.");return; }
+        self->clearChannelEmotes("twitch");self->hub->provider(self,d["data"],"twitch","channel");
+        self->status("Twitch channel emotes reloaded.");
+    }, "GET", {{"broadcaster_id",channelId}});
 }
 
 void Source::loadBadges() {

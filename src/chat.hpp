@@ -73,6 +73,7 @@ class Source : public QObject {
     qint64 polls = 0;
     quint64 generation = 0;
     QHash<QString, qint64> emoteLoaded;
+    quint64 emoteRefreshEpoch = 0;
     qint64 globalBadgesLoaded = 0, channelBadgesLoaded = 0;
     bool globalBadgesPending = false, channelBadgesPending = false;
     QString badgeChannelRoom;
@@ -101,6 +102,8 @@ class Source : public QObject {
     QString chatModeSummary() const;
     void youtubeApiPollState(const QJsonObject &data);
     void loadEmotes(QString channelId = {});
+    void reloadChannelEmotes();
+    void clearChannelEmotes(const QString &provider);
     void loadBadges();
     void loadHistory();
     void kickConnect();
@@ -108,7 +111,7 @@ class Source : public QObject {
     void kickPoll();
     void kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Message>> batch, bool historical);
     void kickError(QString error);
-    void kickLoadEmotes();
+    void kickLoadEmotes(bool notify = false);
     void kickStartSocket();
     void kickSocketMessage(const QString &text);
     void kickSocketFailed();
@@ -138,6 +141,7 @@ class Source : public QObject {
     void decorationsChanged();
     void chatModesChanged();
     void permissionsChanged();
+    void emoteRefreshRequested();
     void redacted(QJsonObject target);
 };
 

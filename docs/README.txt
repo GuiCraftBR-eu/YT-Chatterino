@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.5.0 — WINDOWS 11 x64
+YT-CHATTERINO 2.5.1 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.5.0.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.5.1.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -39,7 +39,7 @@ You must have the channel's actual moderation/owner permission. More steps are i
 Do not share your JSON, account tokens or profile with friends. Share only this clean ZIP.
 
 VOD CHAT REPLAY
-1. In the app, click + > VOD extension setup and open the extension folder.
+1. In the app, click + > Browser extension setup and open the extension folder.
 2. In Chrome/Edge, open Extensions, enable Developer mode and Load unpacked, selecting
    the browser-extension folder. For Firefox, download the signed XPI from the GitHub
    release and use about:addons > gear > Install Add-on From File. Install this version
@@ -52,7 +52,7 @@ VOD CHAT REPLAY
    extension folder in your browser.
 Replay is read-only and depends on the platform retaining and exposing the chat. It uses
 unofficial public interfaces and may fail, be rate-limited or omit messages/emotes.
-The extension sends YouTube watch-page and Twitch/Kick VOD URLs and playback state to the local app.
+The extension sends supported channel and video URLs and VOD playback state to the local app.
 
 OPEN ON PHONE
 Right-click the tab, select the pane and Open on phone. Choose the local network,
@@ -64,6 +64,9 @@ HTTP, so use a trusted network. The phone view supports
 reading, sending, replies, emotes and permitted moderation, but not every desktop feature.
 
 USEFUL CONTROLS
+F5: reload channel emotes in the current pane. Ctrl+F5: reconnect the pane's chats.
+Use + to select live streams open in the browser or choose a suggested mixed feed. Similar
+names do not guarantee that channels belong to the same person.
 Ctrl+Shift+T: add a split. Ctrl+W: close focused pane. Ctrl+Shift+W: close tab.
 Ctrl+Tab: next tab. Ctrl+1-8: select tab. Ctrl+9: last tab.
 Drag the stream title to adjust its height. Drag tabs to reorder; drag dividers to resize. Scroll over tabs to switch.

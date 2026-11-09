@@ -297,12 +297,13 @@ void Source::kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Mess
     });
 }
 
-void Source::kickLoadEmotes() {
-    if (closed || kickChannelId.isEmpty()) return;
+void Source::kickLoadEmotes(bool notify) {
+    if (closed || kickChannelId.isEmpty()) { if(notify && !closed) status("Kick channel emotes are not available yet."); return; }
     QPointer<Source> self(this);
     const auto epoch = generation;
-    hub->net->json(QUrl("https://kick.com/emotes/" + id), [self, epoch](QJsonObject data, QString error) {
-        if (!self || self->closed || self->generation != epoch || !error.isEmpty()) return;
+    hub->net->json(QUrl("https://kick.com/emotes/" + id), [self, epoch, notify](QJsonObject data, QString error) {
+        if (!self || self->closed || self->generation != epoch) return;
+        if (!error.isEmpty() || !data["items"].isArray()) { if(notify)self->status("Could not reload Kick channel emotes."); return; }
         QHash<QString, Span> channel, global;
         for (const auto &setValue : data["items"].toArray()) {
             const auto set = setValue.toObject();
@@ -315,6 +316,17 @@ void Source::kickLoadEmotes() {
                 (isChannel ? channel : global)[code] = span;
             }
         }
+        if(notify) {
+            for(auto it=self->channelEmotes.begin();it!=self->channelEmotes.end();) {
+                if(QUrl(it.value().urls.value(0)).host()!="files.kick.com") { ++it;continue; }
+                const auto code=it.key();it=self->channelEmotes.erase(it);
+                if(QUrl(self->emotes.value(code).urls.value(0)).host()=="files.kick.com") self->emotes.remove(code);
+            }
+            for(auto it=self->kickGlobalEmotes.cbegin();it!=self->kickGlobalEmotes.cend();++it)
+                if(!global.contains(it.key()) && !self->channelEmotes.contains(it.key())) self->emotes.remove(it.key());
+            for(auto it=self->hub->globals.cbegin();it!=self->hub->globals.cend();++it)
+                if(!self->channelEmotes.contains(it.key())) self->emotes[it.key()]=it.value();
+        }
         self->kickGlobalEmotes = global;
         for (auto i = global.cbegin(); i != global.cend(); ++i)
             if (!self->channelEmotes.contains(i.key())) self->emotes[i.key()] = i.value();
@@ -322,6 +334,7 @@ void Source::kickLoadEmotes() {
             self->channelEmotes[i.key()] = i.value(); self->emotes[i.key()] = i.value();
         }
         emit self->changed();
+        if(notify)self->status("Kick channel emotes reloaded.");
     });
 }
 

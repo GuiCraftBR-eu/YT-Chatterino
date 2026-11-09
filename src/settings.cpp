@@ -1267,6 +1267,7 @@ QWidget *SettingsWindow::shortcutsPage() {
                                         {"Ctrl+Shift+F", "Search all chats"},
                                         {"Ctrl+P", "Appearance settings"},
                                         {"Ctrl+K", "Switch chat"},
+                                        {"F5", "Reload channel emotes"},
                                         {"Ctrl+F5", "Reconnect current pane"},
                                         {"Alt+Arrows", "Move pane focus"},
                                         {"Ctrl+Alt+M", "Mix channels"},

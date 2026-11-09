@@ -8,7 +8,7 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 **Windows 11 · Arch Linux · C++20 / Qt 6 · PT-BR / English**
 
-[Baixar v2.5.0](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.5.0) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
+[Baixar v2.5.1](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.5.1) · [Como usar](#primeiros-passos) · [Compilar](docs/BUILDING.md) · [Aviso de independência](#independência-e-marcas)
 
 </div>
 
@@ -17,16 +17,16 @@ Cliente independente para chats do YouTube, da Twitch e da Kick, com abas, pain�
 
 ## Baixar e abrir
 
-| Sistema | Download da versão 2.5.0 | Instalação |
+| Sistema | Download da versão 2.5.1 | Instalação |
 | --- | --- | --- |
-| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.0/YT-Chatterino-Windows11-2.5.0.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
-| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.0/yt-chatterino-2.5.0-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
+| **Windows 11** | [Baixar ZIP](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.1/YT-Chatterino-Windows11-2.5.1.zip) | Extraia tudo e abra `YT-Chatterino.exe`. Mantenha as DLLs e pastas junto do executável. |
+| **Arch Linux** | [Baixar pacote nativo](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.1/yt-chatterino-2.5.1-1-x86_64.pkg.tar.zst) | Instale com o comando abaixo. [Guia para Arch](docs/ARCH-LINUX.md). |
 
 ```sh
-sudo pacman -U ./yt-chatterino-2.5.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./yt-chatterino-2.5.1-1-x86_64.pkg.tar.zst
 ```
 
-Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.5.0).
+Não precisa de Python. Baixe pelo repositório oficial **deste projeto**; os arquivos e as verificações SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.5.1).
 
 ## Primeiros passos
 
@@ -67,11 +67,13 @@ Os controles de moderação aparecem quando o app identifica seu cargo no canal.
 
 ### Replay de chat de VOD
 
-O chat acompanha a posição, a pausa e os saltos da VOD aberta no navegador. No app, clique em **+ → Configurar extensão de VOD…** para abrir as instruções e a pasta da extensão. No Chrome/Edge, ative o modo de desenvolvedor em Extensões e carregue a pasta `browser-extension` sem compactação. No Firefox, baixe a [extensão assinada](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.0/YT-Chatterino-Firefox-2.5.0.xpi), abra `about:addons` e use **engrenagem → Instalar extensão de arquivo**. Instale-a uma vez para receber as próximas versões assinadas automaticamente. Se já usava a extensão anterior, instale a nova versão assinada; no Chrome/Edge, recarregue a pasta atualizada.
+O chat acompanha a posição, a pausa e os saltos da VOD aberta no navegador. No app, clique em **+ → Configurar extensão do navegador…** para abrir as instruções e a pasta da extensão. No Chrome/Edge, ative o modo de desenvolvedor em Extensões e carregue a pasta `browser-extension` sem compactação. No Firefox, baixe a [extensão assinada](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.1/YT-Chatterino-Firefox-2.5.1.xpi), abra `about:addons` e use **engrenagem → Instalar extensão de arquivo**. Instale-a uma vez para receber as próximas versões assinadas automaticamente. Se já usava a extensão anterior, instale a nova versão assinada; no Chrome/Edge, recarregue a pasta atualizada.
 
 Com o app e a extensão abertos, comece a reproduzir uma VOD compatível, clique em **+**, marque-a em **Selecionar chats de VOD abertos** e clique em **Abrir**. O app não abre abas automaticamente; se fechar o chat, você pode selecioná-lo novamente enquanto o vídeo estiver aberto. Para misturar VODs, selecione **Chat misturado** e marque os vídeos desejados. Também é possível selecionar **Link de VOD** e adicionar links manualmente; mantenha as VODs abertas no navegador para sincronizar a reprodução.
 
-O replay é somente leitura e depende do chat estar disponível na Twitch, no YouTube ou na Kick. As interfaces públicas não oficiais podem mudar ou limitar o acesso; mensagens, emotes ou distintivos podem faltar. Para identificar replays, a extensão envia ao app local endereços de vídeos do YouTube e de VODs da Twitch/Kick e seu estado de reprodução. A conexão aceita extensões do navegador e fica restrita ao próprio computador.
+O botão **+** também mostra lives abertas no navegador. Quando os nomes dos canais são parecidos, uma sugestão de chat misturado permite selecioná-los juntos. Confira a sugestão antes de abrir: nomes parecidos não garantem que os canais sejam da mesma pessoa.
+
+O replay é somente leitura e depende do chat estar disponível na Twitch, no YouTube ou na Kick. As interfaces públicas não oficiais podem mudar ou limitar o acesso; mensagens, emotes ou distintivos podem faltar. Para identificar lives e replays, a extensão envia ao app local endereços de canais e vídeos compatíveis e o estado de reprodução da VOD. A conexão aceita extensões do navegador e fica restrita ao próprio computador.
 
 ### Controles essenciais
 

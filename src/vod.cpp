@@ -553,6 +553,94 @@ void VodBridge::disconnectClient(const QString &client) {
     const auto prefix = client + ':';
     const auto keys = players.keys();
     for (const auto &key : keys) if (key.startsWith(prefix)) removePlayer(key, false);
+    const auto liveKeys = livePlayers.keys();
+    for (const auto &key : liveKeys) if (key.startsWith(prefix)) removeLivePlayer(key);
+}
+
+QJsonObject VodBridge::identifyLive(const QUrl &url) {
+    if (url.scheme() != "https" || !url.userInfo().isEmpty() || (url.port(-1) != -1 && url.port() != 443)) return {};
+    const QString host = url.host().toLower(), path = url.path();
+    if ((host == "youtube.com" || host == "www.youtube.com" || host == "m.youtube.com") && path == "/watch") {
+        const QString id = QUrlQuery(url).queryItemValue("v");
+        if (QRegularExpression("^[A-Za-z0-9_-]{11}$").match(id).hasMatch()) return {{"platform","youtube"},{"id",id}};
+    } else if (host == "twitch.tv" || host == "www.twitch.tv" || host == "m.twitch.tv") {
+        if (!QRegularExpression("^/[A-Za-z0-9_]{1,25}/?$").match(path).hasMatch()) return {};
+        const auto id = twitchLogin(url.toString()); if (!id.isEmpty()) return {{"platform","twitch"},{"id",id}};
+    } else if (host == "kick.com" || host == "www.kick.com") {
+        if (!QRegularExpression("^/[A-Za-z0-9_-]{1,80}/?$").match(path).hasMatch()) return {};
+        const auto id = kickLogin(url.toString()); if (!id.isEmpty()) return {{"platform","kick"},{"id",id}};
+    }
+    return {};
+}
+
+void VodBridge::removeLivePlayer(const QString &player) {
+    livePlayers.remove(player);
+    if (liveItems.remove(player)) emit liveStreamsChanged();
+}
+
+void VodBridge::processLiveState(const QString &client, const QJsonObject &data) {
+    if (!data["tab"].isDouble()) return;
+    const double tab = data["tab"].toDouble(-1);
+    if (!std::isfinite(tab) || tab < 0 || tab > 2147483647 || std::floor(tab) != tab) return;
+    const QString player = client + ':' + QString::number(int(tab));
+    const QUrl url(str(data["url"])); const auto identity = identifyLive(url);
+    if (identity.isEmpty()) { removeLivePlayer(player); return; }
+    if (!livePlayers.contains(player) && livePlayers.size() >= 32) return;
+    if (livePlayers.value(player) != url) { livePlayers[player] = url; if (liveItems.remove(player)) emit liveStreamsChanged(); }
+    const QString cacheKey = url.toString(QUrl::FullyEncoded);
+    const auto now = QDateTime::currentMSecsSinceEpoch();
+    if (liveCacheUntil.value(cacheKey) > now) {
+        const auto cached = liveCache.value(cacheKey);
+        if (liveItems.value(player) != cached) { if (cached.isEmpty()) liveItems.remove(player); else liveItems[player] = cached; emit liveStreamsChanged(); }
+        return;
+    }
+    if (livePending.contains(cacheKey)) return;
+    if (liveCache.size() > 96) { liveCache.clear(); liveCacheUntil.clear(); }
+    livePending.insert(cacheKey); QPointer<VodBridge> self(this);
+    auto complete = [self, cacheKey, url](QJsonObject item, bool error) {
+        if (!self) return;
+        self->livePending.remove(cacheKey); self->liveCache[cacheKey] = item;
+        self->liveCacheUntil[cacheKey] = QDateTime::currentMSecsSinceEpoch() + (error ? 30000 : 90000);
+        bool changed = false;
+        for (auto it = self->livePlayers.cbegin(); it != self->livePlayers.cend(); ++it) if (it.value() == url) {
+            if (self->liveItems.value(it.key()) == item) continue;
+            if (item.isEmpty()) self->liveItems.remove(it.key()); else self->liveItems[it.key()] = item;
+            changed = true;
+        }
+        if (changed) emit self->liveStreamsChanged();
+    };
+    const QString platform = str(identity["platform"]), id = str(identity["id"]);
+    const QString browserName = str(data["name"]).trimmed().left(100);
+    if (platform == "youtube" && data["live"].toBool() && !browserName.isEmpty()) {
+        complete({{"platform","youtube"},{"id",id},{"name",browserName}}, false); return;
+    }
+    if (platform == "twitch") {
+        const QJsonObject body{{"query","query($login:String!){user(login:$login){login displayName stream{id}}}"},
+                               {"variables",QJsonObject{{"login",id}}}};
+        hub->net->json(QUrl("https://gql.twitch.tv/gql"), [complete,id](QJsonObject data, QString error) {
+            const auto user = at(data,{"data","user"}).toObject();
+            const bool failed = !error.isEmpty() || !data["errors"].toArray().isEmpty();
+            if (failed || user["stream"].toObject().isEmpty()) { complete({}, failed); return; }
+            QString name = str(user["displayName"]); if (name.isEmpty()) name = id;
+            complete({{"platform","twitch"},{"id",id},{"name",name}}, false);
+        }, "POST", body, twitchReplayHeaders());
+    } else if (platform == "kick") {
+        hub->net->json(QUrl("https://kick.com/api/v2/channels/"+id), [complete,id](QJsonObject data, QString error) {
+            if (!error.isEmpty() || data["livestream"].toObject().isEmpty()) { complete({}, !error.isEmpty()); return; }
+            QString name = str(at(data,{"user","username"})); if (name.isEmpty()) name=id;
+            complete({{"platform","kick"},{"id",id},{"name",name}}, false);
+        }, "GET", {}, {{"User-Agent", browserAgent}});
+    } else {
+        hub->net->bytes(Network::query("https://www.youtube.com/watch", {{"v",id}}), [complete,id](QByteArray bytes, QString error) {
+            if (!error.isEmpty()) { complete({}, true); return; }
+            const auto response = embeddedJson(QString::fromUtf8(bytes), "ytInitialPlayerResponse");
+            const auto details = response["videoDetails"].toObject();
+            const bool live = details["isLive"].toBool() || at(response,{"microformat","playerMicroformatRenderer","liveBroadcastDetails","isLiveNow"}).toBool();
+            if (str(details["videoId"]) != id || !live) { complete({}, details.isEmpty()); return; }
+            QString name = str(details["author"]); if (name.isEmpty()) name=id;
+            complete({{"platform","youtube"},{"id",id},{"name",name}}, false);
+        }, "GET", {}, {{"User-Agent", browserAgent}});
+    }
 }
 
 void VodBridge::processState(const QString &client, const QJsonObject &data) {
@@ -598,8 +686,14 @@ void VodBridge::acceptConnection() {
             }
             const auto client = clients.value(socket), type = str(data["type"]);
             if (type == "state") processState(client, data);
-            else if (type == "closed" && data["tab"].isDouble())
-                removePlayer(client + ':' + QString::number(data["tab"].toInt(-1)), true);
+            else if (type == "live-state") processLiveState(client, data);
+            else if ((type == "closed" || type == "vod-closed" || type == "live-closed") && data["tab"].isDouble()) {
+                const double tab = data["tab"].toDouble(-1);
+                if (!std::isfinite(tab) || tab < 0 || tab > 2147483647 || std::floor(tab) != tab) return;
+                const auto player = client + ':' + QString::number(int(tab));
+                if (type != "live-closed") removePlayer(player, true);
+                if (type != "vod-closed") removeLivePlayer(player);
+            }
         });
         connect(socket, &QWebSocket::disconnected, this, [this, socket] {
             const auto client = clients.take(socket); if (!client.isEmpty()) disconnectClient(client);
