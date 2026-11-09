@@ -32,6 +32,8 @@ class NativeTests : public QObject {
     void notificationIconsAreCenteredAndConsistent();
     void replayAlertsUseEventCards();
     void detectedVodCanBeReopened();
+    void browserLiveSuggestionsAndNavigation();
+    void f5ReloadsEmotesWithoutReconnecting();
     void vodAutomaticTabsMixAndBadges();
     void vodSessionRestoreAndSuppression();
     void vodBrowserOriginsAndReadOnlyModes();

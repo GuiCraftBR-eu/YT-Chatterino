@@ -50,10 +50,17 @@ class VodBridge : public QObject {
     QWebSocketServer server;
     QHash<QWebSocket *, QString> clients;
     QHash<QString, QString> players, owners;
+    QHash<QString, QUrl> livePlayers;
+    QHash<QString, QJsonObject> liveItems, liveCache;
+    QHash<QString, qint64> liveCacheUntil;
+    QSet<QString> livePending;
     QSet<QString> suppressed, hooked;
     static bool allowedOrigin(const QString &origin);
     void acceptConnection();
     void processState(const QString &client, const QJsonObject &data);
+    void processLiveState(const QString &client, const QJsonObject &data);
+    void removeLivePlayer(const QString &player);
+    static QJsonObject identifyLive(const QUrl &url);
     void removePlayer(const QString &player, bool navigation = false);
     void disconnectClient(const QString &client);
     void suppress(const QString &key);
@@ -61,5 +68,6 @@ class VodBridge : public QObject {
     void hook(Source *source);
   signals:
     void discovered(yc::Source *source);
+    void liveStreamsChanged();
 };
 } // namespace yc

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.1
+
+- Lives abertas no navegador aparecem no botão +, com sugestões opcionais para misturar canais de nomes parecidos.
+- F5 recarrega emotes dos canais no painel atual; Ctrl+F5 continua reconectando chats.
+- Extensão passa a se chamar YT-Chatterino.
+
 ## 2.5.0
 
 - VODs detectadas podem ser abertas e reabertas pelo botão +, sem criar abas automaticamente.

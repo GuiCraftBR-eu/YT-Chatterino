@@ -2648,6 +2648,7 @@ void Pane::openEmotes() {
         }
     });
     connect(s, &Source::changed, dialog, populate);
+    connect(s, &Source::emoteRefreshRequested, dialog, load);
     connect(authorize, &QPushButton::clicked, dialog, [=, this] {
         if (hub->accounts->twitchAllows({"user:read:emotes"})) {
             load();

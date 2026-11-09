@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.5.0 — WINDOWS 11 x64
+YT-CHATTERINO 2.5.1 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.5.0.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.5.1.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -40,7 +40,7 @@ Você precisa ter permissão real de moderador/dono no canal. Há mais instruç�
 Não compartilhe seu JSON, tokens nem perfil com amigos. Compartilhe somente este ZIP limpo.
 
 REPLAY DE CHAT DE VOD
-1. No app, clique em + > Configurar extensão de VOD e abra a pasta da extensão.
+1. No app, clique em + > Configurar extensão do navegador e abra a pasta da extensão.
 2. No Chrome/Edge, abra Extensões, ative o modo de desenvolvedor e use Carregar sem
    compactação para selecionar a pasta browser-extension. Para Firefox, baixe o XPI assinado
    na release do GitHub; em about:addons, clique na engrenagem > Instalar extensão de arquivo.
@@ -53,8 +53,8 @@ REPLAY DE CHAT DE VOD
    atualização a partir da versão anterior, carregue novamente a pasta da extensão atualizada.
 O replay é somente leitura e depende de a plataforma ter guardado e disponibilizado o chat.
 Usa interfaces públicas não oficiais e pode falhar, ser limitado ou omitir mensagens/emotes.
-A extensão envia os endereços de páginas de vídeo do YouTube e VODs da Twitch/Kick e o
-estado da reprodução ao app local, para identificar e sincronizar replays.
+A extensão envia endereços de canais e vídeos compatíveis e o estado de reprodução das
+VODs ao app local, para identificar lives e sincronizar replays.
 
 ABRIR NO CELULAR
 Clique com o direito na aba, escolha o painel e Abrir no celular. Selecione
@@ -67,6 +67,9 @@ a conexão até ser configurado. A conexão usa HTTP local: use uma rede confiá
 suas permissões, além de editar título e categoria. Toque em emotes e emblemas para ampliá-los.
 
 CONTROLES ÚTEIS
+F5: recarregar emotes dos canais do painel atual. Ctrl+F5: reconectar os chats do painel.
+No botão +, selecione lives abertas no navegador ou uma sugestão de chat misturado; nomes
+parecidos não garantem que sejam da mesma pessoa.
 Ctrl+Shift+T: adicionar painel. Ctrl+W: fechar painel focado. Ctrl+Shift+W: fechar aba.
 Ctrl+Tab: próxima aba. Ctrl+1-8: selecionar aba. Ctrl+9: última aba.
 Arraste o título da live para ajustar a altura. Arraste as abas para reordenar; arraste as divisórias para redimensionar. Role sobre as abas para trocar.

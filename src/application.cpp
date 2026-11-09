@@ -216,6 +216,14 @@ MainWindow::MainWindow(QString profile, bool testing)
     shortcut("Ctrl+Shift+F", [this] { globalSearch(); });
     shortcut("Ctrl+P", [this] { showSettings("Display"); });
     shortcut("Ctrl+K", [this] { quickSwitch(); });
+    shortcut("F5", [this] {
+        if (auto *p = currentPane()) {
+            QSet<Source *> refreshed;
+            for (auto s : p->sources) if (s && !refreshed.contains(s)) {
+                refreshed.insert(s); s->reloadChannelEmotes();
+            }
+        }
+    });
     shortcut("Ctrl+F5", [this] {
         if (auto *p = currentPane()) {
             for (auto s : p->sources) {
@@ -420,6 +428,13 @@ static QStringList liveStreamChoices(const QJsonArray &streams) {
     return choices;
 }
 
+static QString suggestedMixKey(QString name) {
+    name = name.normalized(QString::NormalizationForm_KD).toCaseFolded();
+    name.remove(QRegularExpression("[^a-z0-9]"));
+    if (name.endsWith("live") && name.size() >= 7) name.chop(4);
+    return name.size() >= 3 ? name : QString();
+}
+
 void MainWindow::addChats(QString mode, Pane *anchor) {
     auto *dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -496,20 +511,70 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
     vodLabel->hide(); vods->hide();
     for (auto *source : hub.sources) addVod(source);
     if (vodBridge) connect(vodBridge, &VodBridge::discovered, dialog, addVod);
+    auto *liveLabel = label(cfg, "Live streams open in your browser");
+    auto *liveList = new QListWidget(dialog); liveList->setObjectName("add-chat-browser-live");
+    auto *suggestLabel = label(cfg, "Suggested mixed chats");
+    auto *suggestions = new QListWidget(dialog); suggestions->setObjectName("add-chat-browser-mixes");
+    liveList->setStyleSheet(saved->styleSheet().replace("add-chat-saved", "add-chat-browser-live"));
+    layout->addWidget(liveLabel); layout->addWidget(liveList);
+    layout->addWidget(suggestLabel); layout->addWidget(suggestions);
+    auto refreshLive = [this, liveList, liveLabel, suggestions, suggestLabel] {
+        QSet<QString> checked;
+        for (int i=0;i<liveList->count();++i) if (liveList->item(i)->checkState()==Qt::Checked)
+            checked.insert(liveList->item(i)->data(Qt::UserRole+1).toString());
+        QMap<QString,QJsonObject> unique;
+        if (vodBridge) for (const auto &item : vodBridge->liveItems) {
+            const auto key = str(item["platform"]) + ':' + str(item["id"]);
+            if (!key.endsWith(':')) unique[key]=item;
+        }
+        liveList->clear(); suggestions->clear();
+        QMap<QString,QList<QJsonObject>> groups;
+        for (auto it=unique.cbegin();it!=unique.cend();++it) {
+            const auto item=it.value(); const QString platform=str(item["platform"]), name=str(item["name"]);
+            auto *row=new QListWidgetItem(QString(platform=="youtube" ? "YouTube" : platform=="twitch" ? "Twitch" : "Kick") + " · " + name,liveList);
+            row->setFlags(row->flags()|Qt::ItemIsUserCheckable);
+            row->setCheckState(checked.contains(it.key()) ? Qt::Checked : Qt::Unchecked);
+            row->setData(Qt::UserRole,item); row->setData(Qt::UserRole+1,it.key());
+            const auto group=suggestedMixKey(name); if(!group.isEmpty()) groups[group]<<item;
+        }
+        for(auto it=groups.cbegin();it!=groups.cend();++it) if(it.value().size()>1) {
+            QStringList names; QJsonArray keys;
+            for(const auto &item:it.value()) {
+                const QString platform=str(item["platform"]);
+                names << (platform=="youtube" ? "YouTube" : platform=="twitch" ? "Twitch" : "Kick") + QString(" · ") + str(item["name"]);
+                keys.append(platform + ':' + str(item["id"]));
+            }
+            auto *row=new QListWidgetItem(names.join("  +  "),suggestions); row->setData(Qt::UserRole,keys);
+        }
+        liveList->setFixedHeight(qMin(150,6+27*liveList->count()));
+        suggestions->setFixedHeight(qMin(100,6+27*suggestions->count()));
+        liveLabel->setVisible(liveList->count()>0); liveList->setVisible(liveList->count()>0);
+        suggestLabel->setVisible(suggestions->count()>0); suggestions->setVisible(suggestions->count()>0);
+    };
+    auto chooseMix = [liveList,combo](QListWidgetItem *item) {
+        QSet<QString> keys; for(const auto &value:item->data(Qt::UserRole).toJsonArray()) keys.insert(value.toString());
+        for(int i=0;i<liveList->count();++i) if(keys.contains(liveList->item(i)->data(Qt::UserRole+1).toString()))
+            liveList->item(i)->setCheckState(Qt::Checked);
+        combo->setCurrentIndex(3);
+    };
+    connect(suggestions, &QListWidget::itemClicked, dialog, chooseMix);
+    connect(suggestions, &QListWidget::itemActivated, dialog, chooseMix);
+    refreshLive();
+    if (vodBridge) connect(vodBridge, &VodBridge::liveStreamsChanged, dialog, refreshLive);
     auto *lookupStatus = new QLabel(cfg.T("Looking for live broadcasts…"), dialog);
     lookupStatus->setObjectName("add-chat-status"); lookupStatus->hide();
     layout->addWidget(lookupStatus);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Open | QDialogButtonBox::Cancel, dialog);
     buttons->button(QDialogButtonBox::Open)->setText(cfg.T("Open"));
     buttons->button(QDialogButtonBox::Cancel)->setText(cfg.T("Cancel"));
-    auto *vod = new QPushButton(cfg.T("VOD extension setup…"), dialog);
+    auto *vod = new QPushButton(cfg.T("Browser extension setup…"), dialog);
     vod->setObjectName("add-vod-replay");
     layout->addWidget(vod);
     connect(vod, &QPushButton::clicked, dialog, [this, dialog] { dialog->accept(); showVod(); });
     layout->addWidget(buttons);
     QPointer<Pane> safe(anchor);
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-    auto open = [this, input, combo, modes, dialog, safe, platform, saved, vods, buttons, lookupStatus] {
+    auto open = [this, input, combo, modes, dialog, safe, platform, saved, vods, liveList, buttons, lookupStatus] {
         if (!buttons->button(QDialogButtonBox::Open)->isEnabled()) return;
         QList<QJsonObject> selections;
         QStringList entries;
@@ -559,6 +624,11 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
         for (int i = 0; i < vods->count(); ++i)
             if (vods->item(i)->checkState() == Qt::Checked)
                 selections << QJsonObject{{"platform", "vod"}, {"channel_id", vods->item(i)->data(Qt::UserRole).toString()}};
+        for (int i=0;i<liveList->count();++i) if(liveList->item(i)->checkState()==Qt::Checked) {
+            const auto item=liveList->item(i)->data(Qt::UserRole).toJsonObject();
+            selections << QJsonObject{{"platform",str(item["platform"])=="youtube" ? "video" : str(item["platform"])},
+                                      {"channel_id",item["id"]}};
+        }
         if (selections.isEmpty()) { input->setFocus(); return; }
         if (selections.size() > 32) {
             QMessageBox::warning(dialog, cfg.T("Add chats"), cfg.T("Choose at most 32 chats at a time."));
@@ -889,7 +959,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     menu.addSeparator();
     menu.addAction(cfg.T("Search messages…") + "\tCtrl+F", p, &Pane::showSearch);
     auto *historyMenu = menu.addMenu(cfg.T("Filters and history"));
-    auto *vod = historyMenu->addAction(cfg.T("VOD extension setup…"), this, &MainWindow::showVod);
+    auto *vod = historyMenu->addAction(cfg.T("Browser extension setup…"), this, &MainWindow::showVod);
     vod->setObjectName("open-vod-replay");
     auto *layoutMenu = menu.addMenu(cfg.T("Layout"));
     menu.addAction(cfg.T("Rename tab…"), this, [this] {
@@ -977,8 +1047,8 @@ void MainWindow::startVodBridge(quint16 port) {
 }
 
 void MainWindow::showVod() {
-    QMessageBox box(QMessageBox::Information, cfg.T("VOD extension setup"),
-        cfg.T("Install the included browser extension. Open a VOD in the browser, then select its chat with the + button.\n\n"
+    QMessageBox box(QMessageBox::Information, cfg.T("Browser extension setup"),
+        cfg.T("Install the included browser extension. Open a live stream or VOD in the browser, then select its chat with the + button.\n\n"
               "Chrome/Edge: open Extensions, enable Developer mode, choose Load unpacked and select the extension folder.\n\n"
               "Firefox: download the signed XPI from the GitHub release. In about:addons, use the gear menu → Install Add-on From File.\n\n"
               "After updating the app, reload the unpacked Chrome/Edge extension."), QMessageBox::Close, this);

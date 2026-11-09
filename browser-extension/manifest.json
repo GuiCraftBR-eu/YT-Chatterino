@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "YT-Chatterino VOD Sync",
-  "version": "2.5.0",
-  "description": "Synchronize local YT-Chatterino VOD chat with the video in this browser tab.",
+  "name": "YT-Chatterino",
+  "version": "2.5.1",
+  "description": "Find open livestreams and synchronize VOD chat with YT-Chatterino on this computer.",
   "permissions": [],
   "host_permissions": [
     "http://127.0.0.1/*"
@@ -15,7 +15,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "YT-Chatterino VOD Sync",
+    "default_title": "YT-Chatterino",
     "default_icon": {
       "512": "icon.png"
     }
