@@ -33,6 +33,10 @@ class NativeTests : public QObject {
     void replayAlertsUseEventCards();
     void detectedVodCanBeReopened();
     void browserLiveSuggestionsAndNavigation();
+    void liveIndicatorsFollowEachChannel();
+    void twitchLiveIndicatorWithoutSignIn();
+    void twitchBrowserPanelsFollowTabsAndPermissions();
+    void browserBridgeUnicodeAndPanelRouting();
     void f5ReloadsEmotesWithoutReconnecting();
     void vodAutomaticTabsMixAndBadges();
     void vodSessionRestoreAndSuppression();

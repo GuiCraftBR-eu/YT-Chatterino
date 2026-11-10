@@ -574,8 +574,65 @@ QJsonObject VodBridge::identifyLive(const QUrl &url) {
 }
 
 void VodBridge::removeLivePlayer(const QString &player) {
+    const auto oldLogin = str(browserPanels.value(player)["login"]);
+    browserPanels.remove(player);
     livePlayers.remove(player);
     if (liveItems.remove(player)) emit liveStreamsChanged();
+    if (!oldLogin.isEmpty()) refreshBrowserPanels(oldLogin);
+}
+
+void VodBridge::refreshBrowserPanels(const QString &login) {
+    if (login.isEmpty()) return;
+    QJsonObject selected;
+    for (const auto &value : browserPanels) {
+        if (str(value["login"]) == login && value["sequence"].toDouble() > selected["sequence"].toDouble())
+            selected = value;
+    }
+    for (auto *source : hub->sources) {
+        if (source && !source->isVod && source->platform == "twitch" && source->id.compare(login, Qt::CaseInsensitive) == 0)
+            source->setBrowserPanels(selected["pin"].toObject(), selected["poll"].toObject(), selected["prediction"].toObject());
+    }
+}
+
+bool VodBridge::openTwitchPanel(Source *source, const QString &kind) {
+    if (!source || source->isVod || source->platform != "twitch" || (kind != "poll" && kind != "prediction")) return false;
+    QString player;
+    double sequence = 0;
+    for (auto it = browserPanels.cbegin(); it != browserPanels.cend(); ++it) {
+        const auto item = it.value();
+        if (str(item["login"]).compare(source->id, Qt::CaseInsensitive) != 0 || item[kind].toObject().isEmpty() ||
+            item["sequence"].toDouble() <= sequence) continue;
+        player = it.key(); sequence = item["sequence"].toDouble();
+    }
+    const auto client = player.section(':', 0, 0);
+    bool ok = false;
+    const int tab = player.section(':', 1, 1).toInt(&ok);
+    auto *socket = clients.key(client, nullptr);
+    if (player.isEmpty() || !ok || !socket || socket->state() != QAbstractSocket::ConnectedState) return false;
+    const QJsonObject command{{"type", "open-panel"}, {"tab", tab}, {"channel", source->id}, {"kind", kind}};
+    return socket->sendTextMessage(QString::fromUtf8(QJsonDocument(command).toJson(QJsonDocument::Compact))) > 0;
+}
+
+void VodBridge::updateBrowserPanels(const QString &player, const QString &login, const QJsonValue &value) {
+    const QString oldLogin = str(browserPanels.value(player)["login"]);
+    const auto chat = value.toObject();
+    if (login.isEmpty() || !chat.value("available").toBool()) {
+        browserPanels.remove(player);
+    } else {
+        auto panel = [](const QJsonValue &input) {
+            const auto source = input.toObject();
+            const QString text = str(source["text"]).simplified().left(800);
+            if (text.isEmpty()) return QJsonObject();
+            return QJsonObject{{"text", text}, {"name", str(source["name"]).simplified().left(100)},
+                               {"options", str(source["options"]).simplified().left(800)}, {"browser", true}};
+        };
+        browserPanels[player] = {{"login", login}, {"sequence", double(++browserPanelSequence)},
+                                 {"pin", panel(chat["pin"])}, {"poll", panel(chat["poll"])},
+                                 {"prediction", panel(chat["prediction"])}};
+    }
+    if (!oldLogin.isEmpty() && oldLogin != login) refreshBrowserPanels(oldLogin);
+    if (!login.isEmpty()) refreshBrowserPanels(login);
+    else if (!oldLogin.isEmpty()) refreshBrowserPanels(oldLogin);
 }
 
 void VodBridge::processLiveState(const QString &client, const QJsonObject &data) {
@@ -586,7 +643,11 @@ void VodBridge::processLiveState(const QString &client, const QJsonObject &data)
     const QUrl url(str(data["url"])); const auto identity = identifyLive(url);
     if (identity.isEmpty()) { removeLivePlayer(player); return; }
     if (!livePlayers.contains(player) && livePlayers.size() >= 32) return;
-    if (livePlayers.value(player) != url) { livePlayers[player] = url; if (liveItems.remove(player)) emit liveStreamsChanged(); }
+    if (livePlayers.value(player) != url) {
+        removeLivePlayer(player);
+        livePlayers[player] = url;
+    }
+    updateBrowserPanels(player, str(identity["platform"]) == "twitch" ? str(identity["id"]) : QString(), data["chat"]);
     const QString cacheKey = url.toString(QUrl::FullyEncoded);
     const auto now = QDateTime::currentMSecsSinceEpoch();
     if (liveCacheUntil.value(cacheKey) > now) {
@@ -674,10 +735,11 @@ void VodBridge::acceptConnection() {
         if (!socket->peerAddress().isLoopback() || !allowedOrigin(socket->origin()) || clients.size() >= 8) {
             socket->close(); socket->deleteLater(); continue;
         }
-        socket->setMaxAllowedIncomingFrameSize(8192); socket->setMaxAllowedIncomingMessageSize(8192);
+        // The bounded banner fields can contain multibyte text and emotes.
+        socket->setMaxAllowedIncomingFrameSize(16384); socket->setMaxAllowedIncomingMessageSize(16384);
         QTimer::singleShot(5000, socket, [this, socket] { if (!clients.contains(socket)) socket->close(); });
         connect(socket, &QWebSocket::textMessageReceived, this, [this, socket](const QString &text) {
-            if (text.size() > 8192) { socket->close(); return; }
+            if (text.size() > 16384) { socket->close(); return; }
             const auto data = QJsonDocument::fromJson(text.toUtf8()).object();
             if (!clients.contains(socket)) {
                 const QString id = str(data["client"]);

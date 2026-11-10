@@ -1,4 +1,4 @@
-/* Playback data is sent only to YT-Chatterino on this computer. */
+/* Playback state and visible chat panels are sent only to the app on this computer. */
 const api = globalThis.browser || globalThis.chrome;
 const states = new Map();
 const liveStates = new Map();
@@ -34,7 +34,7 @@ function liveUrl(raw) {
   const twitch = ["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(host);
   const kick = ["www.kick.com", "kick.com"].includes(host);
   if (!twitch && !kick) return "";
-  const match = u.pathname.match(twitch ? /^\/([A-Za-z0-9_]{1,25})\/?$/ : /^\/([A-Za-z0-9_-]{1,80})\/?$/);
+  const match = u.pathname.match(twitch ? /^\/(?:popout\/)?([A-Za-z0-9_]{1,25})(?:\/chat)?\/?$/ : /^\/([A-Za-z0-9_-]{1,80})\/?$/);
   if (!match || ["directory","downloads","jobs","login","p","settings","signup","subscriptions","turbo","videos","wallet","categories","browse","search"].includes(match[1].toLowerCase())) return "";
   return (twitch ? "https://www.twitch.tv/" : "https://kick.com/") + match[1].toLowerCase();
 }
@@ -49,7 +49,16 @@ function connect() {
   ws.onopen = () => ws.send(JSON.stringify({type:"hello", client}));
   ws.onmessage = event => {
     let data; try { data = JSON.parse(event.data); } catch (_) { return; }
-    if (socket !== ws || data.type !== "ready") return;
+    if (socket !== ws) return;
+    if (data.type === "open-panel" && status === "Connected") {
+      const tab=data.tab, channel=typeof data.channel === "string" ? data.channel.toLowerCase() : "";
+      if (!Number.isInteger(tab) || !/^[a-z0-9_]{1,25}$/.test(channel) ||
+          !["poll","prediction"].includes(data.kind) || liveStates.get(tab)?.url !== "https://www.twitch.tv/"+channel) return;
+      api.tabs.update(tab,{active:true}).then(info=>api.windows.update(info.windowId,{focused:true})).catch(()=>{});
+      api.tabs.sendMessage(tab,{type:"open-panel",kind:data.kind,channel}).catch(()=>{});
+      return;
+    }
+    if (data.type !== "ready") return;
     status = "Connected";
     for (const state of states.values()) send({...state, seek:true});
     for (const state of liveStates.values()) send(state);
@@ -87,10 +96,18 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
   if (message.type === "live-state") {
     let pageOrigin, currentOrigin;
     try { pageOrigin=new URL(sender.url).origin; currentOrigin=new URL(message.url).origin; } catch (_) { return; }
-    const url=pageOrigin === currentOrigin ? liveUrl(message.url) : "";
+    const url=pageOrigin === currentOrigin && liveUrl(sender.url) === liveUrl(message.url) ? liveUrl(message.url) : "";
     if (!url) return;
     const name=typeof message.name === "string" ? message.name.trim().slice(0,100) : "";
-    const state={type:"live-state",tab,url,live:message.live === true && !!name,name}; liveStates.set(tab,state); connect(); send(state); return;
+    const state={type:"live-state",tab,url,live:message.live === true && !!name,name};
+    if (url.startsWith("https://www.twitch.tv/") && message.chat && typeof message.chat === "object") {
+      const panel = value => value && typeof value === "object" && typeof value.text === "string"
+        ? {text:value.text.slice(0,800),name:typeof value.name === "string" ? value.name.slice(0,100) : "",
+           options:typeof value.options === "string" ? value.options.slice(0,800) : ""} : {};
+      state.chat={available:message.chat.available === true,pin:panel(message.chat.pin),
+        poll:panel(message.chat.poll),prediction:panel(message.chat.prediction)};
+    }
+    liveStates.set(tab,state); connect(); send(state); return;
   }
   if (message.type !== "vod-state") return;
   let pageOrigin, currentOrigin;

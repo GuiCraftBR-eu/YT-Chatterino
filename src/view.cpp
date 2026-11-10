@@ -297,6 +297,19 @@ QImage channelIcon(Source *source, Images *images, int size) {
     return result;
 }
 
+static QImage channelHeaderIcon(Source *source, Images *images, int size) {
+    QImage image = channelIcon(source, images, size);
+    if (source && !source->isVod && source->header.value("live").toBool()) {
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(QColor("#101012"), 1.5));
+        painter.setBrush(QColor("#eb3349"));
+        const qreal diameter = qMax(5., size * .34);
+        painter.drawEllipse(QRectF(size - diameter - .5, size - diameter - .5, diameter, diameter));
+    }
+    return image;
+}
+
 static QImage roleBadge(const QString &role, int size) {
     QImage image(size * 2, size * 2, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
@@ -2039,7 +2052,7 @@ void Pane::refreshDecorations() {
     int count = 0;
     for (auto source : sources) {
         if (!source) continue;
-        const auto add = [&](const QString &heading, const QJsonObject &value) {
+        const auto add = [&](const QString &heading, const QJsonObject &value, const QString &action = QString()) {
             if (str(value["text"]).isEmpty()) return;
             QString text = heading;
             if (sources.size() > 1) text += " · " + source->name();
@@ -2053,16 +2066,33 @@ void Pane::refreshDecorations() {
             label->setTextInteractionFlags(Qt::TextSelectableByMouse);
             label->setStyleSheet("background:#1c1c20; color:#e9e9ec; border-left:2px solid #9147ff; padding:4px;");
             box->addWidget(label);
+            if (!action.isEmpty() && source->platform == "twitch" && !source->isVod && !value["ended"].toBool()) {
+                auto *open = new QToolButton(decorations);
+                open->setObjectName("open-twitch-engagement");
+                open->setText(hub->cfg->T(action));
+                open->setToolTip(hub->cfg->T("Complete this action on Twitch in your browser."));
+                open->setStyleSheet("QToolButton { color:#c7a6ff; background:#25232a; border:0; padding:3px 8px; } QToolButton:hover { background:#39333f; }");
+                QPointer<Source> target(source);
+                const QString kind = action == "Vote on Twitch" ? "poll" : "prediction";
+                connect(open, &QToolButton::clicked, this, [this, target, kind] {
+                    if (target && (!openBrowserPanel || !openBrowserPanel(target, kind)))
+                        QDesktopServices::openUrl(QUrl("https://www.twitch.tv/" + target->id));
+                });
+                box->addWidget(open, 0, Qt::AlignRight);
+            }
             ++count;
         };
-        add(hub->cfg->T("Pinned message"), source->pinned);
-        QString pollHeading = hub->cfg->T(source->activePoll.value("ended").toBool() ? "Poll result" : "Poll");
-        if (source->activePoll.value("last_observed").toBool()) pollHeading += " · " + hub->cfg->T("last observed");
-        add(pollHeading, source->activePoll);
-        QString predictionHeading = hub->cfg->T(source->activePrediction.value("ended").toBool() ? "Prediction result" : "Prediction");
-        if (str(source->activePrediction.value("status")) == "LOCKED") predictionHeading += " · " + hub->cfg->T("Locked");
-        if (str(source->activePrediction.value("status")) == "CANCELED") predictionHeading += " · " + hub->cfg->T("Canceled");
-        add(predictionHeading, source->activePrediction);
+        const auto pin = source->pinned.isEmpty() ? source->browserPinned : source->pinned;
+        const auto poll = source->activePoll.isEmpty() ? source->browserPoll : source->activePoll;
+        const auto prediction = source->activePrediction.isEmpty() ? source->browserPrediction : source->activePrediction;
+        add(hub->cfg->T("Pinned message"), pin);
+        QString pollHeading = hub->cfg->T(poll.value("ended").toBool() ? "Poll result" : "Poll");
+        if (poll.value("last_observed").toBool()) pollHeading += " · " + hub->cfg->T("last observed");
+        add(pollHeading, poll, "Vote on Twitch");
+        QString predictionHeading = hub->cfg->T(prediction.value("ended").toBool() ? "Prediction result" : "Prediction");
+        if (str(prediction.value("status")) == "LOCKED") predictionHeading += " · " + hub->cfg->T("Locked");
+        if (str(prediction.value("status")) == "CANCELED") predictionHeading += " · " + hub->cfg->T("Canceled");
+        add(predictionHeading, prediction, str(prediction.value("status")) == "LOCKED" ? QString() : "Predict on Twitch");
     }
     decorations->setVisible(count > 0 && !detached);
 }
@@ -2169,7 +2199,7 @@ void Pane::refresh() {
         icon->parentWidget()->setVisible(isMixed && source);
         if (!source) continue;
         icon->setProperty("source-key", source->key);
-        icon->setPixmap(QPixmap::fromImage(channelIcon(source, hub->images, 20)));
+        icon->setPixmap(QPixmap::fromImage(channelHeaderIcon(source, hub->images, 20)));
         icon->setAccessibleName(source->name());
         title->setText(titles.value(i));
         title->setProperty("source-key", source->key);
@@ -2183,7 +2213,7 @@ void Pane::refresh() {
         headerText->setToolTip(fullTitles.value(0));
         headerIcon->setProperty("source-key", sources[0]->key);
         headerIcon->setAccessibleName(sources[0]->name());
-        headerIcon->setPixmap(QPixmap::fromImage(channelIcon(sources[0], hub->images, 20)));
+        headerIcon->setPixmap(QPixmap::fromImage(channelHeaderIcon(sources[0], hub->images, 20)));
     }
     int selected = target->currentIndex();
     for (int i = 0; i < target->count(); ++i) {

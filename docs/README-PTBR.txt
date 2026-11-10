@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.5.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.5.2 — WINDOWS 11 x64
 
-1. Baixe YT-Chatterino-Windows11-2.5.1.zip na versão publicada no GitHub.
+1. Baixe YT-Chatterino-Windows11-2.5.2.zip na versão publicada no GitHub.
 2. Clique com o botão direito no ZIP e escolha Extrair Tudo. Abra a pasta YT-Chatterino extraída.
 3. Dê dois cliques em YT-Chatterino.exe. Não precisa de Python, compilador, instalador nem Prompt de Comando.
 4. Mantenha todas as DLLs e pastas de plugins junto do EXE. Não execute dentro do ZIP.
@@ -53,8 +53,9 @@ REPLAY DE CHAT DE VOD
    atualização a partir da versão anterior, carregue novamente a pasta da extensão atualizada.
 O replay é somente leitura e depende de a plataforma ter guardado e disponibilizado o chat.
 Usa interfaces públicas não oficiais e pode falhar, ser limitado ou omitir mensagens/emotes.
-A extensão envia endereços de canais e vídeos compatíveis e o estado de reprodução das
-VODs ao app local, para identificar lives e sincronizar replays.
+A extensão envia ao app local os endereços compatíveis, o estado das VODs e painéis
+visíveis do chat da Twitch, como mensagens fixadas e enquetes. Ela não coleta credenciais
+nem mensagens comuns do chat. Votações e apostas são concluídas na Twitch pelo navegador.
 
 ABRIR NO CELULAR
 Clique com o direito na aba, escolha o painel e Abrir no celular. Selecione

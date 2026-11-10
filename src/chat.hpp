@@ -18,6 +18,7 @@ class Source : public QObject {
     QPointer<VodReplay> vodReplay;
     QJsonObject header;
     QJsonObject pinned, activePoll, activePrediction;
+    QJsonObject browserPinned, browserPoll, browserPrediction;
     QJsonObject chatModes;
     bool chatModesKnown = false;
     QString youtubeModeNotice;
@@ -60,6 +61,7 @@ class Source : public QObject {
     int kickRetryMs = 5000;
     qint64 kickPollCooldownUntil = 0;
     bool decorationPending = false, pollDecorationPending = false, predictionDecorationPending = false;
+    bool twitchPublicLivePending = false;
     qint64 pinRetryAfter = 0;
     quint64 decorationGeneration = 0;
     QString decorationSignature;
@@ -92,9 +94,11 @@ class Source : public QObject {
     void trim();
     int retentionCap() const;
     void refreshHeader();
+    void refreshTwitchPublicLive();
     void refreshDecorations();
     void setDecorations(QJsonObject pin, QJsonObject poll);
     void setPrediction(QJsonObject prediction);
+    void setBrowserPanels(QJsonObject pin, QJsonObject poll, QJsonObject prediction);
     void youtubeBannerActions(const QJsonArray &actions);
     void youtubeWebPollState(const QJsonObject &response);
     void updateChatModes(const QJsonObject &patch, bool known = true);

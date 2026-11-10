@@ -460,7 +460,7 @@ QWidget *SettingsWindow::accountsPage() {
     twLayout->addWidget(twStatus);
     twLayout->addWidget(twPermissions);
     twLayout->addWidget(text(main->cfg,
-        "Pinned Twitch messages require moderator access. Twitch polls and predictions are available only in your own channel, with the corresponding permissions.", true));
+        "With the browser extension, open the Twitch chat in your browser to share its visible pinned message and poll or prediction. Complete votes and predictions on Twitch. Official API access still requires channel permissions.", true));
     twLayout->addWidget(twButton);
     twLayout->addWidget(twReconnect);
     l->addWidget(twBox);

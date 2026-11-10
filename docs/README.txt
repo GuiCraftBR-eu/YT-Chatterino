@@ -1,6 +1,6 @@
-YT-CHATTERINO 2.5.1 — WINDOWS 11 x64
+YT-CHATTERINO 2.5.2 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.5.1.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.5.2.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
@@ -52,7 +52,9 @@ VOD CHAT REPLAY
    extension folder in your browser.
 Replay is read-only and depends on the platform retaining and exposing the chat. It uses
 unofficial public interfaces and may fail, be rate-limited or omit messages/emotes.
-The extension sends supported channel and video URLs and VOD playback state to the local app.
+The extension sends supported channel and video URLs, VOD playback state and visible Twitch
+chat panels such as pinned messages and polls to the local app. It does not collect credentials
+or ordinary chat messages. Complete votes and predictions on Twitch in your browser.
 
 OPEN ON PHONE
 Right-click the tab, select the pane and Open on phone. Choose the local network,

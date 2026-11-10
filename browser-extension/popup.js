@@ -6,7 +6,7 @@ const translations = {"Waiting for the app":"Aguardando o aplicativo", "Connecti
 if (pt) {
   document.documentElement.lang = "pt-BR";
   document.getElementById("intro").textContent = "Abra uma live ou VOD compatível no navegador e selecione o chat pelo botão + no YT-Chatterino.";
-  document.getElementById("privacy").textContent = "Endereços de canais e vídeos compatíveis e o estado da VOD são enviados apenas ao aplicativo neste computador.";
+  document.getElementById("privacy").textContent = "Endereços de canais e vídeos compatíveis, o estado da VOD e os painéis visíveis do chat da Twitch são enviados apenas ao aplicativo neste computador. Mensagens comuns e credenciais não são coletadas.";
 }
 async function refresh() {
   const result = await api.runtime.sendMessage({type:"vod-status"});

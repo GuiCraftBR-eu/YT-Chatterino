@@ -68,6 +68,7 @@ MainWindow::MainWindow(QString profile, bool testing)
     tabs->tabBar()->setObjectName("chat-tabbar");
     tabs->tabBar()->setElideMode(Qt::ElideRight);
     tabs->tabBar()->setUsesScrollButtons(true);
+    tabs->setIconSize(QSize(10, 10));
     tabs->setStyleSheet("QTabBar#chat-tabbar::tab{background:#101012;color:#bdbdc3;"
                         "padding:4px 7px;border-top:2px solid transparent;}"
                         "QTabBar#chat-tabbar::tab:hover:!selected{background:#1b1b1e;color:#fff;}"
@@ -327,6 +328,9 @@ Workspace *MainWindow::addWorkspace(QList<Source *> sources, QString title) {
 }
 
 void MainWindow::attachPane(Pane *p) {
+    p->openBrowserPanel = [this](Source *source, const QString &kind) {
+        return vodBridge && vodBridge->openTwitchPanel(source, kind);
+    };
     auto markVodSources = [this, p] {
         for (auto source : p->sources) if (source && source->isVod) {
             source->header["vod_shown"] = true;
@@ -371,6 +375,20 @@ void MainWindow::refreshTabs() {
         if (!w) {
             continue;
         }
+        bool live = false;
+        for (auto *pane : w->panes()) for (auto source : pane->sources)
+            live |= source && !source->isVod && source->header.value("live").toBool();
+        static const QIcon liveIcon = [] {
+            QPixmap pixmap(10, 10);
+            pixmap.fill(Qt::transparent);
+            QPainter painter(&pixmap);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor("#eb3349"));
+            painter.drawEllipse(QRectF(1, 1, 8, 8));
+            return QIcon(pixmap);
+        }();
+        if (tabs->tabIcon(i).isNull() == live) tabs->setTabIcon(i, live ? liveIcon : QIcon());
         QString title = w->title;
         if (title.isEmpty()) {
             QStringList names;
@@ -383,8 +401,9 @@ void MainWindow::refreshTabs() {
             }
             title = names.join(" + ");
         }
-        tabs->setTabText(i, title.isEmpty() ? cfg.T("Chat") : title);
-        tabs->setTabToolTip(i, title);
+        const auto label = title.isEmpty() ? cfg.T("Chat") : title;
+        if (tabs->tabText(i) != label) tabs->setTabText(i, label);
+        if (tabs->tabToolTip(i) != title) tabs->setTabToolTip(i, title);
     }
 }
 
