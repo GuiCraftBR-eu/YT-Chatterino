@@ -1,4 +1,8 @@
 {
+  "Vote on Twitch": "Votar na Twitch",
+  "Predict on Twitch": "Apostar na Twitch",
+  "Complete this action on Twitch in your browser.": "Conclua esta ação na Twitch pelo navegador.",
+  "With the browser extension, open the Twitch chat in your browser to share its visible pinned message and poll or prediction. Complete votes and predictions on Twitch. Official API access still requires channel permissions.": "Com a extensão, abra o chat da Twitch no navegador para compartilhar a mensagem fixada e a enquete ou aposta visível. Conclua votos e apostas na Twitch. O acesso pela API oficial ainda exige permissões no canal.",
   "Change title…": "Alterar título…",
   "Change title / category…": "Alterar título / categoria…",
   "Change title": "Alterar título",

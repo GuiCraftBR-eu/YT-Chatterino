@@ -69,8 +69,11 @@ void NativeTests::detectedVodCanBeReopened() {
         dialog->close();
     };
     checkList();
-    app->addWorkspace({vod}); app->vodBridge->processState(client,state); QVERIFY(vod->vodReplay->initialized);
-    app->closeTab(app->tabs->currentIndex()); app->pruneSources();
+    auto *opened = app->addWorkspace({vod}); app->vodBridge->processState(client,state); QVERIFY(vod->vodReplay->initialized);
+    QCOMPARE(app->tabs->currentWidget(), static_cast<QWidget *>(opened));
+    app->closeTab(app->tabs->currentIndex());
+    QCOMPARE(app->tabs->indexOf(opened), -1);
+    app->pruneSources();
     QVERIFY(app->hub.sources.value(vod->key)==vod); QVERIFY(!vod->header["vod_shown"].toBool());
     QVERIFY(!vod->vodReplay->initialized); checkList();
     const int closedRequests=replayRequests;

@@ -177,6 +177,7 @@ class Pane : public QWidget {
     quint64 sendEpoch = 0;
     QJsonObject filter;
     std::function<bool(const Message &)> extraFilter;
+    std::function<bool(Source *, const QString &)> openBrowserPanel;
     QString threadId;
     void refresh();
     void refreshDecorations();

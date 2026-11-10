@@ -14,9 +14,74 @@ function isLiveCandidate() {
   const twitch=["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(host);
   const kick=["kick.com", "www.kick.com"].includes(host);
   if (!twitch && !kick) return false;
-  const match=path.match(twitch ? /^\/([A-Za-z0-9_]{1,25})\/?$/ : /^\/([A-Za-z0-9_-]{1,80})\/?$/);
+  const match=path.match(twitch ? /^\/(?:popout\/)?([A-Za-z0-9_]{1,25})(?:\/chat)?\/?$/ : /^\/([A-Za-z0-9_-]{1,80})\/?$/);
   return !!match && !["directory","downloads","jobs","login","p","settings","signup","subscriptions","turbo","videos","wallet","categories","browse","search"].includes(match[1].toLowerCase());
 }
+// Read only Twitch's visible, dedicated banner elements. Never read the chat log,
+// cookies, or account data. Missing chat UI is distinct from an empty banner.
+function twitchEngagementCard(kind) {
+  const pattern = kind === "poll" ? /\bpoll\b|enquete|vota[cç][aã]o/i :
+    kind === "prediction" ? /predict|predi[cç][aã]o|previs[aã]o|aposta/i : null;
+  if (!pattern) return null;
+  return [...document.querySelectorAll('.community-highlight')].find(element => {
+    const heading=element.querySelector('[data-test-selector="header-content"] [data-test-selector="header"]');
+    return element.getClientRects().length > 0 && pattern.test((heading?.innerText || "").trim());
+  }) || null;
+}
+function twitchChatPanels() {
+  if (!["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(location.hostname.toLowerCase())) return undefined;
+  const shown = node => !!node && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== "hidden";
+  if (!shown(document.querySelector('[data-test-selector="chat-room-component-layout"], .chat-room'))) return {available:false};
+  const clean = (text, n=800) => (text || "").replace(/\s+/g," ").trim().slice(0,n);
+  const textWithEmotes = root => {
+    if (!root) return "";
+    const walk = node => node.nodeType === Node.TEXT_NODE ? node.nodeValue :
+      node.nodeType !== Node.ELEMENT_NODE ? "" : node.tagName === "IMG" ? (node.alt || "") :
+      [...node.childNodes].map(walk).join("");
+    return clean(walk(root));
+  };
+  const pinNode = document.querySelector('.pinned-chat__message, [data-test-selector="pinned-chat-message"] [data-a-target="chat-line-message-body"], [data-a-target="pinned-chat-message"] [data-a-target="chat-line-message-body"]');
+  const pinScope = pinNode?.parentElement?.parentElement;
+  const author = pinScope?.querySelector('.chatter-name, [data-a-target="chat-message-username"]');
+  const pin = shown(pinNode) ? {text:textWithEmotes(pinNode),name:clean(author?.textContent,100)} : {};
+  const panel = selector => {
+    const node = document.querySelector(selector);
+    const text = shown(node) ? clean(node.innerText,800) : "";
+    return text ? {text} : {};
+  };
+  // Twitch currently renders polls as a generic community-highlight rather
+  // than a poll-specific element. Only inspect the card above the chat log.
+  const card = kind => {
+    const root = twitchEngagementCard(kind);
+    if (!root) return {};
+    const heading=root.querySelector('[data-test-selector="header-content"] strong');
+    const text=clean(heading?.innerText,400);
+    const options=[...root.querySelectorAll('[data-test-selector="expanded-content"] button[role="progressbar"]')]
+      .filter(shown).map(choice=>{
+        const label=clean(choice.querySelector('[data-test-selector="title"]')?.innerText || choice.getAttribute('aria-label'),100);
+        const count=clean(choice.querySelector('[data-test-selector="Count"]')?.innerText,60);
+        return label + (count ? ' ' + count : '');
+      }).filter(Boolean).slice(0,10).join(' · ');
+    return text ? {text,options} : {};
+  };
+  const poll = card("poll");
+  const prediction = card("prediction");
+  return {available:true, pin,
+    poll:poll.text ? poll : panel('[data-test-selector="poll-banner"], .poll-card'),
+    prediction:prediction.text ? prediction : panel('[data-test-selector="community-prediction-banner"], .community-prediction-summary')};
+}
+// The desktop can request only that a matching Twitch panel be expanded.
+// It cannot select an outcome, submit a vote, or spend channel points.
+api.runtime.onMessage.addListener((message, sender) => {
+  if (sender.id !== api.runtime.id || message?.type !== "open-panel" || !isLiveCandidate()) return;
+  if (!["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(location.hostname.toLowerCase())) return;
+  const match=location.pathname.match(/^\/(?:popout\/)?([A-Za-z0-9_]{1,25})(?:\/chat)?\/?$/);
+  if (!match || match[1].toLowerCase() !== message.channel || !["poll","prediction"].includes(message.kind)) return;
+  const card=twitchEngagementCard(message.kind);
+  if (card && !card.querySelector('[data-test-selector="expanded-content"]')) {
+    card.querySelector('[data-test-selector="click-wrapper"]')?.click();
+  }
+});
 function findVideo() {
   const candidates = [...document.querySelectorAll("video")].filter(video => {
     const box = video.getBoundingClientRect();
@@ -42,7 +107,7 @@ function report() {
   if (!isLive && liveReporting) { api.runtime.sendMessage({type:"live-end"}).catch(() => {}); liveReporting=false; lastLiveUrl=""; }
   if (isLive && (location.href !== lastLiveUrl || Date.now()-lastLiveAt >= 5000)) {
     liveReporting=true;lastLiveUrl=location.href;lastLiveAt=Date.now();
-    api.runtime.sendMessage({type:"live-state",url:location.href,...youtubeLiveHint()}).catch(() => {});
+    api.runtime.sendMessage({type:"live-state",url:location.href,...youtubeLiveHint(),chat:twitchChatPanels()}).catch(() => {});
   }
   if (!isVod) return;
   const video = findVideo(); if (!video) return;

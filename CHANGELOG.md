@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.2
+
+- Indicadores vermelhos nas abas e nos ícones de canais ao vivo.
+- A extensão compartilha painéis visíveis da Twitch, inclusive mensagens fixadas, enquetes e apostas, com o chat correspondente.
+- Os botões de participação abrem o painel da Twitch no navegador; votos e apostas são concluídos na própria Twitch.
+
 ## 2.5.1
 
 - Lives abertas no navegador aparecem no botão +, com sugestões opcionais para misturar canais de nomes parecidos.

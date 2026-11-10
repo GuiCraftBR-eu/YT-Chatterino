@@ -535,6 +535,10 @@ void Source::refreshHeader() {
     if (platform == "twitch" && !hub->accounts->loaded) {
         return;
     }
+    if (platform == "twitch" && str(hub->accounts->twitch["access_token"]).isEmpty()) {
+        refreshTwitchPublicLive();
+        return;
+    }
     QPointer<Source> self(this);
     if (platform == "kick") {
         kickConnect();
@@ -623,6 +627,35 @@ void Source::refreshHeader() {
         "GET", {{"login", id}});
 }
 
+void Source::refreshTwitchPublicLive() {
+    if (closed || isVod || platform != "twitch" || twitchPublicLivePending) return;
+    twitchPublicLivePending = true;
+    const auto epoch = generation;
+    QPointer<Source> self(this);
+    const QJsonObject body{{"query", "query($login:String!){user(login:$login){login displayName stream{id}}}"},
+                           {"variables", QJsonObject{{"login", id}}}};
+    hub->net->json(QUrl("https://gql.twitch.tv/gql"), [self, epoch](QJsonObject data, QString error) {
+        if (!self) return;
+        self->twitchPublicLivePending = false;
+        if (self->closed || self->generation != epoch || !str(self->hub->accounts->twitch["access_token"]).isEmpty() ||
+            !error.isEmpty() || !data["errors"].toArray().isEmpty()) return;
+        const auto user = at(data, {"data", "user"}).toObject();
+        if (user.isEmpty()) return;
+        const bool live = !user["stream"].toObject().isEmpty();
+        const bool changed = !self->header.contains("live") || self->header["live"].toBool() != live;
+        const QString name = str(user["displayName"]);
+        const bool renamed = !name.isEmpty() && name != str(self->header["channel"]);
+        if (renamed) self->header["channel"] = name;
+        self->header["live"] = live;
+        if (changed) {
+            if (live) self->header.remove("viewers"); else self->header["viewers"] = 0;
+            self->header.remove("started_at");
+            self->hub->liveChange(self, live);
+        }
+        if (changed || renamed) emit self->headerChanged();
+    }, "POST", body, {{"Client-ID", "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"}, {"Origin", "https://www.twitch.tv"}});
+}
+
 void Source::setDecorations(QJsonObject pin, QJsonObject pollState) {
     if (pinned == pin && activePoll == pollState) return;
     pinned = std::move(pin);
@@ -633,6 +666,14 @@ void Source::setDecorations(QJsonObject pin, QJsonObject pollState) {
 void Source::setPrediction(QJsonObject prediction) {
     if (activePrediction == prediction) return;
     activePrediction = std::move(prediction);
+    emit decorationsChanged();
+}
+
+void Source::setBrowserPanels(QJsonObject pin, QJsonObject pollState, QJsonObject prediction) {
+    if (browserPinned == pin && browserPoll == pollState && browserPrediction == prediction) return;
+    browserPinned = std::move(pin);
+    browserPoll = std::move(pollState);
+    browserPrediction = std::move(prediction);
     emit decorationsChanged();
 }
 
@@ -2795,7 +2836,12 @@ void Hub::liveChange(QString platform, QString login, QString name, bool live, b
 
 void Hub::pollLive() {
     pollKickLive();
-    if (liveRequest || str(accounts->twitch["access_token"]).isEmpty()) {
+    if (liveRequest) {
+        return;
+    }
+    if (str(accounts->twitch["access_token"]).isEmpty()) {
+        for (auto *source : sources)
+            if (source && source->platform == "twitch" && !source->isVod) source->refreshTwitchPublicLive();
         return;
     }
     QSet<QString> logins;
