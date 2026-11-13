@@ -1225,6 +1225,14 @@ QWidget *SettingsWindow::updatesPage() {
     QVBoxLayout *l;
     auto *w = pageWidget(main->cfg, "Updates", &l);
     l->addWidget(text(main->cfg, main->cfg.T("Installed version: {version}", {{"version", APP_VERSION}})));
+    if (main->obsDockMode) {
+        l->addWidget(text(main->cfg, "Update the OBS dock by installing the latest OBS plugin release while OBS is closed.", true));
+        l->addWidget(action(main->cfg, "Open releases…", w, [] {
+            QDesktopServices::openUrl(QUrl("https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/latest"));
+        }));
+        l->addStretch();
+        return w;
+    }
     auto *automatic = new QCheckBox(main->cfg.T("Check for updates automatically"), w);
     automatic->setChecked(main->cfg.data["automatic_updates"].toBool(true));
     l->addWidget(automatic);

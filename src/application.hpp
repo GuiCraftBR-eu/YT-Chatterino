@@ -11,7 +11,7 @@ class VodBridge;
 class MainWindow : public QMainWindow {
     Q_OBJECT
   public:
-    MainWindow(QString profile = {}, bool testMode = false);
+    MainWindow(QString profile = {}, bool testMode = false, bool obsDock = false);
     ~MainWindow() override;
     Config cfg;
     Network net;
@@ -32,7 +32,12 @@ class MainWindow : public QMainWindow {
     QHash<QString, QPointer<QDialog>> userCards;
     QHash<QString, QPointer<ThreadWindow>> threads;
     QTimer sessionTimer;
-    bool restoring = false, testMode = false;
+    bool restoring = false, testMode = false, obsDockMode = false;
+    QPointer<Pane> obsPane;
+    QTimer obsYoutubeTimer;
+    QString obsYoutubeChannel, obsYoutubeVideo;
+    quint64 obsYoutubeEpoch = 0;
+    bool obsYoutubePending = false;
     QJsonArray closedTabs;
     Workspace *current() const;
     Pane *currentPane() const;
@@ -70,6 +75,8 @@ class MainWindow : public QMainWindow {
     void saveSession();
     void restoreSession();
     void applyTopmost();
+    void syncObsAccounts();
+    void refreshObsYoutube();
 
   protected:
     void closeEvent(QCloseEvent *) override;

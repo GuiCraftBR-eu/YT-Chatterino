@@ -3,7 +3,12 @@ const api = globalThis.browser || globalThis.chrome;
 const states = new Map();
 const liveStates = new Map();
 const client = crypto.randomUUID();
-let socket = null, retry = null, status = "Waiting for the app";
+const endpoints = [37367, 37368].map(port => ({port, socket:null, retry:null, ready:false}));
+function status() {
+  if (endpoints.some(endpoint => endpoint.ready)) return "Connected";
+  if (!states.size && !liveStates.size) return "Waiting for a stream";
+  return endpoints.some(endpoint => endpoint.socket) ? "Connecting…" : "Waiting for the app";
+}
 function vodUrl(raw) {
   let u; try { u = new URL(raw); } catch (_) { return ""; }
   if (u.protocol !== "https:" || u.username || u.password || (u.port && u.port !== "443")) return "";
@@ -38,26 +43,28 @@ function liveUrl(raw) {
   if (!match || ["directory","downloads","jobs","login","p","settings","signup","subscriptions","turbo","videos","wallet","categories","browse","search"].includes(match[1].toLowerCase())) return "";
   return (twitch ? "https://www.twitch.tv/" : "https://kick.com/") + match[1].toLowerCase();
 }
-function send(data) {
-  if (socket?.readyState === WebSocket.OPEN && status === "Connected") socket.send(JSON.stringify(data));
+function sendTo(endpoint, data) {
+  if (endpoint.socket?.readyState === WebSocket.OPEN && endpoint.ready) endpoint.socket.send(JSON.stringify(data));
 }
-function connect() {
-  if (socket || (!states.size && !liveStates.size)) return;
-  clearTimeout(retry); retry = null; status = "Connecting…";
-  let ws; try { ws = new WebSocket("ws://127.0.0.1:37367/"); } catch (_) { status = "Waiting for the app"; return; }
-  socket = ws;
+function send(data) { for (const endpoint of endpoints) sendTo(endpoint, data); }
+function connectEndpoint(endpoint) {
+  if (endpoint.socket || endpoint.retry || (!states.size && !liveStates.size)) return;
+  let ws;
+  try { ws = new WebSocket(`ws://127.0.0.1:${endpoint.port}/`); }
+  catch (_) { endpoint.retry=setTimeout(()=>{endpoint.retry=null;connectEndpoint(endpoint);},3000); return; }
+  endpoint.socket = ws;
   ws.onopen = () => ws.send(JSON.stringify({type:"hello", client}));
   ws.onmessage = event => {
     let data; try { data = JSON.parse(event.data); } catch (_) { return; }
-    if (socket !== ws) return;
-    if (data.type === "sync-request" && status === "Connected") {
-      for (const state of states.values()) send({...state, seek:false});
-      for (const state of liveStates.values()) send(state);
+    if (endpoint.socket !== ws) return;
+    if (data.type === "sync-request" && endpoint.ready) {
+      for (const state of states.values()) sendTo(endpoint, {...state, seek:false});
+      for (const state of liveStates.values()) sendTo(endpoint, state);
       for (const tab of new Set([...states.keys(), ...liveStates.keys()]))
         api.tabs.sendMessage(tab,{type:"sync-now"}).catch(()=>{});
       return;
     }
-    if (data.type === "open-panel" && status === "Connected") {
+    if (data.type === "open-panel" && endpoint.ready) {
       const tab=data.tab, channel=typeof data.channel === "string" ? data.channel.toLowerCase() : "";
       if (!Number.isInteger(tab) || !/^[a-z0-9_]{1,25}$/.test(channel) ||
           !["poll","prediction"].includes(data.kind) || liveStates.get(tab)?.url !== "https://www.twitch.tv/"+channel) return;
@@ -66,30 +73,37 @@ function connect() {
       return;
     }
     if (data.type !== "ready") return;
-    status = "Connected";
-    for (const state of states.values()) send({...state, seek:true});
-    for (const state of liveStates.values()) send(state);
+    endpoint.ready = true;
+    for (const state of states.values()) sendTo(endpoint, {...state, seek:true});
+    for (const state of liveStates.values()) sendTo(endpoint, state);
   };
-  ws.onerror = () => { status = "Waiting for the app"; };
+  ws.onerror = () => { endpoint.ready = false; };
   ws.onclose = () => {
-    if (socket !== ws) return;
-    socket = null; status = "Waiting for the app";
-    if (states.size || liveStates.size) retry = setTimeout(connect, 3000);
+    if (endpoint.socket !== ws) return;
+    endpoint.socket = null; endpoint.ready = false;
+    if (states.size || liveStates.size) endpoint.retry = setTimeout(() => {
+      endpoint.retry = null; connectEndpoint(endpoint);
+    }, 3000);
   };
+}
+function connect() { for (const endpoint of endpoints) connectEndpoint(endpoint); }
+function disconnectAll() {
+  for (const endpoint of endpoints) {
+    clearTimeout(endpoint.retry); endpoint.retry=null; endpoint.ready=false;
+    if (endpoint.socket) { const ws=endpoint.socket; endpoint.socket=null; ws.onclose=null; ws.close(); }
+  }
 }
 function closeTab(tab) {
   const hadVod = states.delete(tab), hadLive = liveStates.delete(tab);
   if (!hadVod && !hadLive) return;
   send({type:"closed", tab});
   if (!states.size && !liveStates.size) {
-    clearTimeout(retry); retry = null;
-    if (socket) { const ws=socket; socket=null; ws.onclose=null; ws.close(); }
-    status = "Waiting for a stream";
+    disconnectAll();
   }
 }
 api.runtime.onMessage.addListener((message, sender, respond) => {
   if (message.type === "vod-status" && sender.url === api.runtime.getURL("popup.html")) {
-    respond({status, count:new Set([...states.keys(), ...liveStates.keys()]).size}); return;
+    respond({status:status(), count:new Set([...states.keys(), ...liveStates.keys()]).size}); return;
   }
   if (!sender.tab || sender.frameId !== 0 || !Number.isInteger(sender.tab.id)) return;
   const tab = sender.tab.id;
@@ -97,7 +111,7 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
   if (message.type === "vod-end" || message.type === "live-end") {
     const map = message.type === "vod-end" ? states : liveStates;
     if (map.delete(tab)) send({type:message.type === "vod-end" ? "vod-closed" : "live-closed", tab});
-    if (!states.size && !liveStates.size) { clearTimeout(retry); retry=null; if(socket){const ws=socket;socket=null;ws.onclose=null;ws.close();} status="Waiting for a stream"; }
+    if (!states.size && !liveStates.size) disconnectAll();
     return;
   }
   if (message.type === "live-state") {

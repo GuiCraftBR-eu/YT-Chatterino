@@ -1,4 +1,12 @@
 {
+  "Open Settings → Accounts to connect your channels.": "Abra Configurações → Contas para conectar seus canais.",
+  "Could not check your YouTube live broadcasts.": "Não foi possível verificar suas transmissões ao vivo do YouTube.",
+  "Choose a YouTube live broadcast": "Escolha uma transmissão ao vivo do YouTube",
+  "Choose the broadcast to show in OBS:": "Escolha a transmissão a ser exibida no OBS:",
+  "Your YouTube channel is not live.": "Seu canal do YouTube não está ao vivo.",
+  "Update the OBS dock by installing the latest OBS plugin release while OBS is closed.": "Para atualizar o painel do OBS, feche o OBS e instale a versão mais recente do plugin.",
+  "Open releases…": "Abrir lançamentos…",
+  "Refresh connected channels": "Atualizar canais conectados",
   "Vote on Twitch": "Votar na Twitch",
   "Predict on Twitch": "Apostar na Twitch",
   "Complete this action on Twitch in your browser.": "Conclua esta ação na Twitch pelo navegador.",

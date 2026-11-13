@@ -1,7 +1,7 @@
 name: Native C++ checks
 on:
   push:
-    branches: [main, 'prepare-v2.5.3']
+    branches: [main, 'prepare-v2.5.4']
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,12 +35,12 @@ jobs:
         run: |
           $mingw = Get-ChildItem "${{ github.workspace }}/../Qt/Tools" -Directory -Filter 'mingw*' | Select-Object -First 1
           $env:PATH = "$($mingw.FullName)/bin;$env:PATH"
-          python packaging/windows/package.py --exe build/YT-Chatterino.exe --stage build/portable/YT-Chatterino --output release-assets --version 2.5.3
+          python packaging/windows/package.py --exe build/YT-Chatterino.exe --stage build/portable/YT-Chatterino --output release-assets --version 2.5.4
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $exe = Join-Path $env:GITHUB_WORKSPACE 'build/portable/YT-Chatterino/YT-Chatterino.exe'
-          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.5.3') { throw 'Incorrect executable version.' }
-          if ((Get-Item $exe).VersionInfo.FileDescription -ne 'YT-Chatterino 2.5.3v') { throw 'Incorrect Task Manager name.' }
-          if ((Get-Item $exe).VersionInfo.ProductName -ne 'YT-Chatterino 2.5.3v') { throw 'Incorrect product name.' }
+          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.5.4') { throw 'Incorrect executable version.' }
+          if ((Get-Item $exe).VersionInfo.FileDescription -ne 'YT-Chatterino 2.5.4v') { throw 'Incorrect Task Manager name.' }
+          if ((Get-Item $exe).VersionInfo.ProductName -ne 'YT-Chatterino 2.5.4v') { throw 'Incorrect product name.' }
           # Run with only the packaged DLLs/plugins, not the build's Qt installation.
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           Remove-Item Env:QT_PLUGIN_PATH,Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
@@ -49,10 +49,10 @@ jobs:
           $stderr = Join-Path $env:RUNNER_TEMP 'yt-version-err.txt'
           $process = Start-Process -FilePath $exe -ArgumentList '--version' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           if ($process.ExitCode -ne 0) { throw 'Packaged executable did not start.' }
-          if (((Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)) -notlike '*2.5.3*') { throw 'Wrong packaged application version.' }
+          if (((Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)) -notlike '*2.5.4*') { throw 'Wrong packaged application version.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-Windows-2.5.3
+          name: YT-Chatterino-Windows-2.5.4
           path: release-assets/*.zip
       - uses: actions/upload-artifact@v4
         if: always()
@@ -78,35 +78,96 @@ jobs:
           QT_QPA_PLATFORM=offscreen yt-chatterino --version
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-ArchLinux-2.5.3-pacman
+          name: YT-Chatterino-ArchLinux-2.5.4-pacman
           path: /tmp/yt-chatterino-build/packaging/arch/*.pkg.tar.zst
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: arch-native-test-log
           path: /tmp/yt-chatterino-build/packaging/arch/src/build/Testing/Temporary/LastTest.log
+  obs-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Build OBS dock with the OBS-compatible compiler
+        shell: pwsh
+        run: |
+          cmake -S obs-plugin -B obs-build -G 'Visual Studio 17 2022' -A x64 -DBUILD_OBS_DOCK_TESTS=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build obs-build --config Release --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YT-Chatterino-OBS-Compiler-2.5.4
+          if-no-files-found: error
+          path: |
+            obs-build/Release/yt-chatterino-obs.dll
+            obs-build/Release/obs-frontend-api.dll
+            obs-build/Release/obs-dock-fixture.exe
+  obs-integration:
+    needs: [windows, obs-windows]
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: YT-Chatterino-Windows-2.5.4
+          path: windows-package
+      - uses: actions/download-artifact@v4
+        with:
+          name: YT-Chatterino-OBS-Compiler-2.5.4
+          path: obs-compiler
+      - name: Package the dock and test the embedded window
+        shell: pwsh
+        run: |
+          python obs-plugin/package_obs.py --plugin obs-compiler/yt-chatterino-obs.dll --windows-zip windows-package/YT-Chatterino-Windows11-2.5.4.zip --output release-assets --version 2.5.4
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Expand-Archive release-assets/YT-Chatterino-OBS-Windows-2.5.4.zip -DestinationPath "$env:RUNNER_TEMP/obs-package"
+          $env:YTCHATTERINO_OBS_PROFILE = "$env:RUNNER_TEMP/obs-profile"
+          $env:QT_QPA_PLATFORM = 'windows'
+          & "$env:GITHUB_WORKSPACE/obs-compiler/obs-dock-fixture.exe" "$env:GITHUB_WORKSPACE/obs-compiler/obs-frontend-api.dll" "$env:RUNNER_TEMP/obs-package/yt-chatterino-obs/yt-chatterino-obs.dll"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YT-Chatterino-OBS-Windows-2.5.4
+          path: release-assets/YT-Chatterino-OBS-Windows-2.5.4.zip
+          if-no-files-found: error
   publish-release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release 2.5.3')
-    needs: [arch-linux, windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release 2.5.4')
+    needs: [arch-linux, windows, obs-integration]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    concurrency: yt-chatterino-release-2.5.3
+    concurrency: yt-chatterino-release-2.5.4
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-Windows-2.5.3
+          name: YT-Chatterino-Windows-2.5.4
           path: release-assets
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-ArchLinux-2.5.3-pacman
+          name: YT-Chatterino-ArchLinux-2.5.4-pacman
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: YT-Chatterino-OBS-Windows-2.5.4
           path: release-assets
       - name: Verify assets and publish release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: v2.5.3
+          RELEASE_TAG: v2.5.4
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
@@ -118,21 +179,22 @@ jobs:
             exit 1
           fi
           curl -fL --retry 3 -o release-assets/Qt-6.8.3-Library-Sources.zip https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.0/Qt-6.8.3-Library-Sources.zip
-          cp firefox-release/YT-Chatterino-Firefox-2.5.3.xpi release-assets/
+          cp firefox-release/YT-Chatterino-Firefox-2.5.4.xpi release-assets/
           cd release-assets
           echo '8376df57d67130e3f41820db7b76cdc112da43f672d19dd32c4554bbf254524f  Qt-6.8.3-Library-Sources.zip' | sha256sum -c -
           curl -fL --retry 3 -o /tmp/qtwebsockets-everywhere-src-6.8.3.tar.xz https://download.qt.io/archive/qt/6.8/6.8.3/submodules/qtwebsockets-everywhere-src-6.8.3.tar.xz
           echo 'fc6310c1b12d6e22a31062727aa6574ed69239d036c8a4247b3b089902709b11  /tmp/qtwebsockets-everywhere-src-6.8.3.tar.xz' | sha256sum -c -
           python ../packaging/add_qtwebsockets_source.py Qt-6.8.3-Library-Sources.zip /tmp/qtwebsockets-everywhere-src-6.8.3.tar.xz
-          test -f YT-Chatterino-Windows11-2.5.3.zip
-          test -f YT-Chatterino-Cpp-Source-2.5.3.zip
-          test -f yt-chatterino-2.5.3-1-x86_64.pkg.tar.zst
+          test -f YT-Chatterino-Windows11-2.5.4.zip
+          test -f YT-Chatterino-OBS-Windows-2.5.4.zip
+          test -f YT-Chatterino-Cpp-Source-2.5.4.zip
+          test -f yt-chatterino-2.5.4-1-x86_64.pkg.tar.zst
           sha256sum *.pkg.tar.zst > SHA256SUMS-ArchLinux.txt
           sha256sum *.zip *.xpi *.pkg.tar.zst > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
           gh api "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA"
           actual_tag=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
           test "$actual_tag" = "$GITHUB_SHA"
-          gh release create "$RELEASE_TAG" --verify-tag --draft --title '2.5.3 — Melhorias no chat e na extensão' --notes-file ../.github/release-notes-2.5.3.md *.zip *.xpi *.pkg.tar.zst SHA256SUMS.txt SHA256SUMS-ArchLinux.txt
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title '2.5.4 — Chat misturado no OBS' --notes-file ../.github/release-notes-2.5.4.md *.zip *.xpi *.pkg.tar.zst SHA256SUMS.txt SHA256SUMS-ArchLinux.txt
           python ../packaging/verify_draft_assets.py
           gh release edit "$RELEASE_TAG" --draft=false --latest

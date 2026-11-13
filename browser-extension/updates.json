@@ -3,9 +3,9 @@
     "vod-sync@yt-chatterino.local": {
       "updates": [
         {
-          "version": "2.5.3",
-          "update_link": "https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.3/YT-Chatterino-Firefox-2.5.3.xpi",
-          "update_hash": "sha256:5ca3e515b25f56fdb8275f43ab83ad1b079df63b0ae2a32e334f0c18597b792d"
+          "version": "2.5.4",
+          "update_link": "https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.4/YT-Chatterino-Firefox-2.5.4.xpi",
+          "update_hash": "sha256:6376eba579bd4cb052ebc2c1006644b0442bf985290b23fa973098ebcd483c90"
         }
       ]
     }

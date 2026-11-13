@@ -2,11 +2,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const vm = require('vm');
-let onMessage, onRemoved, onUpdated, socket;
+let onMessage, onRemoved, onUpdated;
+const sockets=[];
 const actions=[];
 class FakeSocket {
   static OPEN=1;
-  constructor(url) { this.url=url; this.readyState=1; this.sent=[]; socket=this; }
+  constructor(url) { this.url=url; this.readyState=1; this.sent=[]; sockets.push(this); }
   send(raw) { this.sent.push(JSON.parse(raw)); }
   close() { this.readyState=3; }
 }
@@ -26,15 +27,23 @@ assert.equal(context.normalize('https://www.twitch.tv.evil.test/felps'),'');
 const sender={tab:{id:7},frameId:0,url:'https://www.twitch.tv/popout/felps/chat'};
 onMessage({type:'live-state',url:sender.url,chat:{available:true,pin:{name:'Alice',text:'Hello',cookie:'secret'},
   poll:{text:'Question',options:'Yes · No'},access_token:'secret'}},sender,()=>{});
+assert.equal(sockets.length,2);
+const socket=sockets.find(x=>x.url.includes(':37367/'));
+const obsSocket=sockets.find(x=>x.url.includes(':37368/'));
+assert(socket && obsSocket);
 socket.onopen();socket.onmessage({data:'{"type":"ready"}'});
+obsSocket.onopen();obsSocket.onmessage({data:'{"type":"ready"}'});
 const state=socket.sent.find(x=>x.type==='live-state');
+assert(obsSocket.sent.some(x=>x.type==='live-state'&&x.url==='https://www.twitch.tv/felps'));
 assert.equal(state.url,'https://www.twitch.tv/felps');
 assert.equal(state.chat.pin.text,'Hello');assert.equal(state.chat.poll.options,'Yes · No');
 assert(!JSON.stringify(state).includes('secret'));
 const send=data=>socket.onmessage({data:JSON.stringify(data)});
 const beforeSync=socket.sent.length;
+const beforeObsSync=obsSocket.sent.length;
 send({type:'sync-request'});
 assert(socket.sent.slice(beforeSync).some(x=>x.type==='live-state'&&x.url==='https://www.twitch.tv/felps'));
+assert.equal(obsSocket.sent.length,beforeObsSync);
 assert(actions.some(x=>x.type==='message'&&x.tab===7&&x.message.type==='sync-now'));
 actions.length=0;
 // The content script persists when Twitch navigates within the same origin.
@@ -53,5 +62,6 @@ assert(actions.some(x=>x.type==='message'&&x.tab===7&&x.message.kind==='poll'));
 assert(actions.every(x=>!['vote','predict','redeem'].includes(x.message?.type)));
 onUpdated(7,{status:'loading'});
 assert(socket.sent.some(x=>x.type==='closed'&&x.tab===7));
+assert(obsSocket.sent.some(x=>x.type==='closed'&&x.tab===7));
 onRemoved(7);
 console.log('PASS: browser bridge routing, channel validation, privacy, and navigation');

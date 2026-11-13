@@ -1,9 +1,17 @@
-YT-CHATTERINO 2.5.3 — WINDOWS 11 x64
+YT-CHATTERINO 2.5.4 — WINDOWS 11 x64
 
-1. Download YT-Chatterino-Windows11-2.5.3.zip from the GitHub release.
+1. Download YT-Chatterino-Windows11-2.5.4.zip from the GitHub release.
 2. Right-click the ZIP and choose Extract All. Open the extracted YT-Chatterino folder.
 3. Double-click YT-Chatterino.exe. No Python, compiler, installer or Command Prompt is needed.
 4. Keep every DLL and plugin folder beside the EXE. Do not run it inside the ZIP.
+
+OBS STUDIO DOCK
+The separate Windows plugin requires OBS Studio 33 or newer. Close OBS and extract the
+yt-chatterino-obs folder from the plugin ZIP into %PROGRAMDATA%\obs-studio\plugins.
+For portable OBS, use its plugins folder. Restart OBS and select Docks > YT-Chatterino.
+Sign in under Settings > Accounts in the dock; its accounts are separate from the app.
+Your channels share one mixed chat; YouTube requires a live broadcast. To update the
+plugin, close OBS and replace the plugin folder. The standalone app keeps its updater.
 
 ADD A CHAT
 Press Ctrl+T (or click +). Enter a channel or link. For YouTube, use the handle from its URL: for example, LofiGirl for youtube.com/@LofiGirl. The @ is optional when opening and saving channels.

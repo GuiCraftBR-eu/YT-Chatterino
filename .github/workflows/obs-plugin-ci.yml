@@ -1,0 +1,32 @@
+name: OBS dock compiler checks
+on:
+  push:
+    branches: ['prepare-v2.5.4']
+    paths: ['obs-plugin/**', '.github/workflows/obs-plugin-ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  obs-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Build OBS dock and test fixture
+        shell: pwsh
+        run: |
+          cmake -S obs-plugin -B obs-build -G 'Visual Studio 17 2022' -A x64 -DBUILD_OBS_DOCK_TESTS=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build obs-build --config Release --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YT-Chatterino-OBS-Compiler-Check
+          path: |
+            obs-build/Release/yt-chatterino-obs.dll
+            obs-build/Release/obs-frontend-api.dll
+            obs-build/Release/obs-dock-fixture.exe
