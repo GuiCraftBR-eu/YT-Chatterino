@@ -9,5 +9,6 @@ extern "C" __declspec(dllexport) bool obs_frontend_add_dock_by_id(const char *id
     dock->setObjectName(QString::fromUtf8(id));
     dock->setWidget(static_cast<QWidget *>(widget));
     window->addDockWidget(Qt::RightDockWidgetArea, dock);
+    dock->show();
     return true;
 }

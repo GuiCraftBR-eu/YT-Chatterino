@@ -22,20 +22,20 @@ int main(int argc, char **argv) {
     const auto pluginPath = QString::fromLocal8Bit(argv[2]).toStdWString();
     QMainWindow host; host.setWindowTitle("YT-Chatterino OBS fixture"); host.resize(560, 600);
     app.setProperty("fixture-host", QVariant::fromValue(quintptr(&host)));
-    host.show();
     HMODULE frontend = LoadLibraryW(frontendPath.c_str());
     HMODULE plugin = frontend ? LoadLibraryW(pluginPath.c_str()) : nullptr;
     if (!plugin) { std::cerr << "Failed to load fixture module: " << GetLastError() << '\n'; return 3; }
     using Load = bool (*)();
     const auto load = reinterpret_cast<Load>(GetProcAddress(plugin, "obs_module_load"));
     if (!load || !load()) { std::cerr << "Failed to register dock\n"; return 4; }
+    host.show();
     QTimer timer; int attempts = 0; DWORD childPid = 0;
     QObject::connect(&timer, &QTimer::timeout, &host, [&] {
         auto *dock = host.findChild<QWidget *>("yt-chatterino-obs-dock");
         auto *container = dock ? dock->findChild<QWidget *>("yt-chatterino-foreign-window") : nullptr;
         ForeignWindow foreign{GetCurrentProcessId(), 0, nullptr};
-        if (container && container->winId())
-            EnumChildWindows(reinterpret_cast<HWND>(container->winId()), findForeign, reinterpret_cast<LPARAM>(&foreign));
+        if (container && host.winId())
+            EnumChildWindows(reinterpret_cast<HWND>(host.winId()), findForeign, reinterpret_cast<LPARAM>(&foreign));
         if (foreign.handle) {
             childPid = foreign.child;
             host.resize(720, 480); app.processEvents();
