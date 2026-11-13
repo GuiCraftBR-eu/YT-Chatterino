@@ -631,8 +631,11 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
                 const QString prefix = str(selected["prefix"]).toLower();
                 if (prefix == "cheer" || prefix == "shamrock") {
                     const QString base = "https://d3aqoihi2n8ty8.cloudfront.net/actions/" + prefix + "/dark/";
-                    urls << base + "animated/" + QString::number(level) + "/2.gif"
-                         << base + "static/" + QString::number(level) + "/2.png";
+                    // Some seasonal Cheermotes do not provide every standard tier.
+                    for (int fallback : {100000, 10000, 5000, 1000, 100, 1}) if (fallback <= level) {
+                        urls << base + "animated/" + QString::number(fallback) + "/2.gif"
+                             << base + "static/" + QString::number(fallback) + "/2.png";
+                    }
                     color = level >= 10000 ? QColor("#f44336") : level >= 5000 ? QColor("#00aaf0")
                           : level >= 1000 ? QColor("#1db2a5") : level >= 100 ? QColor("#9c3ee8") : QColor("#979797");
                 }

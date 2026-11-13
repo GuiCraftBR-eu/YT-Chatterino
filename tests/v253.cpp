@@ -80,6 +80,19 @@ void NativeTests::twitchCheermotesRenderAndCopy() {
     auto replay=sample253(3002,vod->key,"Viewer","Shamrock100"); view.setMessages({replay});
     QVERIFY(view.document(0)->toPlainText().contains(QChar::ObjectReplacementCharacter));
     QVERIFY(view.messageText(0).contains("Shamrock100"));
+    QImage fixture(20,20,QImage::Format_ARGB32); fixture.fill(Qt::red);
+    QByteArray png; QBuffer buffer(&png); QVERIFY(buffer.open(QIODevice::WriteOnly)); QVERIFY(fixture.save(&buffer,"PNG"));
+    int attempts=0;
+    app->net.transport=[&](QUrl url,QByteArray,QByteArray,QMap<QByteArray,QByteArray>,BytesCallback done) {
+        ++attempts;
+        if (url.path().contains("/10000/")) done(png,{}); else done({},"HTTP 403");
+    };
+    auto large=sample253(3003,twitch->key,"Viewer","Shamrock100000"); large.special="alert"; large.alertKind="bits"; large.alertText="Cheered 100000 Bits";
+    view.setMessages({large}); view.document(0);
+    QCOMPARE(attempts,3);
+    const QString high="https://d3aqoihi2n8ty8.cloudfront.net/actions/shamrock/dark/animated/100000/2.gif";
+    QVERIFY(app->images.cache.contains(high));
+    view.invalidate(); QVERIFY(view.messageText(0).contains("Shamrock100000"));
 }
 
 void NativeTests::emoteCatalogRetriesIndependently() {
