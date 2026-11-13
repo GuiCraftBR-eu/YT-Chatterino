@@ -69,6 +69,7 @@ int main(int argc, char **argv) {
             if (waited != WAIT_OBJECT_0) { std::cerr << "Child process did not stop\n"; return 7; }
         }
     }
-    FreeLibrary(plugin); FreeLibrary(frontend);
+    // The host and its Qt dock widgets are destroyed on return. Keep their
+    // modules loaded until then so Qt cannot dispatch into an unloaded DLL.
     return result;
 }
