@@ -503,6 +503,17 @@ VodBridge::VodBridge(Hub *h, QObject *parent, quint16 port, bool listen)
     if (listen) server.listen(QHostAddress::LocalHost, port);
 }
 
+VodBridge::~VodBridge() {
+    server.close();
+    // Disconnect before member hashes are destroyed; sockets can emit
+    // disconnected while QWebSocketServer and QObject children are torn down.
+    for (auto *socket : findChildren<QWebSocket *>()) {
+        disconnect(socket, nullptr, this, nullptr);
+        socket->abort();
+    }
+    clients.clear();
+}
+
 bool VodBridge::allowedOrigin(const QString &origin) {
     const QUrl url(origin);
     if (!url.isValid() || !url.userInfo().isEmpty() || url.port(-1) != -1 ||
@@ -635,6 +646,17 @@ void VodBridge::updateBrowserPanels(const QString &player, const QString &login,
     else if (!oldLogin.isEmpty()) refreshBrowserPanels(oldLogin);
 }
 
+void VodBridge::requestSync() {
+    if (syncScheduled) return;
+    syncScheduled = true;
+    QTimer::singleShot(50, this, [this] {
+        syncScheduled = false;
+        for (auto *socket : clients.keys())
+            if (socket && socket->state() == QAbstractSocket::ConnectedState)
+                socket->sendTextMessage(QStringLiteral("{\"type\":\"sync-request\"}"));
+    });
+}
+
 void VodBridge::processLiveState(const QString &client, const QJsonObject &data) {
     if (!data["tab"].isDouble()) return;
     const double tab = data["tab"].toDouble(-1);
@@ -650,6 +672,14 @@ void VodBridge::processLiveState(const QString &client, const QJsonObject &data)
     updateBrowserPanels(player, str(identity["platform"]) == "twitch" ? str(identity["id"]) : QString(), data["chat"]);
     const QString cacheKey = url.toString(QUrl::FullyEncoded);
     const auto now = QDateTime::currentMSecsSinceEpoch();
+    const QString browserName = str(data["name"]).trimmed().left(100);
+    if (data["live"].toBool() && !browserName.isEmpty()) {
+        const QJsonObject item{{"platform", identity["platform"]}, {"id", identity["id"]}, {"name", browserName}};
+        liveCache[cacheKey] = item;
+        liveCacheUntil[cacheKey] = now + 15000;
+        if (liveItems.value(player) != item) { liveItems[player] = item; emit liveStreamsChanged(); }
+        return;
+    }
     if (liveCacheUntil.value(cacheKey) > now) {
         const auto cached = liveCache.value(cacheKey);
         if (liveItems.value(player) != cached) { if (cached.isEmpty()) liveItems.remove(player); else liveItems[player] = cached; emit liveStreamsChanged(); }
@@ -658,9 +688,12 @@ void VodBridge::processLiveState(const QString &client, const QJsonObject &data)
     if (livePending.contains(cacheKey)) return;
     if (liveCache.size() > 96) { liveCache.clear(); liveCacheUntil.clear(); }
     livePending.insert(cacheKey); QPointer<VodBridge> self(this);
-    auto complete = [self, cacheKey, url](QJsonObject item, bool error) {
+    auto complete = [self, cacheKey, url, now](QJsonObject item, bool error) {
         if (!self) return;
-        self->livePending.remove(cacheKey); self->liveCache[cacheKey] = item;
+        self->livePending.remove(cacheKey);
+        // A newer, positive browser snapshot wins over an older network request.
+        if (self->liveCacheUntil.value(cacheKey) > now && !self->liveCache.value(cacheKey).isEmpty()) return;
+        self->liveCache[cacheKey] = item;
         self->liveCacheUntil[cacheKey] = QDateTime::currentMSecsSinceEpoch() + (error ? 30000 : 90000);
         bool changed = false;
         for (auto it = self->livePlayers.cbegin(); it != self->livePlayers.cend(); ++it) if (it.value() == url) {
@@ -671,10 +704,6 @@ void VodBridge::processLiveState(const QString &client, const QJsonObject &data)
         if (changed) emit self->liveStreamsChanged();
     };
     const QString platform = str(identity["platform"]), id = str(identity["id"]);
-    const QString browserName = str(data["name"]).trimmed().left(100);
-    if (platform == "youtube" && data["live"].toBool() && !browserName.isEmpty()) {
-        complete({{"platform","youtube"},{"id",id},{"name",browserName}}, false); return;
-    }
     if (platform == "twitch") {
         const QJsonObject body{{"query","query($login:String!){user(login:$login){login displayName stream{id}}}"},
                                {"variables",QJsonObject{{"login",id}}}};

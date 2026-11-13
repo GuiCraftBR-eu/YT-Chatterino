@@ -2,12 +2,42 @@
 #include <algorithm>
 
 namespace yc {
+class HighlightScrollBar final : public QScrollBar {
+  public:
+    explicit HighlightScrollBar(ChatView *view) : QScrollBar(Qt::Vertical, view), view(view) {
+        setObjectName("highlight-scrollbar");
+    }
+  protected:
+    void paintEvent(QPaintEvent *event) override {
+        QScrollBar::paintEvent(event);
+        if (view->offsets.size() < 2 || view->offsets.last() <= 0) return;
+        QStyleOptionSlider option;
+        initStyleOption(&option);
+        const QRect groove = style()->subControlRect(QStyle::CC_ScrollBar, &option, QStyle::SC_ScrollBarGroove, this);
+        if (!groove.isValid()) return;
+        QPainter painter(this);
+        const double total = view->offsets.last();
+        const int count = qMin(view->messages.size(), view->highlightColors.size());
+        for (int i = 0; i < count; ++i) {
+            QColor color = view->highlightColors[i];
+            if (!color.isValid()) continue;
+            if (color.lightness() < 90) color = color.lighter(170);
+            const double center = (view->offsets.value(i) + view->heights.value(i) / 2.0) / total;
+            const int y = groove.top() + qBound(0, qRound(center * (groove.height() - 1)), groove.height() - 1);
+            painter.fillRect(QRect(groove.center().x() - 1, y, 3, 2), color);
+        }
+    }
+  private:
+    ChatView *view;
+};
+
 ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     setFrameShape(QFrame::NoFrame);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     viewport()->setMouseTracking(true);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setVerticalScrollBar(new HighlightScrollBar(this));
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     latest = new QPushButton(hub->cfg->T("↓ Latest"), viewport());
     latest->hide();
@@ -19,7 +49,7 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     pauseIndicator->hide();
     connect(latest, &QPushButton::clicked, this, &ChatView::jumpLatest);
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this] {
-        if (!hoverSuspended) hideEmoteTooltip();
+        if (!hoverSuspended && !streamPreviewSource) hideEmoteTooltip();
         latest->setVisible(!follow && verticalScrollBar()->maximum() > 0);
         viewport()->update();
     });
@@ -35,6 +65,7 @@ ChatView::ChatView(Hub *h, QWidget *p) : QAbstractScrollArea(p), hub(h) {
     connect(hub->cfg, &Config::appearanceChanged, this, &ChatView::invalidate);
     connect(hub->cfg, &Config::appearanceChanged, this, &ChatView::updateHoverPause);
     connect(hub->cfg, &Config::languageChanged, this, &ChatView::invalidate);
+    connect(hub->accounts, &Accounts::changed, this, [this] { refreshHighlights(); viewport()->update(); });
     connect(hub->images, &Images::ready, this, [this](const QString &url) {
         if (emoteTooltip && emoteTooltip->isVisible() && tooltipUrls.value(0) == url) {
             const auto image = hub->images->get(tooltipUrls, false);
@@ -122,6 +153,7 @@ void ChatView::setMessages(QVector<Message> list) {
         heights << estimate(m);
     }
     trim();
+    refreshHighlights();
     QSet<qint64> retained;
     for (const auto &m : messages) retained.insert(m.seq);
     for (auto it = rowStripes.begin(); it != rowStripes.end();) {
@@ -165,6 +197,7 @@ void ChatView::append(Message m) {
     const int oldCount = messages.size();
     messages << m;
     heights << estimate(m);
+    highlightColors << highlight(m, *hub->cfg, hub->accounts->names());
     if (messages.size() <= messageCap && offsets.size() == oldCount + 1) {
         offsets << offsets.last() + heights.last();
         verticalScrollBar()->setRange(0, qMax(0, offsets.last() - viewport()->height()));
@@ -194,6 +227,7 @@ void ChatView::trim() {
     }
     messages.remove(0, extra);
     heights.remove(0, qMin(extra, int(heights.size())));
+    highlightColors.remove(0, qMin(extra, int(highlightColors.size())));
     selectionStart.first -= extra;
     selectionEnd.first -= extra;
     if (selectionStart.first < 0 || selectionEnd.first < 0) {
@@ -233,10 +267,19 @@ void ChatView::rebuildOffsets() {
     }
     verticalScrollBar()->setRange(0, qMax(0, offsets.last() - viewport()->height()));
     verticalScrollBar()->setPageStep(viewport()->height());
+    verticalScrollBar()->update();
+}
+
+void ChatView::refreshHighlights() {
+    const auto names = hub->accounts->names();
+    highlightColors.clear();
+    highlightColors.reserve(messages.size());
+    for (const auto &message : messages) highlightColors << highlight(message, *hub->cfg, names);
+    verticalScrollBar()->update();
 }
 
 void ChatView::invalidate() {
-    hideEmoteTooltip();
+    if (!streamPreviewSource) hideEmoteTooltip();
     int top = rowAt(verticalScrollBar()->value()), delta = verticalScrollBar()->value() - offsets.value(top);
     documents.clear();
     documentUse.clear();
@@ -245,9 +288,13 @@ void ChatView::invalidate() {
     for (const auto &m : messages) {
         heights << estimate(m);
     }
+    refreshHighlights();
     rebuildOffsets();
     if (follow) {
-        jumpLatest();
+        if (streamPreviewSource) {
+            verticalScrollBar()->setValue(verticalScrollBar()->maximum());
+            latest->hide();
+        } else jumpLatest();
     } else {
         verticalScrollBar()->setValue(offsets.value(top) + delta);
     }
@@ -302,9 +349,9 @@ static QImage channelHeaderIcon(Source *source, Images *images, int size) {
     if (source && !source->isVod && source->header.value("live").toBool()) {
         QPainter painter(&image);
         painter.setRenderHint(QPainter::Antialiasing);
-        painter.setPen(QPen(QColor("#101012"), 1.5));
+        painter.setPen(QPen(QColor("#101012"), 1));
         painter.setBrush(QColor("#eb3349"));
-        const qreal diameter = qMax(5., size * .34);
+        const qreal diameter = qMax(3.5, size * .22);
         painter.drawEllipse(QRectF(size - diameter - .5, size - diameter - .5, diameter, diameter));
     }
     return image;
@@ -537,6 +584,65 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         body.remove(0, bodyOffset);
         for (auto &span : spans) { span.start -= bodyOffset; span.end -= bodyOffset; }
     }
+    QHash<int, QPair<QString, QColor>> cheerAmounts;
+    if (source && source->platform == "twitch" && (!m.deleted || revealDeleted) &&
+        (m.alertKind == "bits" || source->isVod)) {
+        static const QRegularExpression tokenPattern("^[A-Za-z][A-Za-z0-9_]*[0-9]+$");
+        static const QRegularExpression digits("^[0-9]{1,9}$");
+        auto words = QRegularExpression("\\S+").globalMatch(body);
+        while (words.hasNext()) {
+            const auto word = words.next();
+            const QString text = word.captured();
+            if (!tokenPattern.match(text).hasMatch()) continue;
+            QJsonObject selected;
+            int prefixLength = 0;
+            for (const auto &value : source->cheermotes) {
+                const auto candidate = value.toObject();
+                const QString prefix = str(candidate["prefix"]);
+                if (prefix.size() > prefixLength && text.startsWith(prefix, Qt::CaseInsensitive) &&
+                    digits.match(text.mid(prefix.size())).hasMatch()) {
+                    selected = candidate; prefixLength = prefix.size();
+                }
+            }
+            if (!prefixLength) for (const auto &prefix : {QStringLiteral("Cheer"), QStringLiteral("Shamrock")}) {
+                if (text.startsWith(prefix, Qt::CaseInsensitive) && digits.match(text.mid(prefix.size())).hasMatch()) {
+                    selected = {{"prefix", prefix}}; prefixLength = prefix.size(); break;
+                }
+            }
+            if (!prefixLength) continue;
+            const QString amountText = text.mid(prefixLength);
+            const int amount = amountText.toInt();
+            if (amount <= 0) continue;
+            QJsonObject tier;
+            for (const auto &value : selected["tiers"].toArray()) {
+                const auto candidate = value.toObject();
+                if (candidate["min_bits"].toInt() <= amount && candidate["min_bits"].toInt() > tier["min_bits"].toInt()) tier = candidate;
+            }
+            QStringList urls;
+            const auto images = at(tier, {"images", "dark"}).toObject();
+            for (const auto &kind : {QStringLiteral("animated"), QStringLiteral("static")}) {
+                const QString url = str(at(images, {kind, "2"}));
+                if (Images::allowed(QUrl(url)) && !urls.contains(url)) urls << url;
+            }
+            QColor color(str(tier["color"]));
+            if (urls.isEmpty() && selected["tiers"].toArray().isEmpty()) {
+                int level = 1;
+                for (int threshold : {100, 1000, 5000, 10000, 100000}) if (amount >= threshold) level = threshold;
+                const QString prefix = str(selected["prefix"]).toLower();
+                if (prefix == "cheer" || prefix == "shamrock") {
+                    const QString base = "https://d3aqoihi2n8ty8.cloudfront.net/actions/" + prefix + "/dark/";
+                    urls << base + "animated/" + QString::number(level) + "/2.gif"
+                         << base + "static/" + QString::number(level) + "/2.png";
+                    color = level >= 10000 ? QColor("#f44336") : level >= 5000 ? QColor("#00aaf0")
+                          : level >= 1000 ? QColor("#1db2a5") : level >= 100 ? QColor("#9c3ee8") : QColor("#979797");
+                }
+            }
+            if (urls.isEmpty()) continue;
+            Span span; span.start = word.capturedStart(); span.end = word.capturedEnd();
+            span.code = text.left(prefixLength); span.urls = urls; spans << span;
+            cheerAmounts[span.start] = {amountText, color.isValid() ? color : fg};
+        }
+    }
     if (source && (!m.deleted || revealDeleted)) {
         auto matches = QRegularExpression("\\S+").globalMatch(body);
         while (matches.hasNext()) {
@@ -614,6 +720,10 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         insertText(body.mid(offset, e.start - offset), offset);
         insertImage(e.urls, e.code.isEmpty() ? body.mid(e.start, e.end - e.start) : e.code,
                     a["emote_size"].toInt(36), e.gif, true);
+        if (cheerAmounts.contains(e.start) && e.code + cheerAmounts.value(e.start).first == body.mid(e.start, e.end - e.start)) {
+            const auto amount = cheerAmounts.value(e.start);
+            cursor.insertText(amount.first, format(normal, amount.second));
+        }
         offset = e.end;
     }
     insertText(body.mid(offset), offset);
@@ -676,7 +786,7 @@ void ChatView::paintEvent(QPaintEvent *) {
             changed = true;
         }
         QRect rect(0, y, viewport()->width(), height);
-        QColor background = highlight(messages[i], *hub->cfg, hub->accounts->names());
+        QColor background = highlightColors.value(i);
         if (!background.isValid()) {
             background = a["alternate_rows"].toBool(true) && rowStripes.value(messages[i].seq)
                              ? QColor("#0e0e0e") : QColor(Qt::black);
@@ -972,7 +1082,7 @@ bool ChatView::viewportEvent(QEvent *event) {
         event->ignore();
         return true;
     }
-    if (event->type() == QEvent::Leave || event->type() == QEvent::Wheel ||
+    if ((event->type() == QEvent::Leave && !streamPreviewSource) || event->type() == QEvent::Wheel ||
         event->type() == QEvent::MouseButtonPress) {
         hideEmoteTooltip();
     }
@@ -1009,11 +1119,23 @@ void ChatView::mousePressEvent(QMouseEvent *e) {
     if (e->button() == Qt::RightButton && !e->modifiers().testFlag(Qt::ControlModifier)) {
         const int y = e->position().y() + verticalScrollBar()->value();
         const int row = !offsets.isEmpty() && y >= 0 && y < offsets.last() ? rowAt(y) : -1;
+        if (row >= 0) emit messageRightClicked(messages[row]);
         if (row >= 0 && canReply(messages[row])) {
             suppressContextMenu = true;
             emit replyRequested(messages[row]);
             e->accept();
             return;
+        }
+        if (row >= 0) {
+            const auto &message = messages[row];
+            auto *source = hub->sources.value(message.source);
+            if (source && !source->isVod && source->platform == "youtube" && !message.system &&
+                !message.deleted && (!message.name.trimmed().isEmpty() || !message.login.trimmed().isEmpty())) {
+                suppressContextMenu = true;
+                emit mentionRequested(message);
+                e->accept();
+                return;
+            }
         }
     }
     if (e->button() != Qt::LeftButton) {
@@ -1108,9 +1230,17 @@ void ChatView::contextMenuEvent(QContextMenuEvent *e) {
             ? rowAt(y)
             : -1;
     if (row >= 0) {
+        if (e->reason() == QContextMenuEvent::Mouse && !e->modifiers().testFlag(Qt::ControlModifier))
+            emit messageRightClicked(messages[row]);
         if (e->reason() == QContextMenuEvent::Mouse && !e->modifiers().testFlag(Qt::ControlModifier) &&
             canReply(messages[row])) {
             emit replyRequested(messages[row]);
+        } else if (e->reason() == QContextMenuEvent::Mouse && !e->modifiers().testFlag(Qt::ControlModifier) &&
+                   hub->sources.value(messages[row].source) &&
+                   hub->sources.value(messages[row].source)->platform == "youtube" &&
+                   !hub->sources.value(messages[row].source)->isVod && !messages[row].system && !messages[row].deleted &&
+                   (!messages[row].name.trimmed().isEmpty() || !messages[row].login.trimmed().isEmpty())) {
+            emit mentionRequested(messages[row]);
         } else {
             emit messageMenuRequested(messages[row], e->globalPos());
         }
@@ -1899,6 +2029,8 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     connect(view, &ChatView::messageMenuRequested, this,
             [this](Message m, QPoint p) { emit messageMenu(this, m, p); });
     connect(view, &ChatView::replyRequested, this, &Pane::startReply);
+    connect(view, &ChatView::mentionRequested, this, &Pane::mentionUser);
+    connect(view, &ChatView::messageRightClicked, this, &Pane::selectMessageSource);
     connect(searchInput, &QLineEdit::textChanged, this,
             [this](const QString &s) { searchCount->setText(QString::number(view->search(s))); });
     connect(previous, &QToolButton::clicked, this, [this] { view->search(searchInput->text(), -1); });
@@ -2298,6 +2430,22 @@ void Pane::startReply(Message m) {
         hub->cfg->T("Replying to @{name}: {body}",
                     {{"name", m.login.isEmpty() ? m.name : m.login}, {"body", m.text.left(120)}}));
     replyBar->setVisible(!detached);
+    input->setFocus();
+}
+
+void Pane::selectMessageSource(const Message &message) {
+    const int index = target->findData(message.source);
+    if (index >= 0 && index != target->currentIndex()) target->setCurrentIndex(index);
+}
+
+void Pane::mentionUser(Message message) {
+    auto *source = hub->sources.value(message.source);
+    if (!source || source->isVod || message.system || message.deleted) return;
+    selectMessageSource(message);
+    QString name = (source->platform == "youtube" || message.login.isEmpty() ? message.name : message.login).trimmed();
+    while (name.startsWith('@')) name.remove(0, 1);
+    if (name.isEmpty()) return;
+    input->insert('@' + name + ' ');
     input->setFocus();
 }
 

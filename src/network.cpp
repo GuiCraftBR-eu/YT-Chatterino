@@ -134,6 +134,7 @@ bool Images::allowed(const QUrl &u) {
         return false;
     }
     const auto h = u.host().toLower();
+    if (h == "d3aqoihi2n8ty8.cloudfront.net") return true; // Twitch's official Cheermote CDN.
     for (const auto &suffix :
          QStringList{"7tv.app", "7tv.io", "betterttv.net", "jtvnw.net", "giphy.com", "googleusercontent.com",
                      "ggpht.com", "gstatic.com", "youtube.com", "ytimg.com", "files.kick.com", "ext.cdn.kick.com", "stream.kick.com", "images.kick.com"}) {
@@ -171,7 +172,7 @@ void Images::request(const QStringList &urls, int alternative) {
     if (urls.isEmpty() || alternative >= urls.size()) {
         if (!urls.isEmpty()) {
             pending.remove(urls[0]);
-            failures[urls[0]] = QDateTime::currentSecsSinceEpoch() + 90;
+            failures[urls[0]] = QDateTime::currentSecsSinceEpoch() + 20;
         }
         return;
     }
@@ -241,7 +242,7 @@ void Images::request(const QStringList &urls, int alternative) {
             request(urls, alternative + 1);
         } else {
             pending.remove(key);
-            failures[key] = QDateTime::currentSecsSinceEpoch() + 90;
+            failures[key] = QDateTime::currentSecsSinceEpoch() + (error.contains("429") ? 120 : 20);
             qWarning().noquote() << "Image load failed:" << QUrl(key).host() << error;
             emit ready(key);
         }

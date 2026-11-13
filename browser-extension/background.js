@@ -50,6 +50,13 @@ function connect() {
   ws.onmessage = event => {
     let data; try { data = JSON.parse(event.data); } catch (_) { return; }
     if (socket !== ws) return;
+    if (data.type === "sync-request" && status === "Connected") {
+      for (const state of states.values()) send({...state, seek:false});
+      for (const state of liveStates.values()) send(state);
+      for (const tab of new Set([...states.keys(), ...liveStates.keys()]))
+        api.tabs.sendMessage(tab,{type:"sync-now"}).catch(()=>{});
+      return;
+    }
     if (data.type === "open-panel" && status === "Connected") {
       const tab=data.tab, channel=typeof data.channel === "string" ? data.channel.toLowerCase() : "";
       if (!Number.isInteger(tab) || !/^[a-z0-9_]{1,25}$/.test(channel) ||
@@ -96,7 +103,9 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
   if (message.type === "live-state") {
     let pageOrigin, currentOrigin;
     try { pageOrigin=new URL(sender.url).origin; currentOrigin=new URL(message.url).origin; } catch (_) { return; }
-    const url=pageOrigin === currentOrigin && liveUrl(sender.url) === liveUrl(message.url) ? liveUrl(message.url) : "";
+    // Content scripts survive same-origin SPA navigation; sender.url can still
+    // refer to the page on which the script was originally injected.
+    const url=pageOrigin === currentOrigin ? liveUrl(message.url) : "";
     if (!url) return;
     const name=typeof message.name === "string" ? message.name.trim().slice(0,100) : "";
     const state={type:"live-state",tab,url,live:message.live === true && !!name,name};

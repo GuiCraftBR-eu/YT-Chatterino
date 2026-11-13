@@ -6,6 +6,34 @@
 #include <windows.h>
 #endif
 namespace yc {
+class LiveTabBar final : public QTabBar {
+  public:
+    using QTabBar::QTabBar;
+  protected:
+    void paintEvent(QPaintEvent *event) override {
+        QTabBar::paintEvent(event);
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor("#eb3349"));
+        for (int i = 0; i < count(); ++i) {
+            if (!tabData(i).toBool()) continue;
+            QStyleOptionTab option;
+            initStyleOption(&option, i);
+            const QRect label = style()->subElementRect(QStyle::SE_TabBarTabText, &option, this);
+            const QString text = fontMetrics().elidedText(tabText(i), elideMode(), qMax(0, label.width() - 5));
+            const int x = qMin(label.right() - 2, label.left() + fontMetrics().horizontalAdvance(text) + 2);
+            const int y = tabRect(i).top() + 4;
+            painter.drawEllipse(QRectF(x, y, 3, 3));
+        }
+    }
+};
+
+class ChatTabs final : public QTabWidget {
+  public:
+    explicit ChatTabs(QWidget *parent = nullptr) : QTabWidget(parent) { setTabBar(new LiveTabBar(this)); }
+};
+
 class StandardTranslator final : public QTranslator {
     Config *cfg;
 
@@ -59,7 +87,7 @@ MainWindow::MainWindow(QString profile, bool testing)
     setWindowIcon(QIcon(":/ytchatterino.ico"));
     resize(520, 760);
     setMinimumSize(340, 300);
-    tabs = new QTabWidget(this);
+    tabs = new ChatTabs(this);
     tabs->setObjectName("chat-tabs");
     tabs->setTabsClosable(true);
     tabs->setMovable(true);
@@ -68,7 +96,6 @@ MainWindow::MainWindow(QString profile, bool testing)
     tabs->tabBar()->setObjectName("chat-tabbar");
     tabs->tabBar()->setElideMode(Qt::ElideRight);
     tabs->tabBar()->setUsesScrollButtons(true);
-    tabs->setIconSize(QSize(10, 10));
     tabs->setStyleSheet("QTabBar#chat-tabbar::tab{background:#101012;color:#bdbdc3;"
                         "padding:4px 7px;border-top:2px solid transparent;}"
                         "QTabBar#chat-tabbar::tab:hover:!selected{background:#1b1b1e;color:#fff;}"
@@ -144,6 +171,7 @@ MainWindow::MainWindow(QString profile, bool testing)
         for (auto s : hub.sources) {
             if (s->platform == "twitch" && !s->isVod) {
                 s->emoteLoaded.clear();
+                s->emoteRetryUntil.clear();
                 s->globalBadgesLoaded = s->channelBadgesLoaded = 0;
                 s->refreshHeader();
                 s->loadEmotes(s->room());
@@ -332,10 +360,15 @@ void MainWindow::attachPane(Pane *p) {
         return vodBridge && vodBridge->openTwitchPanel(source, kind);
     };
     auto markVodSources = [this, p] {
-        for (auto source : p->sources) if (source && source->isVod) {
-            source->header["vod_shown"] = true;
-            if (vodBridge) vodBridge->allow(source->key);
+        for (auto source : p->sources) if (source) {
+            if (source->isVod) {
+                source->header["vod_shown"] = true;
+                if (vodBridge) vodBridge->allow(source->key);
+            } else if (vodBridge && source->platform == "twitch") {
+                vodBridge->refreshBrowserPanels(source->id);
+            }
         }
+        if (vodBridge) vodBridge->requestSync();
     };
     markVodSources();
     connect(p, &Pane::sourcesChanged, this, [this, markVodSources] {
@@ -378,17 +411,10 @@ void MainWindow::refreshTabs() {
         bool live = false;
         for (auto *pane : w->panes()) for (auto source : pane->sources)
             live |= source && !source->isVod && source->header.value("live").toBool();
-        static const QIcon liveIcon = [] {
-            QPixmap pixmap(10, 10);
-            pixmap.fill(Qt::transparent);
-            QPainter painter(&pixmap);
-            painter.setRenderHint(QPainter::Antialiasing);
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(QColor("#eb3349"));
-            painter.drawEllipse(QRectF(1, 1, 8, 8));
-            return QIcon(pixmap);
-        }();
-        if (tabs->tabIcon(i).isNull() == live) tabs->setTabIcon(i, live ? liveIcon : QIcon());
+        if (!tabs->tabBar()->tabData(i).isValid() || tabs->tabBar()->tabData(i).toBool() != live) {
+            tabs->tabBar()->setTabData(i, live);
+            tabs->tabBar()->update(tabs->tabBar()->tabRect(i));
+        }
         QString title = w->title;
         if (title.isEmpty()) {
             QStringList names;
@@ -455,6 +481,7 @@ static QString suggestedMixKey(QString name) {
 }
 
 void MainWindow::addChats(QString mode, Pane *anchor) {
+    if (vodBridge) vodBridge->requestSync();
     auto *dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setWindowTitle(cfg.T("Add chats"));
@@ -1227,10 +1254,7 @@ void MainWindow::populateMessageMenu(QMenu &m, Pane *pane, Message message) {
         m.addAction(cfg.T("User information"), this, [=, this] { showUser(pane, source, message); });
         m.addAction(cfg.T("Highlight this user"), this,
                     [=, this] { highlightUser(message.login.isEmpty() ? message.name : message.login); });
-        m.addAction(cfg.T("Mention"), pane, [pane, message] {
-            pane->input->insert('@' + (message.login.isEmpty() ? message.name : message.login) + ' ');
-            pane->input->setFocus();
-        });
+        m.addAction(cfg.T("Mention"), pane, [pane, message] { pane->mentionUser(message); });
         if (source->platform == "twitch" || source->platform == "kick") {
             auto *reply =
                 m.addAction(cfg.T("Reply to message"), pane, [pane, message] { pane->startReply(message); });
