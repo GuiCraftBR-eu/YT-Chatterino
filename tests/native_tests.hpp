@@ -43,6 +43,9 @@ class NativeTests : public QObject {
     void emoteCatalogRetriesIndependently();
     void browserSyncAndLateChatAttachment();
     void streamPreviewSurvivesChatScrolling();
+    void closeButtonOnlyOnActiveTab();
+    void obsDockUsesOneMixedChatAndSeparateAccounts();
+    void obsDockRefreshesYoutubeAndRejectsStaleResults();
     void f5ReloadsEmotesWithoutReconnecting();
     void vodAutomaticTabsMixAndBadges();
     void vodSessionRestoreAndSuppression();

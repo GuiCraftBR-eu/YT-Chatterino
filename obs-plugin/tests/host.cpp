@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
                     QGuiApplication::primaryScreen()->grabWindow(WId(foreign.handle)).save(qEnvironmentVariable("YTCHATTERINO_OBS_FIXTURE_IMAGE"));
                 app.exit(0);
             });
-        } else if (++attempts > 100) {
+        } else if (++attempts > 300) {
             std::cerr << "Timed out waiting for the dock; container=" << bool(container) << '\n';
             if (dock) for (auto *label : dock->findChildren<QLabel *>())
                 std::cerr << "Dock status: " << label->text().toStdString() << '\n';

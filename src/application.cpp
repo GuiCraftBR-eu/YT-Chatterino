@@ -8,8 +8,21 @@
 namespace yc {
 class LiveTabBar final : public QTabBar {
   public:
-    using QTabBar::QTabBar;
+    explicit LiveTabBar(QWidget *parent = nullptr) : QTabBar(parent) {
+        connect(this, &QTabBar::currentChanged, this, [this] { updateCloseButtons(); });
+        connect(this, &QTabBar::tabMoved, this, [this] { updateCloseButtons(); });
+    }
+    void updateCloseButtons() {
+        for (int i = 0; i < count(); ++i) {
+            for (const auto side : {QTabBar::LeftSide, QTabBar::RightSide})
+                if (auto *button = tabButton(i, side)) button->setVisible(i == currentIndex());
+        }
+    }
   protected:
+    void tabInserted(int index) override {
+        QTabBar::tabInserted(index);
+        QTimer::singleShot(0, this, [this] { updateCloseButtons(); });
+    }
     void paintEvent(QPaintEvent *event) override {
         QTabBar::paintEvent(event);
         QPainter painter(this);
@@ -75,9 +88,9 @@ static QJsonArray arrayOf(const QStringList &values) {
     return QJsonArray::fromStringList(values);
 }
 
-MainWindow::MainWindow(QString profile, bool testing)
+MainWindow::MainWindow(QString profile, bool testing, bool obsDock)
     : cfg(profile, this), net(this), quota(&cfg), accounts(&cfg, &net, &quota, this), images(&net, this),
-      hub(&cfg, &net, &accounts, &images, &quota, this), updater(&cfg, &net, this, this), testMode(testing) {
+      hub(&cfg, &net, &accounts, &images, &quota, this), updater(&cfg, &net, this, this), testMode(testing), obsDockMode(obsDock) {
     hub.testMode = testing;
     accounts.persistenceEnabled = !testing;
     accounts.window = this;
@@ -86,7 +99,8 @@ MainWindow::MainWindow(QString profile, bool testing)
     setWindowTitle(QStringLiteral("YT-Chatterino " APP_VERSION "v"));
     setWindowIcon(QIcon(":/ytchatterino.ico"));
     resize(520, 760);
-    setMinimumSize(340, 300);
+    setMinimumSize(obsDockMode ? QSize(220, 160) : QSize(340, 300));
+    if (obsDockMode) setWindowFlag(Qt::FramelessWindowHint, true);
     tabs = new ChatTabs(this);
     tabs->setObjectName("chat-tabs");
     tabs->setTabsClosable(true);
@@ -133,9 +147,18 @@ MainWindow::MainWindow(QString profile, bool testing)
     sl->addWidget(addButton);
     sl->addWidget(quotaLabel);
     sl->addWidget(updateArrow);
+    if (obsDockMode) {
+        auto *refresh = new QToolButton(strip);
+        refresh->setObjectName("obs-refresh-channels");
+        refresh->setText("↻"); refresh->setFixedSize(23, 23);
+        refresh->setToolTip(cfg.T("Refresh connected channels"));
+        connect(refresh, &QToolButton::clicked, this, [this] { syncObsAccounts(); refreshObsYoutube(); });
+        sl->addWidget(refresh);
+    }
     sl->addWidget(gear);
     tabs->setCornerWidget(strip, Qt::TopRightCorner);
     connect(addButton, &QToolButton::clicked, this, [this] { addChats(); });
+    if (obsDockMode) { addButton->hide(); tabs->setTabsClosable(false); tabs->setMovable(false); }
     connect(gear, &QToolButton::clicked, this, [this] { showSettings(); });
     gear->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(gear, &QWidget::customContextMenuRequested, this, [this] { gearMenu(); });
@@ -167,6 +190,7 @@ MainWindow::MainWindow(QString profile, bool testing)
     connect(&hub, &Hub::notice, this, [this](const QString &text) { statusBar()->showMessage(text, 10000); });
     connect(&accounts, &Accounts::status, this,
             [this](const QString &text) { statusBar()->showMessage(cfg.T(text), 12000); });
+    if (obsDockMode) connect(&accounts, &Accounts::changed, this, &MainWindow::syncObsAccounts);
     connect(&accounts, &Accounts::ready, this, [this] {
         for (auto s : hub.sources) {
             if (s->platform == "twitch" && !s->isVod) {
@@ -299,13 +323,20 @@ MainWindow::MainWindow(QString profile, bool testing)
             }
         });
     }
-    restoreSession();
-    if (!testMode) startVodBridge();
+    if (obsDockMode) {
+        auto *workspace = addWorkspace({});
+        obsPane = workspace ? workspace->focusedPane : nullptr;
+        obsYoutubeTimer.setSingleShot(true);
+        obsYoutubeTimer.setInterval(180000);
+        connect(&obsYoutubeTimer, &QTimer::timeout, this, &MainWindow::refreshObsYoutube);
+        statusBar()->showMessage(cfg.T("Open Settings → Accounts to connect your channels."));
+    } else restoreSession();
+    if (!testMode) startVodBridge(obsDockMode ? 37368 : 37367);
     applyTopmost();
     refreshLanguage();
     if (!testMode) {
         accounts.load();
-        updater.start();
+        if (!obsDockMode) updater.start();
     }
 }
 
@@ -390,6 +421,75 @@ void MainWindow::attachPane(Pane *p) {
     connect(p, &Pane::threadRequested, this, &MainWindow::showThread);
 }
 
+void MainWindow::syncObsAccounts() {
+    if (!obsDockMode || !obsPane) return;
+    const QString twitchName = str(accounts.twitch["access_token"]).isEmpty() ? QString()
+        : twitchLogin('@' + str(accounts.twitch["login"]));
+    const QString kickName = str(accounts.kick["access_token"]).isEmpty() ? QString()
+        : kickLogin("kick:" + str(accounts.kick["name"]));
+    const QString youtubeChannel = str(accounts.google["access_token"]).isEmpty() ? QString()
+        : str(accounts.google["channel_id"]);
+    const bool youtubeChanged = youtubeChannel != obsYoutubeChannel;
+    if (youtubeChanged) {
+        obsYoutubeChannel = youtubeChannel; obsYoutubeVideo.clear();
+        obsYoutubePending = false; ++obsYoutubeEpoch; obsYoutubeTimer.stop();
+    }
+    QList<Source *> wanted;
+    if (!twitchName.isEmpty()) wanted << hub.source("twitch", twitchName);
+    if (!obsYoutubeVideo.isEmpty()) wanted << hub.source("youtube", obsYoutubeVideo);
+    if (!kickName.isEmpty()) wanted << hub.source("kick", kickName);
+    bool same = wanted.size() == obsPane->sources.size();
+    for (int i = 0; same && i < wanted.size(); ++i) same = wanted[i] == obsPane->sources[i];
+    if (!same) {
+        const auto target = obsPane->target->currentData().toString();
+        obsPane->setSources(wanted);
+        const int index = obsPane->target->findData(target);
+        if (index >= 0) obsPane->target->setCurrentIndex(index);
+        QTimer::singleShot(0, this, &MainWindow::pruneSources);
+        refreshTabs(); refreshQuota();
+    }
+    if (wanted.isEmpty() && youtubeChannel.isEmpty())
+        statusBar()->showMessage(cfg.T("Open Settings → Accounts to connect your channels."));
+    else if (!wanted.isEmpty()) statusBar()->clearMessage();
+    if (youtubeChanged && !youtubeChannel.isEmpty()) refreshObsYoutube();
+}
+
+void MainWindow::refreshObsYoutube() {
+    if (!obsDockMode || obsYoutubeChannel.isEmpty() || obsYoutubePending) return;
+    const QString channel = obsYoutubeChannel;
+    const quint64 epoch = ++obsYoutubeEpoch;
+    obsYoutubePending = true;
+    QPointer<MainWindow> safe(this);
+    hub.savedStreams({{"channel_id", channel}}, [safe, channel, epoch](QJsonObject data, QString error) {
+        if (!safe || !safe->obsDockMode || safe->obsYoutubeChannel != channel || safe->obsYoutubeEpoch != epoch) return;
+        safe->obsYoutubePending = false;
+        safe->obsYoutubeTimer.start(180000);
+        if (!error.isEmpty()) {
+            safe->statusBar()->showMessage(safe->cfg.T("Could not check your YouTube live broadcasts."), 10000);
+            return;
+        }
+        const auto streams = data["streams"].toArray();
+        QString chosen;
+        for (const auto &value : streams) {
+            const auto item = value.toObject();
+            if (str(item["id"]) == safe->obsYoutubeVideo) chosen = safe->obsYoutubeVideo;
+        }
+        if (chosen.isEmpty() && streams.size() == 1) chosen = str(streams[0].toObject()["id"]);
+        if (chosen.isEmpty() && streams.size() > 1) {
+            QStringList titles;
+            for (const auto &value : streams) titles << str(value.toObject()["title"]);
+            bool ok = false;
+            const QString title = QInputDialog::getItem(safe, safe->cfg.T("Choose a YouTube live broadcast"),
+                safe->cfg.T("Choose the broadcast to show in OBS:"), titles, 0, false, &ok);
+            const int index = ok ? titles.indexOf(title) : -1;
+            if (index >= 0) chosen = str(streams[index].toObject()["id"]);
+        }
+        if (!chosen.isEmpty() && videoId(chosen) != chosen) chosen.clear();
+        if (safe->obsYoutubeVideo != chosen) { safe->obsYoutubeVideo = chosen; safe->syncObsAccounts(); }
+        if (streams.isEmpty()) safe->statusBar()->showMessage(safe->cfg.T("Your YouTube channel is not live."), 10000);
+    });
+}
+
 void MainWindow::refreshTabs() {
     if (!tabs->count()) {
         auto *empty = new QWidget(tabs);
@@ -431,6 +531,7 @@ void MainWindow::refreshTabs() {
         if (tabs->tabText(i) != label) tabs->setTabText(i, label);
         if (tabs->tabToolTip(i) != title) tabs->setTabToolTip(i, title);
     }
+    static_cast<LiveTabBar *>(tabs->tabBar())->updateCloseButtons();
 }
 
 void MainWindow::refreshQuota() {
@@ -449,6 +550,8 @@ void MainWindow::refreshQuota() {
 
 void MainWindow::refreshLanguage() {
     addButton->setToolTip(cfg.T("Add chats (Ctrl+T)"));
+    if (auto *refresh = findChild<QToolButton *>("obs-refresh-channels"))
+        refresh->setToolTip(cfg.T("Refresh connected channels"));
     gear->setToolTip(cfg.T("Settings (Ctrl+P)"));
     refreshTabs();
     refreshQuota();
@@ -481,6 +584,7 @@ static QString suggestedMixKey(QString name) {
 }
 
 void MainWindow::addChats(QString mode, Pane *anchor) {
+    if (obsDockMode) return;
     if (vodBridge) vodBridge->requestSync();
     auto *dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -768,6 +872,7 @@ void MainWindow::addChats(QString mode, Pane *anchor) {
 }
 
 void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor) {
+    if (obsDockMode) return;
     QList<Source *> list;
     QStringList invalid;
     for (const auto &link : links) {
@@ -858,6 +963,7 @@ void MainWindow::gearMenu() {
     QMenu m(this);
     m.addAction(cfg.T("Settings…"), this, [this] { showSettings(); });
     auto *top = m.addAction(cfg.T("Always on top"));
+    top->setVisible(!obsDockMode);
     top->setCheckable(true);
     top->setChecked(cfg.data["topmost"].toBool());
     connect(top, &QAction::toggled, this, [this](bool v) {
@@ -873,8 +979,10 @@ void MainWindow::gearMenu() {
             s->reconnect();
         }
     });
-    m.addAction(cfg.T("Saved channels…"), this, [this] { showSettings("Saved channels"); });
-    m.addAction(cfg.T("Check for updates…"), &updater, &Updater::show);
+    if (!obsDockMode) {
+        m.addAction(cfg.T("Saved channels…"), this, [this] { showSettings("Saved channels"); });
+        m.addAction(cfg.T("Check for updates…"), &updater, &Updater::show);
+    }
     m.exec(gear->mapToGlobal(QPoint(0, gear->height())));
 }
 
@@ -904,7 +1012,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             if (source->isVod) {
                 channel->addAction(cfg.T("Open VOD in browser"), source, [source] { QDesktopServices::openUrl(source->vodUrl); });
                 channel->addAction(cfg.T("Copy VOD link"), source, [source] { QGuiApplication::clipboard()->setText(source->vodUrl.toString()); });
-                if (p->sources.size() > 1) channel->addAction(cfg.T("Remove from mixed feed"), p, [p, source] {
+                if (!obsDockMode && p->sources.size() > 1) channel->addAction(cfg.T("Remove from mixed feed"), p, [p, source] {
                     QList<Source *> keep; for (auto s : p->sources) if (s && s != source) keep << s;
                     p->setSources(keep);
                 });
@@ -987,7 +1095,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
                     this, [this, source] { editChannel(source); });
                 edit->setObjectName("channel-edit");
             }
-            if (p->sources.size() > 1) {
+            if (!obsDockMode && p->sources.size() > 1) {
                 channel->addAction(cfg.T("Remove from mixed feed"), p, [p, source] {
                     QList<Source *> keep;
                     for (auto s : p->sources) {
@@ -1008,7 +1116,8 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     auto *vod = historyMenu->addAction(cfg.T("Browser extension setup…"), this, &MainWindow::showVod);
     vod->setObjectName("open-vod-replay");
     auto *layoutMenu = menu.addMenu(cfg.T("Layout"));
-    menu.addAction(cfg.T("Rename tab…"), this, [this] {
+    layoutMenu->menuAction()->setVisible(!obsDockMode);
+    auto *renameAction = menu.addAction(cfg.T("Rename tab…"), this, [this] {
         if (auto *w = current()) {
             bool ok = false;
             auto name = QInputDialog::getText(this, cfg.T("Rename tab"), cfg.T("Name"), QLineEdit::Normal,
@@ -1020,6 +1129,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             }
         }
     });
+    renameAction->setVisible(!obsDockMode);
     auto *zoom = layoutMenu->addAction(cfg.T("Zoom / restore pane"), p, [this, p] {
         if (auto *w = current()) {
             w->toggleZoom(p);
@@ -1070,7 +1180,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     historyMenu->addSeparator();
     historyMenu->addAction(cfg.T("Clear displayed messages"), p, [p] { p->view->setMessages({}); });
     menu.addSeparator();
-    menu.addAction(cfg.T(hasSplits ? "Close pane" : "Close tab") + "\tCtrl+W", this, [this, p] {
+    auto *closeAction = menu.addAction(cfg.T(hasSplits ? "Close pane" : "Close tab") + "\tCtrl+W", this, [this, p] {
         for (int i = 0; i < tabs->count(); ++i) {
             auto *w = qobject_cast<Workspace *>(tabs->widget(i));
             if (w && w->panes().contains(p)) {
@@ -1084,6 +1194,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
         }
         QTimer::singleShot(0, this, &MainWindow::pruneSources);
     });
+    closeAction->setVisible(!obsDockMode);
 }
 
 void MainWindow::startVodBridge(quint16 port) {
@@ -1397,6 +1508,7 @@ void MainWindow::saveChannel(Source *s) {
 }
 
 void MainWindow::openSaved(QJsonObject item) {
+    if (obsDockMode) return;
     if (str(item["platform"]) == "twitch" || str(item["platform"]) == "kick") {
         addWorkspace({hub.source(str(item["platform"]), str(item["channel_id"]))});
         return;
@@ -1640,6 +1752,7 @@ void MainWindow::changeFont(int delta, bool reset) {
 }
 
 void MainWindow::closeTab(int index) {
+    if (obsDockMode) return;
     if (index < 0) {
         return;
     }
@@ -1699,6 +1812,7 @@ void MainWindow::pruneSources() {
 }
 
 void MainWindow::applyTopmost() {
+    if (obsDockMode) return;
     bool visible = isVisible();
     setWindowFlag(Qt::WindowStaysOnTopHint, cfg.data["topmost"].toBool());
     if (visible) {
@@ -1708,7 +1822,7 @@ void MainWindow::applyTopmost() {
 }
 
 void MainWindow::saveSession() {
-    if (restoring) {
+    if (restoring || obsDockMode) {
         return;
     }
     QJsonArray sources, workspaces;
@@ -1836,14 +1950,14 @@ void MainWindow::closeEvent(QCloseEvent *e) {
 
 void MainWindow::moveEvent(QMoveEvent *e) {
     QMainWindow::moveEvent(e);
-    if (!restoring) {
+    if (!restoring && !obsDockMode) {
         sessionTimer.start();
     }
 }
 
 void MainWindow::resizeEvent(QResizeEvent *e) {
     QMainWindow::resizeEvent(e);
-    if (!restoring) {
+    if (!restoring && !obsDockMode) {
         sessionTimer.start();
     }
 }

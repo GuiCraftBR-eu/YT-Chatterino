@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.4
+
+- Plugin para OBS Studio 33 ou mais recente no Windows: um painel misto com as contas conectadas separadamente ao OBS.
+- A extensão do navegador se conecta ao aplicativo e ao painel do OBS ao mesmo tempo.
+- O botão de fechar aparece apenas na aba selecionada.
+- O plugin é atualizado manualmente; o aplicativo independente mantém seu atualizador.
+
 ## 2.5.3
 
 - Indicadores ao vivo mais discretos e marcas de mensagens destacadas na barra de rolagem.

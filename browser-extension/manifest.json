@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT-Chatterino",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "description": "Find open streams, synchronize VOD chat, and share visible Twitch chat panels with YT-Chatterino on this computer.",
   "permissions": [],
   "host_permissions": [
