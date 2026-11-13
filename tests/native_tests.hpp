@@ -37,6 +37,12 @@ class NativeTests : public QObject {
     void twitchLiveIndicatorWithoutSignIn();
     void twitchBrowserPanelsFollowTabsAndPermissions();
     void browserBridgeUnicodeAndPanelRouting();
+    void mixedRightClickAndYoutubeMentions();
+    void highlightedScrollbarTracksMessages();
+    void twitchCheermotesRenderAndCopy();
+    void emoteCatalogRetriesIndependently();
+    void browserSyncAndLateChatAttachment();
+    void streamPreviewSurvivesChatScrolling();
     void f5ReloadsEmotesWithoutReconnecting();
     void vodAutomaticTabsMixAndBadges();
     void vodSessionRestoreAndSuppression();

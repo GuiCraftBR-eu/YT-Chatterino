@@ -12,10 +12,10 @@ void NativeTests::liveIndicatorsFollowEachChannel() {
     const int index = app->tabs->indexOf(workspace);
     QVERIFY(index >= 0);
     app->refreshTabs();
-    QVERIFY(app->tabs->tabIcon(index).isNull());
+    QVERIFY(!app->tabs->tabBar()->tabData(index).toBool());
     kick->header["live"] = true;
     emit kick->headerChanged();
-    QVERIFY(!app->tabs->tabIcon(index).isNull());
+    QVERIFY(app->tabs->tabBar()->tabData(index).toBool());
     if (qEnvironmentVariableIsSet("YT_CHATTERINO_TEST_SCREENSHOT")) {
         configureApplication(*qobject_cast<QApplication *>(qApp));
         app->resize(520, 760);
@@ -28,10 +28,10 @@ void NativeTests::liveIndicatorsFollowEachChannel() {
     QVERIFY(liveImage.pixelColor(16, 16).red() > offlineImage.pixelColor(16, 16).red());
     kick->header["live"] = false;
     emit kick->headerChanged();
-    QVERIFY(app->tabs->tabIcon(index).isNull());
+    QVERIFY(!app->tabs->tabBar()->tabData(index).toBool());
     youtube->header["live"] = true;
     emit youtube->headerChanged();
-    QVERIFY(!app->tabs->tabIcon(index).isNull());
+    QVERIFY(app->tabs->tabBar()->tabData(index).toBool());
 }
 
 void NativeTests::twitchLiveIndicatorWithoutSignIn() {

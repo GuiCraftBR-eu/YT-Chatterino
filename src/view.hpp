@@ -11,6 +11,7 @@ class ChatView : public QAbstractScrollArea {
     Hub *hub;
     QVector<Message> messages;
     QVector<int> heights, offsets;
+    QVector<QColor> highlightColors;
     QHash<qint64, bool> rowStripes;
     QHash<qint64, QSharedPointer<QTextDocument>> documents;
     QHash<qint64, qint64> documentUse;
@@ -62,6 +63,7 @@ class ChatView : public QAbstractScrollArea {
     void invalidate();
     void rebuildOffsets();
     void reflow();
+    void refreshHighlights();
     int estimate(const Message &message) const;
     int rowAt(int y) const;
     QPair<int, int> positionAt(QPoint point);
@@ -88,6 +90,8 @@ class ChatView : public QAbstractScrollArea {
     void threadClicked(yc::Message message);
     void messageMenuRequested(yc::Message message, QPoint global);
     void replyRequested(yc::Message message);
+    void mentionRequested(yc::Message message);
+    void messageRightClicked(yc::Message message);
     void focused();
 
   protected:
@@ -187,6 +191,8 @@ class Pane : public QWidget {
     void incoming(Source *source, Message message);
     void send();
     void startReply(Message message);
+    void mentionUser(Message message);
+    void selectMessageSource(const Message &message);
     void cancelReply();
     void openEmotes();
     void showSearch();

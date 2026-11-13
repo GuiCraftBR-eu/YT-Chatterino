@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.3
+
+- Indicadores ao vivo mais discretos e marcas de mensagens destacadas na barra de rolagem.
+- Clique direito seleciona o canal de uma mensagem em chats misturados; no YouTube, também menciona o autor sem duplicar o `@`. Ctrl+clique direito abre o menu.
+- Emotes de Bits da Twitch, novas tentativas para emotes e distintivos e prévia do título mais estável.
+- A extensão sincroniza ao abrir o menu de adicionar chats e ao conectar um chat; correção de falha ao fechar o app com a extensão conectada.
+
 ## 2.5.2
 
 - Indicadores vermelhos nas abas e nos ícones de canais ao vivo.

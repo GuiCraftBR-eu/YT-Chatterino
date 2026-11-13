@@ -29,6 +29,10 @@ class Source : public QObject {
     QHash<QString, Span> emotes;
     QHash<QString, Span> channelEmotes;
     QHash<QString, Span> kickGlobalEmotes;
+    QJsonArray cheermotes;
+    QString cheermoteRoom;
+    qint64 cheermoteLoaded = 0, cheermoteRetryAfter = 0;
+    bool cheermotePending = false;
     QMap<int, QString> kickSubscriberBadges;
     QHash<QString, Badge> badges;
     QHash<QString, Badge> globalBadges, channelBadges;
@@ -42,7 +46,7 @@ class Source : public QObject {
     QHash<QString, qint64> connectionNotices;
     QString continuation, visitor;
     QJsonObject context;
-    QTimer poll, metadataTimer, badgeRetry, decorationTimer, historyRetry, pollResultTimer;
+    QTimer poll, metadataTimer, badgeRetry, emoteRetry, decorationTimer, historyRetry, pollResultTimer;
     QTimer youtubeDisplayTimer;
     QQueue<Message> youtubePending;
     int youtubeDisplayChunk = 1;
@@ -75,6 +79,9 @@ class Source : public QObject {
     qint64 polls = 0;
     quint64 generation = 0;
     QHash<QString, qint64> emoteLoaded;
+    QHash<QString, qint64> emoteRetryUntil;
+    QSet<QString> emotePending;
+    QString emoteChannel;
     quint64 emoteRefreshEpoch = 0;
     qint64 globalBadgesLoaded = 0, channelBadgesLoaded = 0;
     bool globalBadgesPending = false, channelBadgesPending = false;
@@ -106,6 +113,7 @@ class Source : public QObject {
     QString chatModeSummary() const;
     void youtubeApiPollState(const QJsonObject &data);
     void loadEmotes(QString channelId = {});
+    void loadCheermotes();
     void reloadChannelEmotes();
     void clearChannelEmotes(const QString &provider);
     void loadBadges();
@@ -193,8 +201,10 @@ class Hub : public QObject {
     QHash<QString, QString> twitchAvatarUrls;
     QHash<QString, qint64> twitchAvatarRetry;
     QSet<QString> twitchAvatarPending;
-    bool globalsLoading = false;
-    qint64 globalsLoaded = 0;
+    QHash<QString, qint64> globalsLoaded;
+    QHash<QString, qint64> globalsRetryUntil;
+    QSet<QString> globalsPending;
+    QTimer globalsRetry;
     QTimer liveTimer;
     QHash<QString, bool> liveState;
     bool liveRequest = false;

@@ -46,6 +46,7 @@ class VodBridge : public QObject {
     Q_OBJECT
   public:
     explicit VodBridge(Hub *hub, QObject *parent = nullptr, quint16 port = 37367, bool listen = true);
+    ~VodBridge() override;
     Hub *hub;
     QWebSocketServer server;
     QHash<QWebSocket *, QString> clients;
@@ -56,11 +57,13 @@ class VodBridge : public QObject {
     quint64 browserPanelSequence = 0;
     QHash<QString, qint64> liveCacheUntil;
     QSet<QString> livePending;
+    bool syncScheduled = false;
     QSet<QString> suppressed, hooked;
     static bool allowedOrigin(const QString &origin);
     void acceptConnection();
     void processState(const QString &client, const QJsonObject &data);
     void processLiveState(const QString &client, const QJsonObject &data);
+    void requestSync();
     void updateBrowserPanels(const QString &player, const QString &login, const QJsonValue &chat);
     void refreshBrowserPanels(const QString &login);
     bool openTwitchPanel(Source *source, const QString &kind);

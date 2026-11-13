@@ -73,7 +73,9 @@ function twitchChatPanels() {
 // The desktop can request only that a matching Twitch panel be expanded.
 // It cannot select an outcome, submit a vote, or spend channel points.
 api.runtime.onMessage.addListener((message, sender) => {
-  if (sender.id !== api.runtime.id || message?.type !== "open-panel" || !isLiveCandidate()) return;
+  if (sender.id !== api.runtime.id) return;
+  if (message?.type === "sync-now") { report(true); return; }
+  if (message?.type !== "open-panel" || !isLiveCandidate()) return;
   if (!["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(location.hostname.toLowerCase())) return;
   const match=location.pathname.match(/^\/(?:popout\/)?([A-Za-z0-9_]{1,25})(?:\/chat)?\/?$/);
   if (!match || match[1].toLowerCase() !== message.channel || !["poll","prediction"].includes(message.kind)) return;
@@ -101,13 +103,26 @@ function youtubeLiveHint() {
   const name = (owner?.textContent || "").replace(/\s+/g," ").trim().slice(0,100);
   return {live:flag && !!name, name};
 }
-function report() {
+function liveHint() {
+  const youtube = youtubeLiveHint();
+  if (youtube.live) return youtube;
+  if (["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(location.hostname.toLowerCase())) {
+    const match = location.pathname.match(/^\/([A-Za-z0-9_]{1,25})\/?$/);
+    const indicator = document.querySelector('[data-a-target="video-ref"] .tw-channel-status-text-indicator');
+    if (match && indicator && indicator.getClientRects().length && /^live$/i.test(indicator.textContent.trim())) {
+      const title = document.title.replace(/\s*-\s*Twitch\s*$/i, '').trim();
+      return {live:true, name:(title || match[1]).slice(0,100)};
+    }
+  }
+  return youtube;
+}
+function report(force = false) {
   const isVod = isVodPage(), isLive = isLiveCandidate();
   if (!isVod && vodReporting) { api.runtime.sendMessage({type:"vod-end"}).catch(() => {}); vodReporting=false; }
   if (!isLive && liveReporting) { api.runtime.sendMessage({type:"live-end"}).catch(() => {}); liveReporting=false; lastLiveUrl=""; }
-  if (isLive && (location.href !== lastLiveUrl || Date.now()-lastLiveAt >= 5000)) {
+  if (isLive && (force || location.href !== lastLiveUrl || Date.now()-lastLiveAt >= 2000)) {
     liveReporting=true;lastLiveUrl=location.href;lastLiveAt=Date.now();
-    api.runtime.sendMessage({type:"live-state",url:location.href,...youtubeLiveHint(),chat:twitchChatPanels()}).catch(() => {});
+    api.runtime.sendMessage({type:"live-state",url:location.href,...liveHint(),chat:twitchChatPanels()}).catch(() => {});
   }
   if (!isVod) return;
   const video = findVideo(); if (!video) return;

@@ -32,6 +32,18 @@ assert.equal(state.url,'https://www.twitch.tv/felps');
 assert.equal(state.chat.pin.text,'Hello');assert.equal(state.chat.poll.options,'Yes · No');
 assert(!JSON.stringify(state).includes('secret'));
 const send=data=>socket.onmessage({data:JSON.stringify(data)});
+const beforeSync=socket.sent.length;
+send({type:'sync-request'});
+assert(socket.sent.slice(beforeSync).some(x=>x.type==='live-state'&&x.url==='https://www.twitch.tv/felps'));
+assert(actions.some(x=>x.type==='message'&&x.tab===7&&x.message.type==='sync-now'));
+actions.length=0;
+// The content script persists when Twitch navigates within the same origin.
+onMessage({type:'live-state',url:'https://www.twitch.tv/anotherchannel'},sender,()=>{});
+assert(socket.sent.some(x=>x.type==='live-state'&&x.url==='https://www.twitch.tv/anotherchannel'));
+const beforeWrongOrigin=socket.sent.length;
+onMessage({type:'live-state',url:'https://kick.com/anotherchannel'},sender,()=>{});
+assert.equal(socket.sent.length,beforeWrongOrigin);
+onMessage({type:'live-state',url:sender.url,chat:{available:true,pin:{name:'Alice',text:'Hello'},poll:{text:'Question'}}},sender,()=>{});
 send({type:'open-panel',tab:7,channel:'wrong',kind:'poll'});
 send({type:'open-panel',tab:7,channel:'felps',kind:'vote'});
 send({type:'open-panel',tab:9,channel:'felps',kind:'poll'});
