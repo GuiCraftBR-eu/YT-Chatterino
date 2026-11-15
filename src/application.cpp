@@ -15,8 +15,15 @@ class LiveTabBar final : public QTabBar {
     void updateCloseButtons() {
         for (int i = 0; i < count(); ++i) {
             for (const auto side : {QTabBar::LeftSide, QTabBar::RightSide})
-                if (auto *button = tabButton(i, side)) button->setVisible(i == currentIndex());
+                if (auto *button = tabButton(i, side)) {
+                    const bool active = i == currentIndex();
+                    const QSize size = active ? button->sizeHint() : QSize(0, 0);
+                    button->setFixedSize(size);
+                    button->setVisible(active);
+                }
         }
+        updateGeometry();
+        update();
     }
   protected:
     void tabInserted(int index) override {
@@ -88,14 +95,14 @@ static QJsonArray arrayOf(const QStringList &values) {
     return QJsonArray::fromStringList(values);
 }
 
-MainWindow::MainWindow(QString profile, bool testing, bool obsDock)
+MainWindow::MainWindow(QString profile, bool testing, bool obsDock, bool embedded)
     : cfg(profile, this), net(this), quota(&cfg), accounts(&cfg, &net, &quota, this), images(&net, this),
       hub(&cfg, &net, &accounts, &images, &quota, this), updater(&cfg, &net, this, this), testMode(testing), obsDockMode(obsDock) {
     hub.testMode = testing;
     accounts.persistenceEnabled = !testing;
     accounts.window = this;
     standardTranslator = new StandardTranslator(&cfg, this);
-    qApp->installTranslator(standardTranslator);
+    if (!embedded) qApp->installTranslator(standardTranslator);
     setWindowTitle(QStringLiteral("YT-Chatterino " APP_VERSION "v"));
     setWindowIcon(QIcon(":/ytchatterino.ico"));
     resize(520, 760);
@@ -170,7 +177,7 @@ MainWindow::MainWindow(QString profile, bool testing, bool obsDock)
     });
     connect(&updater, &Updater::restartRequested, this, [this] {
         saveSession();
-        qApp->quit();
+        if (!obsDockMode) qApp->quit();
     });
     connect(tabs, &QTabWidget::currentChanged, this, [this] {
         refreshQuota();
@@ -408,7 +415,7 @@ void MainWindow::attachPane(Pane *p) {
     });
     connect(p, &Pane::headerLinesChanged, this, [this] { sessionTimer.start(); });
     connect(p, &Pane::focused, this, [this](Pane *pane) {
-        if (current()) {
+        if (current() && !pane->window()->property("yt-chat-popup").toBool()) {
             current()->focusedPane = pane;
         }
         refreshQuota();
@@ -946,6 +953,112 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
     refreshTabs();
     refreshQuota();
     sessionTimer.start();
+    if (list.size() == 1 && !list[0]->isVod) {
+        for (int i = 0; i < tabs->count(); ++i) {
+            auto *workspace = qobject_cast<Workspace *>(tabs->widget(i));
+            if (!workspace) continue;
+            for (auto *pane : workspace->panes()) {
+                if (pane->sources.contains(list[0])) { suggestSimilarLive(list[0], pane); return; }
+            }
+        }
+    }
+}
+
+void MainWindow::suggestSimilarLive(Source *source, Pane *pane) {
+    if (testMode || !source || !pane || source->isVod) return;
+    if (source->platform == "youtube" && str(source->header["channel"]).isEmpty()) {
+        auto *waiter = new QObject(this);
+        QPointer<Source> safeSource(source); QPointer<Pane> safePane(pane);
+        connect(source, &Source::changed, waiter, [this, waiter, safeSource, safePane] {
+            if (!safeSource || !safePane || str(safeSource->header["channel"]).isEmpty()) return;
+            disconnect(safeSource, nullptr, waiter, nullptr);
+            waiter->deleteLater(); suggestSimilarLive(safeSource, safePane);
+        });
+        QTimer::singleShot(15000, waiter, &QObject::deleteLater);
+        return;
+    }
+    QString name = source->platform == "youtube" ? str(source->header["channel"]) : source->id;
+    name = name.toLower(); name.remove(QRegularExpression("[^a-z0-9_-]"));
+    if (name.size() < 3 || name.size() > 21) return;
+    QString base = name;
+    if (base.endsWith("live") && base.size() > 7) base.chop(4);
+    QStringList candidates{name, base, base + "live"}; candidates.removeDuplicates();
+    struct Search { int remaining = 0; QJsonArray found; };
+    auto state = QSharedPointer<Search>::create();
+    QPointer<MainWindow> self(this); QPointer<Pane> safePane(pane); QPointer<Source> safeSource(source);
+    auto finish = [self, safePane, safeSource, state](QString platform, QString name, QJsonArray streams) {
+        if (!self || !safePane || !safeSource) return;
+        for (const auto &v : streams) {
+            auto row = v.toObject(); row["platform"] = platform; row["name"] = name;
+            state->found.append(row);
+        }
+        if (--state->remaining || state->found.isEmpty()) return;
+        auto *dialog = new QDialog(self);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->setWindowTitle(self->cfg.T("Similar live channels"));
+        auto *layout = new QVBoxLayout(dialog);
+        layout->addWidget(label(self->cfg, "Similar names may belong to different people. Select streams to mix:", true));
+        auto *list = new QListWidget(dialog);
+        list->setObjectName("similar-live-channels");
+        QSet<QString> seen;
+        for (const auto &v : state->found) {
+            const auto row = v.toObject();
+            const QString platform = str(row["platform"]), id = str(row["id"]), key = platform + ':' + id;
+            if (id.isEmpty() || seen.contains(key)) continue;
+            bool already = false;
+            for (auto existing : safePane->sources) if (existing && existing->platform == platform && existing->id == id) already = true;
+            if (already) continue;
+            seen.insert(key);
+            auto *item = new QListWidgetItem(platform + " · " + str(row["name"]) + " — " + str(row["title"]), list);
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(Qt::Unchecked); item->setData(Qt::UserRole, row);
+        }
+        if (!list->count()) { dialog->deleteLater(); return; }
+        layout->addWidget(list);
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+        buttons->button(QDialogButtonBox::Ok)->setText(self->cfg.T("Mix selected"));
+        connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+        connect(buttons, &QDialogButtonBox::accepted, dialog, [self, safePane, list, dialog] {
+            if (!self || !safePane) { dialog->reject(); return; }
+            QList<Source *> sources;
+            for (auto existing : safePane->sources) if (existing) sources << existing;
+            for (int i = 0; i < list->count(); ++i) if (list->item(i)->checkState() == Qt::Checked) {
+                const auto row = list->item(i)->data(Qt::UserRole).toJsonObject();
+                if (auto *added = self->hub.source(str(row["platform"]), str(row["id"])); added && !sources.contains(added)) sources << added;
+            }
+            safePane->setSources(sources); dialog->accept();
+        });
+        layout->addWidget(buttons); dialog->resize(480, 260); dialog->show();
+    };
+    state->remaining = candidates.size() * 2;
+    for (const auto &candidate : candidates) {
+        if (source->platform != "twitch") {
+            const QJsonObject body{{"query", "query($login:String!){user(login:$login){login displayName stream{id title}}}"},
+                                   {"variables", QJsonObject{{"login", candidate}}}};
+            net.json(QUrl("https://gql.twitch.tv/gql"), [finish, candidate](QJsonObject data, QString error) {
+                QJsonArray result;
+                const auto user = at(data, {"data", "user"}).toObject();
+                const auto stream = user["stream"].toObject();
+                const auto login = twitchLogin("@" + str(user["login"]));
+                if (error.isEmpty() && !stream.isEmpty() && !login.isEmpty())
+                    result.append(QJsonObject{{"id", login}, {"title", stream["title"]}});
+                finish("twitch", candidate, result);
+            }, "POST", body, {{"Client-ID", "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"}, {"Origin", "https://www.twitch.tv"}});
+        }
+        if (source->platform != "kick") {
+            net.json(QUrl("https://kick.com/api/v2/channels/" + candidate), [finish, candidate](QJsonObject data, QString error) {
+                QJsonArray result; const auto live = data["livestream"].toObject();
+                if (error.isEmpty() && !live.isEmpty() && !kickLogin("kick:" + candidate).isEmpty())
+                    result.append(QJsonObject{{"id", candidate}, {"title", live["session_title"]}});
+                finish("kick", candidate, result);
+            });
+        }
+        if (source->platform != "youtube") {
+            hub.savedStreams({{"channel_id", "@" + candidate}}, [finish, candidate](QJsonObject data, QString error) {
+                finish("youtube", candidate, error.isEmpty() ? data["streams"].toArray() : QJsonArray());
+            });
+        }
+    }
 }
 
 void MainWindow::showSettings(QString page) {
@@ -1108,6 +1221,16 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             }
         }
     }
+    menu.addAction(cfg.T("Open popup"), this, [this, p] { openPopup(p, false); })->setObjectName("open-popup");
+    menu.addAction(cfg.T("Open overlay"), this, [this, p] { openPopup(p, true); })->setObjectName("open-overlay");
+    if (p->window()->property("yt-chat-overlay").toBool()) {
+        menu.addAction(cfg.T("Overlay opacity…"), p, [this, p] {
+            bool ok = false;
+            const int value = QInputDialog::getInt(p, cfg.T("Overlay opacity"), cfg.T("Opacity (%)"),
+                                                   qRound(p->window()->windowOpacity() * 100), 20, 100, 5, &ok);
+            if (ok) p->window()->setWindowOpacity(value / 100.0);
+        });
+    }
     auto *phone = menu.addAction(cfg.T("Open on phone…"), this, [this, p] { showPhone(p); });
     phone->setObjectName("open-phone");
     menu.addSeparator();
@@ -1195,6 +1318,31 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
         QTimer::singleShot(0, this, &MainWindow::pruneSources);
     });
     closeAction->setVisible(!obsDockMode);
+}
+
+void MainWindow::openPopup(Pane *sourcePane, bool overlay) {
+    if (!sourcePane) return;
+    QList<Source *> sources;
+    for (auto source : sourcePane->sources) if (source) sources << source;
+    if (sources.isEmpty()) return;
+    auto *dialog = new QDialog(this, Qt::Window | (overlay ? Qt::WindowStaysOnTopHint : Qt::WindowFlags()));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setProperty("yt-chat-popup", true);
+    dialog->setProperty("yt-chat-overlay", overlay);
+    dialog->setWindowTitle(cfg.T(overlay ? "Chat overlay" : "Chat popup"));
+    dialog->resize(420, 650);
+    if (overlay) dialog->setWindowOpacity(0.75);
+    auto *layout = new QVBoxLayout(dialog);
+    layout->setContentsMargins(0, 0, 0, 0);
+    auto *pane = new Pane(&hub, sources, dialog);
+    pane->filter = sourcePane->filter;
+    pane->view->messageCap = sourcePane->view->messageCap;
+    pane->reload();
+    attachPane(pane);
+    layout->addWidget(pane);
+    popupWindows << dialog;
+    connect(dialog, &QObject::destroyed, this, [this] { QTimer::singleShot(0, this, &MainWindow::pruneSources); });
+    dialog->show();
 }
 
 void MainWindow::startVodBridge(quint16 port) {
@@ -1794,6 +1942,11 @@ void MainWindow::pruneSources() {
         if (card) {
             needed.insert(card->property("source_key").toString());
         }
+    }
+    for (auto popup : popupWindows) {
+        if (!popup) continue;
+        for (auto *pane : popup->findChildren<Pane *>())
+            for (auto source : pane->sources) if (source) needed.insert(source->key);
     }
     for (auto s : hub.sources) {
         if (!needed.contains(s->key)) {

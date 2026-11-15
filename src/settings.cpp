@@ -281,6 +281,7 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
                            << "Date format\tdates time seconds formato data am pm";
     searchItems["Updates"]
         << "Check for updates automatically\tupdates native automatic download atualizar atualizacoes";
+    searchItems["Moderation"] << "Moderation actions\tmoderation actions commands icons moderacao comandos";
     rebuildLanguage();
 }
 
@@ -297,7 +298,7 @@ void SettingsWindow::rebuildLanguage() {
     navigation->clear();
     for (const auto &group : QList<QPair<QString, QStringList>>{
              {"Connections", {"Accounts", "Saved channels", "YouTube quota"}},
-             {"Appearance", {"Display", "Messages", "Highlights"}},
+             {"Appearance", {"Display", "Messages", "Highlights", "Moderation"}},
              {"Application", {"Notifications", "Updates", "Keyboard shortcuts", "Tutorial"}}}) {
         auto *section = new QTreeWidgetItem(navigation, {main->cfg.T(group.first)});
         section->setFlags(section->flags() & ~Qt::ItemIsSelectable);
@@ -378,6 +379,7 @@ QWidget *SettingsWindow::buildPage(QString name) {
     if (name == "Messages") {
         return messagesPage();
     }
+    if (name == "Moderation") return moderationPage();
     if (name == "Highlights") {
         return highlightsPage();
     }
@@ -798,6 +800,56 @@ QWidget *SettingsWindow::messagesPage() {
     }));
     l->addStretch();
     return w;
+}
+
+QWidget *SettingsWindow::moderationPage() {
+    auto &cfg = main->cfg;
+    QVBoxLayout *layout;
+    auto *page = pageWidget(cfg, "Moderation", &layout);
+    layout->addWidget(text(cfg, "Moderation mode (beta): use the sword in a channel you moderate.", true));
+    layout->addWidget(text(cfg, "Use {user.name}, {msg.id} and {channel.name} in actions. Timeout durations are in seconds.", true));
+    auto *table = new QTableWidget(page);
+    table->setObjectName("moderation-actions");
+    table->setColumnCount(2);
+    table->setHorizontalHeaderLabels({cfg.T("Icon"), cfg.T("Action")});
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    const auto add = [table](QString icon, QString command) {
+        const int row = table->rowCount(); table->insertRow(row);
+        table->setItem(row, 0, new QTableWidgetItem(icon));
+        table->setItem(row, 1, new QTableWidgetItem(command));
+    };
+    for (const auto &value : moderationActions(cfg)) {
+        const auto item = value.toObject(); add(str(item["icon"]), str(item["command"]));
+    }
+    layout->addWidget(table);
+    auto *buttons = new QHBoxLayout;
+    buttons->addWidget(action(cfg, "Add", page, [table, add] { if (table->rowCount() < 12) add("•", ""); }));
+    buttons->addWidget(action(cfg, "Remove", page, [table] { if (table->currentRow() >= 0) table->removeRow(table->currentRow()); }));
+    for (int direction : {-1, 1}) {
+        buttons->addWidget(action(cfg, direction < 0 ? "Move up" : "Move down", page, [table, direction] {
+            const int row = table->currentRow(), next = row + direction;
+            if (row < 0 || next < 0 || next >= table->rowCount()) return;
+            for (int col = 0; col < 2; ++col) {
+                auto *a = table->takeItem(row, col), *b = table->takeItem(next, col);
+                table->setItem(row, col, b); table->setItem(next, col, a);
+            }
+            table->selectRow(next);
+        }));
+    }
+    buttons->addStretch(); layout->addLayout(buttons);
+    layout->addWidget(action(cfg, "Apply moderation actions", page, [this, table] {
+        QJsonArray actions;
+        for (int row = 0; row < table->rowCount(); ++row) {
+            const auto icon = table->item(row, 0) ? table->item(row, 0)->text().trimmed().left(8) : QString();
+            const auto command = table->item(row, 1) ? table->item(row, 1)->text().trimmed().left(500) : QString();
+            if (!icon.isEmpty() && !command.isEmpty()) actions.append(QJsonObject{{"icon", icon}, {"command", command}});
+        }
+        main->cfg.data["moderation_actions"] = actions;
+        main->cfg.save(); emit main->cfg.appearanceChanged();
+    }));
+    layout->addStretch(); return page;
 }
 
 QWidget *SettingsWindow::highlightsPage() {

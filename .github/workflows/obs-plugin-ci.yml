@@ -1,7 +1,7 @@
 name: OBS dock compiler checks
 on:
   push:
-    branches: ['prepare-v2.5.4']
+    branches: ['prepare-v2.5.5']
     paths: ['obs-plugin/**', '.github/workflows/obs-plugin-ci.yml']
   workflow_dispatch:
 permissions:
