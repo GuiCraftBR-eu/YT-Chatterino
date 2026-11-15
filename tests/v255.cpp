@@ -62,3 +62,27 @@ void NativeTests::moderationModeRespectsPermissions() {
     app->accounts.twitch = {}; pane->refreshModeration();
     QVERIFY(pane->moderationButton->isHidden()); QVERIFY(!pane->moderationButton->isChecked());
 }
+
+void NativeTests::similarLiveSuggestionsRequireSelection() {
+    auto *pane = app->addWorkspace({twitch})->focusedPane.data();
+    app->net.transport = [](QUrl url, QByteArray, QByteArray, QMap<QByteArray, QByteArray>, BytesCallback done) {
+        if (url.host() == "kick.com" && url.path().endsWith("/guicraft_")) {
+            done(R"({"livestream":{"session_title":"Live on Kick"}})", {}); return;
+        }
+        if (url.host() == "www.youtube.com" && url.path() == "/@guicraft_/streams") {
+            done(R"(ytInitialData = {"contents":[{"videoRenderer":{"videoId":"abcdefghijk","title":{"simpleText":"Live on YouTube"},"badges":[{"style":"LIVE"}]}}]};)", {}); return;
+        }
+        done({}, "HTTP 404");
+    };
+    app->suggestSimilarLive(twitch, pane, true);
+    auto *list = app->findChild<QListWidget *>("similar-live-channels"); QVERIFY(list);
+    QCOMPARE(list->count(), 2);
+    QCOMPARE(list->item(0)->checkState(), Qt::Unchecked);
+    QCOMPARE(list->item(1)->checkState(), Qt::Unchecked);
+    QCOMPARE(pane->sources.size(), 1);
+    list->item(0)->setCheckState(Qt::Checked);
+    auto *dialog = qobject_cast<QDialog *>(list->window()); QVERIFY(dialog);
+    auto *buttons = dialog->findChild<QDialogButtonBox *>(); QVERIFY(buttons);
+    buttons->button(QDialogButtonBox::Ok)->click();
+    QCOMPARE(pane->sources.size(), 2);
+}

@@ -48,6 +48,7 @@ class NativeTests : public QObject {
     void popupKeepsSourceAlive();
     void pinnedLinksAreEscaped();
     void moderationModeRespectsPermissions();
+    void similarLiveSuggestionsRequireSelection();
     void obsDockUsesOneMixedChatAndSeparateAccounts();
     void obsDockRefreshesYoutubeAndRejectsStaleResults();
     void f5ReloadsEmotesWithoutReconnecting();

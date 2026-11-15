@@ -964,15 +964,15 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
     }
 }
 
-void MainWindow::suggestSimilarLive(Source *source, Pane *pane) {
-    if (testMode || !source || !pane || source->isVod) return;
+void MainWindow::suggestSimilarLive(Source *source, Pane *pane, bool allowTest) {
+    if ((testMode && !allowTest) || !source || !pane || source->isVod) return;
     if (source->platform == "youtube" && str(source->header["channel"]).isEmpty()) {
         auto *waiter = new QObject(this);
         QPointer<Source> safeSource(source); QPointer<Pane> safePane(pane);
-        connect(source, &Source::changed, waiter, [this, waiter, safeSource, safePane] {
+        connect(source, &Source::changed, waiter, [this, waiter, safeSource, safePane, allowTest] {
             if (!safeSource || !safePane || str(safeSource->header["channel"]).isEmpty()) return;
             disconnect(safeSource, nullptr, waiter, nullptr);
-            waiter->deleteLater(); suggestSimilarLive(safeSource, safePane);
+            waiter->deleteLater(); suggestSimilarLive(safeSource, safePane, allowTest);
         });
         QTimer::singleShot(15000, waiter, &QObject::deleteLater);
         return;
@@ -1221,16 +1221,6 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             }
         }
     }
-    menu.addAction(cfg.T("Open popup"), this, [this, p] { openPopup(p, false); })->setObjectName("open-popup");
-    menu.addAction(cfg.T("Open overlay"), this, [this, p] { openPopup(p, true); })->setObjectName("open-overlay");
-    if (p->window()->property("yt-chat-overlay").toBool()) {
-        menu.addAction(cfg.T("Overlay opacity…"), p, [this, p] {
-            bool ok = false;
-            const int value = QInputDialog::getInt(p, cfg.T("Overlay opacity"), cfg.T("Opacity (%)"),
-                                                   qRound(p->window()->windowOpacity() * 100), 20, 100, 5, &ok);
-            if (ok) p->window()->setWindowOpacity(value / 100.0);
-        });
-    }
     auto *phone = menu.addAction(cfg.T("Open on phone…"), this, [this, p] { showPhone(p); });
     phone->setObjectName("open-phone");
     menu.addSeparator();
@@ -1240,6 +1230,17 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     vod->setObjectName("open-vod-replay");
     auto *layoutMenu = menu.addMenu(cfg.T("Layout"));
     layoutMenu->menuAction()->setVisible(!obsDockMode);
+    layoutMenu->addAction(cfg.T("Open popup"), this, [this, p] { openPopup(p, false); })->setObjectName("open-popup");
+    layoutMenu->addAction(cfg.T("Open overlay"), this, [this, p] { openPopup(p, true); })->setObjectName("open-overlay");
+    if (p->window()->property("yt-chat-overlay").toBool()) {
+        layoutMenu->addAction(cfg.T("Overlay opacity…"), p, [this, p] {
+            bool ok = false;
+            const int value = QInputDialog::getInt(p, cfg.T("Overlay opacity"), cfg.T("Opacity (%)"),
+                                                   qRound(p->window()->windowOpacity() * 100), 20, 100, 5, &ok);
+            if (ok) p->window()->setWindowOpacity(value / 100.0);
+        });
+    }
+    layoutMenu->addSeparator();
     auto *renameAction = menu.addAction(cfg.T("Rename tab…"), this, [this] {
         if (auto *w = current()) {
             bool ok = false;
