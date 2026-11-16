@@ -86,3 +86,30 @@ void NativeTests::similarLiveSuggestionsRequireSelection() {
     buttons->button(QDialogButtonBox::Ok)->click();
     QCOMPARE(pane->sources.size(), 2);
 }
+
+void NativeTests::moderationButtonTargetsOriginalMessage() {
+    twitch->header["channel_id"] = "42";
+    auto *pane = app->addWorkspace({twitch})->focusedPane.data();
+    app->show(); QTest::qWait(30);
+    pane->refreshModeration(); pane->moderationButton->setChecked(true);
+    Message message; message.seq = 778; message.id = "message-id"; message.source = twitch->key;
+    message.name = "Viewer"; message.login = "viewer"; message.uid = "99"; message.text = "Hello";
+    pane->view->setMessages({message});
+    int requests = 0;
+    app->net.transport = [&](QUrl url, QByteArray method, QByteArray body,
+                             QMap<QByteArray, QByteArray>, BytesCallback done) {
+        QCOMPARE(url.path(), QString("/helix/moderation/bans"));
+        QCOMPARE(method, QByteArray("POST"));
+        auto data = QJsonDocument::fromJson(body).object()["data"].toObject();
+        QCOMPARE(str(data["user_id"]), QString("99"));
+        QCOMPARE(data["duration"].toInt(), 300);
+        ++requests; done("{}", {});
+    };
+    auto doc = pane->view->document(0);
+    auto block = doc->begin(); auto line = block.layout()->lineAt(0);
+    const QPoint point(qRound(6 + line.cursorToX(1)), qRound(3 + line.height() / 2));
+    QTest::mouseClick(pane->view->viewport(), Qt::LeftButton, Qt::NoModifier, point);
+    QCOMPARE(requests, 1);
+    app->accounts.twitch = {}; pane->runModeration(message, 0);
+    QCOMPARE(requests, 1);
+}

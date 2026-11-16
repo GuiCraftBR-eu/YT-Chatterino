@@ -147,7 +147,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       - name: Install OBS and native build dependencies
-        run: pacman -Syu --noconfirm --needed git cmake ninja python zip obs-studio qt6-base qt6-svg qt6-imageformats qt6-websockets libsecret ttf-dejavu
+        run: pacman -Syu --noconfirm --needed git cmake ninja python zip obs-studio simde qt6-base qt6-svg qt6-imageformats qt6-websockets libsecret ttf-dejavu
       - uses: actions/checkout@v4
       - name: Build and exercise the native Arch OBS dock
         run: |
