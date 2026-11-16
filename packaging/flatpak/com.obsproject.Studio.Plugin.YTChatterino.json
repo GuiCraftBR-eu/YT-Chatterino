@@ -11,9 +11,15 @@
   "modules": [
     "libsecret.json",
     {
+      "name": "qtwebsockets",
+      "buildsystem": "cmake-ninja",
+      "config-opts": ["-DCMAKE_BUILD_TYPE=Release", "-DQT_BUILD_TESTS=OFF", "-DQT_BUILD_EXAMPLES=OFF"],
+      "sources": [{"type": "archive", "url": "https://download.qt.io/archive/qt/6.11/6.11.1/submodules/qtwebsockets-everywhere-src-6.11.1.tar.xz", "sha256": "243e3aa11924c8c5c1645e892f62d013caa3766c57512ca926d5b58146646fbf"}]
+    },
+    {
       "name": "yt-chatterino-obs",
       "buildsystem": "cmake-ninja",
-      "config-opts": ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_STANDALONE=OFF", "-DBUILD_OBS_LINUX=ON", "-DBUILD_TESTING=OFF"],
+      "config-opts": ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_STANDALONE=OFF", "-DBUILD_OBS_LINUX=ON", "-DBUILD_TESTING=OFF", "-DQt6WebSockets_DIR=/app/plugins/YTChatterino/lib/cmake/Qt6WebSockets"],
       "post-install": ["install -Dm644 packaging/flatpak/com.obsproject.Studio.Plugin.YTChatterino.metainfo.xml ${FLATPAK_DEST}/share/metainfo/com.obsproject.Studio.Plugin.YTChatterino.metainfo.xml"],
       "sources": [{"type": "dir", "path": "../..", "skip": [".git", ".flatpak-builder", "build", "release-assets", "google-oauth-client.json"]}]
     }

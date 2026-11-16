@@ -37,6 +37,7 @@ jobs:
         run: |
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub com.obsproject.Studio
+          flatpak run --devel --command=sh com.obsproject.Studio -c 'grep PACKAGE_VERSION /app/lib/cmake/Qt6/Qt6ConfigVersion.cmake | head -n 1; ls -l /app/lib/libQt6Core.so*'
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: packaging/flatpak/com.obsproject.Studio.Plugin.YTChatterino.json
