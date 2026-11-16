@@ -55,6 +55,7 @@ Em ambos, ative **Painéis → YT-Chatterino**. Os plugins exigem OBS Studio 33 
 - **Google 403 / acesso negado:** em projetos OAuth em teste, adicione a conta Google em **Google Auth Platform → Público-alvo → Usuários de teste**. Consulte o [guia de login](docs/GOOGLE-LOGIN.md).
 - Recursos dependem dos dados, das permissões e da disponibilidade das plataformas. O histórico da Twitch depende de serviço externo; a leitura da Kick usa uma interface pública não oficial.
 - A extensão compartilha com o app local o estado das VODs, as lives abertas e painéis visíveis da Twitch. Enquetes gratuitas da Twitch podem ser votadas no app quando a enquete estiver aberta na aba conectada. Apostas com pontos e votos no YouTube ou na Kick continuam no navegador.
+- A votação pelo app foi testada em navegador com uma página simulada; a confirmação em uma enquete real autenticada ainda está pendente.
 - As credenciais ficam no armazenamento protegido do sistema. Não compartilhe tokens nem arquivos OAuth. No Arch, é necessário um chaveiro compatível para salvar acessos.
 - No Windows, use a seta na barra superior para atualizar o aplicativo. No Linux, consulte o [guia Flatpak](docs/FLATPAK-LINUX.md). Para relatar problemas, [abra uma issue](https://github.com/GuiCraftBR-eu/YT-Chatterino/issues).
 

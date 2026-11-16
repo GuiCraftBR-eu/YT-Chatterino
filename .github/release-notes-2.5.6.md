@@ -8,4 +8,6 @@
 
 Para votar, mantenha a Twitch aberta no navegador com a extensão 2.5.6 conectada. A interface da Twitch pode mudar. Apostas com pontos, enquetes do YouTube e da Kick continuam no navegador; o aplicativo não envia apostas nem gasta pontos automaticamente. A disponibilidade do AutoMod e dos modos de chat depende das permissões da conta e da plataforma.
 
+O fluxo de votação foi testado em um navegador com uma página simulada baseada na interface da Twitch. Uma votação real autenticada ainda não foi confirmada.
+
 No Linux, o instalador pode copiar suas configurações nativas antigas sem apagar os arquivos originais, mas é necessário conectar as contas novamente no ambiente Flatpak. O instalador usa Flatpak, Python 3 e o timer do systemd de usuário; os próprios aplicativos são nativos em C++/Qt.

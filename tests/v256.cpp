@@ -56,7 +56,7 @@ void NativeTests::autoModHeldMessagesCanBeReviewed() {
         QCOMPARE(str(payload["user_id"]), QString("42"));
         QCOMPARE(str(payload["msg_id"]), QString("held-1"));
         QCOMPARE(str(payload["action"]), QString("ALLOW"));
-        ++requests; done("{}", {});
+        ++requests; done({}, {}); // Twitch returns HTTP 204 with an empty body.
     };
     QString error;
     app->hub.autoMod->review(twitch, "held-1", true, [&](QJsonObject, QString e) { error = e; });
@@ -80,7 +80,7 @@ void NativeTests::autoModHeldMessagesCanBeReviewed() {
     app->net.transport = [&](QUrl, QByteArray method, QByteArray body, QMap<QByteArray, QByteArray>, BytesCallback done) {
         QCOMPARE(method, QByteArray("POST"));
         QCOMPARE(str(QJsonDocument::fromJson(body).object()["action"]), QString("DENY"));
-        ++requests; done("{}", {});
+        ++requests; done({}, {});
     };
     app->hub.autoMod->review(twitch, "held-3", false, [&](QJsonObject, QString e) { error = e; });
     QVERIFY(error.isEmpty()); QCOMPARE(requests, 2);
