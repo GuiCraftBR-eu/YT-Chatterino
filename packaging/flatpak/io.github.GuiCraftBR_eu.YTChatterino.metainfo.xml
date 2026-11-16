@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.GuiCraftBR_eu.YTChatterino</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>YT-Chatterino</name>
+  <summary>Follow Twitch, YouTube and Kick chats in one window</summary>
+  <description><p>A multi-platform chat client with mixed chats, emotes, moderation and a phone view.</p></description>
+  <launchable type="desktop-id">io.github.GuiCraftBR_eu.YTChatterino.desktop</launchable>
+  <url type="homepage">https://github.com/GuiCraftBR-eu/YT-Chatterino</url>
+  <releases><release version="2.5.6" date="2026-11-16"/></releases>
+</component>

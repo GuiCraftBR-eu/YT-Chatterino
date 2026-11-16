@@ -1,4 +1,5 @@
 #include "view.hpp"
+#include "automod.hpp"
 #include <algorithm>
 
 namespace yc {
@@ -491,7 +492,19 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         cursor.insertText(timestamp + ' ', format(hub->cfg->timestampFont(), dim));
     }
     if (m.system) {
-        cursor.insertText(hub->cfg->T(m.text), format(normal, dim));
+        if (m.special == "automod-held" || m.special == "automod-resolved") {
+            cursor.insertText(hub->cfg->T("AutoMod held @{name}: {body}", {{"name", m.name}, {"body", m.text}}), format(normal, dim));
+            if (m.special == "automod-held" && source && source->autoModPending.contains(m.apiId) && hub->hasModerationRole(source)) {
+                for (const auto &action : QList<QPair<QString, QString>>{{"allow", "Allow"}, {"deny", "Deny"}}) {
+                    cursor.insertText("  ", normalFormat);
+                    auto button = format(normal, action.first == "allow" ? QColor("#75d88b") : QColor("#ff7979"));
+                    button.setAnchor(true); button.setAnchorHref("ytautomod:" + action.first);
+                    cursor.insertText(hub->cfg->T(action.second), button);
+                }
+            } else if (m.special == "automod-resolved") {
+                cursor.insertText(" · " + hub->cfg->T(m.alertKind == "approved" ? "Allowed" : m.alertKind == "denied" ? "Denied" : "Expired"), format(normal, dim));
+            }
+        } else cursor.insertText(hub->cfg->T(m.text), format(normal, dim));
         documents[m.seq] = doc;
         details[m.seq] = detail;
         return doc;
@@ -1212,7 +1225,9 @@ void ChatView::mouseReleaseEvent(QMouseEvent *e) {
         auto detail = details.value(m.seq);
         const QPointF local(e->position().x() - 6, e->position().y() + verticalScrollBar()->value() - offsets.value(pos.first) - 3);
         const QString anchor = document(pos.first)->documentLayout()->anchorAt(local);
-        if (anchor.startsWith("ytmoderate:")) {
+        if (anchor == "ytautomod:allow" || anchor == "ytautomod:deny") {
+            emit autoModRequested(m, anchor.endsWith("allow"));
+        } else if (anchor.startsWith("ytmoderate:")) {
             bool ok = false;
             const int index = anchor.mid(11).toInt(&ok);
             if (ok) emit moderationRequested(m, index);
@@ -1240,7 +1255,9 @@ void ChatView::mouseReleaseEvent(QMouseEvent *e) {
             QTextCursor c(document(pos.first).data());
             c.setPosition(pos.second);
             QString url = c.charFormat().anchorHref();
-            if (url.startsWith("ytmoderate:")) {
+            if (url == "ytautomod:allow" || url == "ytautomod:deny") {
+                emit autoModRequested(m, url.endsWith("allow"));
+            } else if (url.startsWith("ytmoderate:")) {
                 bool ok = false;
                 const int index = url.mid(11).toInt(&ok);
                 if (ok) emit moderationRequested(m, index);
@@ -1865,7 +1882,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     moderationButton->setObjectName("moderation-mode");
     moderationButton->setText("⚔");
     moderationButton->setCheckable(true);
-    moderationButton->setToolTip(hub->cfg->T("Moderation mode (beta)"));
+    moderationButton->setToolTip(hub->cfg->T("Moderation mode"));
     moderationButton->setStyleSheet("QToolButton{color:#999;background:#202020;border:1px solid #454545;padding:2px;} QToolButton:checked{color:#71db54;background:#1b321c;}");
     moderationButton->hide();
     hl->addWidget(moderationButton);
@@ -2078,6 +2095,14 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     connect(view, &ChatView::mentionRequested, this, &Pane::mentionUser);
     connect(view, &ChatView::messageRightClicked, this, &Pane::selectMessageSource);
     connect(view, &ChatView::moderationRequested, this, &Pane::runModeration);
+    connect(view, &ChatView::autoModRequested, this, [this](Message message, bool allow) {
+        auto *source = hub->sources.value(message.source);
+        if (!hub->autoMod || message.special != "automod-held") return;
+        QPointer<Pane> safe(this);
+        hub->autoMod->review(source, message.apiId, allow, [safe](QJsonObject, QString error) {
+            if (safe && !error.isEmpty()) QMessageBox::warning(safe, safe->hub->cfg->T("AutoMod"), safe->hub->cfg->T(error));
+        });
+    });
     connect(hub->accounts, &Accounts::changed, this, &Pane::refreshModeration);
     connect(searchInput, &QLineEdit::textChanged, this,
             [this](const QString &s) { searchCount->setText(QString::number(view->search(s))); });
@@ -2341,6 +2366,70 @@ void Pane::refreshDecorations() {
         QString pollHeading = hub->cfg->T(poll.value("ended").toBool() ? "Poll result" : "Poll");
         if (poll.value("last_observed").toBool()) pollHeading += " · " + hub->cfg->T("last observed");
         add(pollHeading, poll, "Vote on Twitch");
+        const auto browserPoll = source->browserPoll;
+        const auto question = str(browserPoll["text"]);
+        const auto key = source->key;
+        if (!question.isEmpty() && pollQuestions.value(key) != question) {
+            pollQuestions[key] = question; pollSelection.remove(key); pollFeedback.remove(key);
+        }
+        const auto choices = browserPoll["choices"].toArray();
+        if (source->platform == "twitch" && !source->isVod && !question.isEmpty() &&
+            (source->activePoll.isEmpty() || str(source->activePoll["text"]) == question)) {
+            if (str(browserPoll["state"]) == "open" && !choices.isEmpty() && voteBrowserPoll) {
+                auto *row = new QWidget(decorations);
+                auto *layout = new QHBoxLayout(row); layout->setContentsMargins(2, 0, 2, 0);
+                auto *select = new QComboBox(row); select->setObjectName("twitch-poll-choice");
+                select->addItem(hub->cfg->T("Choose an option"), QString());
+                for (const auto &value : choices) {
+                    const auto choice = value.toObject();
+                    select->addItem(str(choice["label"]), str(choice["id"]));
+                }
+                const int previous = select->findData(pollSelection.value(key));
+                select->setCurrentIndex(qMax(0, previous));
+                connect(select, qOverload<int>(&QComboBox::currentIndexChanged), this, [this, select, key] {
+                    pollSelection[key] = select->currentData().toString();
+                });
+                auto *vote = new QPushButton(hub->cfg->T("Vote"), row); vote->setObjectName("twitch-poll-vote");
+                vote->setEnabled(select->currentIndex() > 0 && !pollRequests.contains(key));
+                connect(select, qOverload<int>(&QComboBox::currentIndexChanged), vote, [this, vote, key](int index) {
+                    vote->setEnabled(index > 0 && !pollRequests.contains(key));
+                });
+                QPointer<Source> target(source);
+                connect(vote, &QPushButton::clicked, this, [this, target, select, vote, key, question] {
+                    if (!target || pollRequests.contains(key) || select->currentIndex() <= 0) return;
+                    const auto choice = select->currentData().toString(), label = select->currentText();
+                    pollRequests.insert(key); vote->setEnabled(false);
+                    pollFeedback[key] = "Sending vote…";
+                    QPointer<Pane> safe(this);
+                    voteBrowserPoll(target, question, choice, label, [safe, key, question](QJsonObject result, QString error) {
+                        if (!safe) return;
+                        safe->pollRequests.remove(key);
+                        if (safe->pollQuestions.value(key) != question) return;
+                        const auto status = str(result["status"]);
+                        const QMap<QString, QString> messages{{"confirmed", "Vote confirmed on Twitch."},
+                            {"already_voted", "Your vote was already recorded."}, {"ended", "This poll has ended."},
+                            {"changed", "The poll changed. Choose again."}, {"tab_closed", "The Twitch browser tab was closed."},
+                            {"unavailable", "Voting is unavailable in the browser tab."},
+                            {"uncertain", "Vote submitted, but Twitch did not confirm it. Check the browser before retrying."}};
+                        safe->pollFeedback[key] = error.isEmpty() ? messages.value(status, "Voting is unavailable in the browser tab.") : error;
+                        QTimer::singleShot(0, safe, [safe] { if (safe) safe->refreshDecorations(); });
+                    });
+                });
+                layout->addWidget(select, 1); layout->addWidget(vote); box->addWidget(row);
+            } else if (str(browserPoll["state"]) == "voted" && pollFeedback.value(key).isEmpty()) {
+                pollFeedback[key] = "Your vote was already recorded.";
+            }
+            if (!pollFeedback.value(key).isEmpty()) {
+                auto *status = new QLabel(hub->cfg->T(pollFeedback.value(key)), decorations);
+                status->setObjectName("twitch-poll-status"); status->setWordWrap(true);
+                status->setStyleSheet("color:#bcbcc6; padding:2px 4px;"); box->addWidget(status);
+            }
+        }
+        if (question.isEmpty() && !pollFeedback.value(key).isEmpty()) {
+            auto *status = new QLabel(hub->cfg->T(pollFeedback.value(key)), decorations);
+            status->setObjectName("twitch-poll-status"); status->setWordWrap(true);
+            status->setStyleSheet("color:#bcbcc6; padding:2px 4px;"); box->addWidget(status); ++count;
+        }
         QString predictionHeading = hub->cfg->T(prediction.value("ended").toBool() ? "Prediction result" : "Prediction");
         if (str(prediction.value("status")) == "LOCKED") predictionHeading += " · " + hub->cfg->T("Locked");
         if (str(prediction.value("status")) == "CANCELED") predictionHeading += " · " + hub->cfg->T("Canceled");

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.6
+
+- Enquetes gratuitas da Twitch podem ser respondidas no aplicativo por meio da extensão do navegador; apostas continuam na Twitch.
+- Revisão de mensagens retidas pelo AutoMod e edição dos modos de chat da Twitch, com as permissões necessárias.
+- Moderação fora do beta, mensagens apagadas nas configurações de moderação, opacidade do overlay ajustável e correção do botão de fechar abas.
+- Atualizações automáticas do painel OBS no Windows e pacotes Flatpak para o aplicativo e o painel OBS no Linux.
+
 ## 2.5.5
 
 - Modo de moderação beta com ações e ícones configuráveis para canais autorizados.

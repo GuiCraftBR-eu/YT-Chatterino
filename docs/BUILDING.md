@@ -16,17 +16,17 @@ Copy-Item build/YT-Chatterino.exe dist/YT-Chatterino/
 
 Deploy shared Qt and GCC runtime libraries. Keep plugins in their original folders. The Windows resource embeds the app icon and version. Run tests with the same Qt/compiler DLLs on PATH and `QT_QPA_PLATFORM=offscreen` if there is no desktop.
 
-## Arch Linux
+## Linux (development build)
 
 ```sh
-sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-svg qt6-imageformats libsecret ttf-dejavu
+sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-svg qt6-imageformats qt6-websockets libsecret ttf-dejavu
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DCMAKE_INSTALL_PREFIX=/usr
 cmake --build build --parallel 2
 QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
 ./build/yt-chatterino
 ```
 
-Build the pacman package as a regular user with `cd packaging/arch && makepkg -si`. The PKGBUILD uses this local checkout. Native CI builds and tests on Windows and Arch before attaching an Arch package to a release.
+Official Linux releases use Flatpak for both the app and the OBS extension. The manifests are in `packaging/flatpak/`; CI builds and smoke-tests them before release. See [FLATPAK-LINUX.md](FLATPAK-LINUX.md) for installation and updates.
 
 `--profile /absolute/directory` uses an isolated `.ytchatterino.json` and an independent encrypted credential namespace. Test fixtures never require real tokens. Do not check private profiles or OAuth JSON into Git.
 

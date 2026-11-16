@@ -95,6 +95,7 @@ class ChatView : public QAbstractScrollArea {
     void mentionRequested(yc::Message message);
     void messageRightClicked(yc::Message message);
     void moderationRequested(yc::Message message, int action);
+    void autoModRequested(yc::Message message, bool allow);
     void focused();
 
   protected:
@@ -185,6 +186,9 @@ class Pane : public QWidget {
     QJsonObject filter;
     std::function<bool(const Message &)> extraFilter;
     std::function<bool(Source *, const QString &)> openBrowserPanel;
+    std::function<void(Source *, const QString &, const QString &, const QString &, JsonCallback)> voteBrowserPoll;
+    QHash<QString, QString> pollSelection, pollQuestions, pollFeedback;
+    QSet<QString> pollRequests;
     QString threadId;
     void refresh();
     void refreshDecorations();

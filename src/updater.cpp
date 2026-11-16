@@ -33,6 +33,7 @@ QString Updater::kind() const {
                ? "windows"
                : "development";
 #elif defined(Q_OS_LINUX)
+    if (QFileInfo::exists("/.flatpak-info")) return "flatpak";
     return QCoreApplication::applicationDirPath() == "/usr/bin" ? "pacman" : "development";
 #else
     return "development";
@@ -65,7 +66,7 @@ QJsonObject Updater::releaseInfo(const QJsonObject &d, const QString &current, c
     if (version.startsWith('v')) {
         version.remove(0, 1);
     }
-    if (kind == "development") {
+    if (kind == "development" || kind == "flatpak") {
         return {{"version", version}, {"kind", kind}, {"published", d["published_at"]}};
     }
     QString pattern = kind == "windows"
@@ -140,8 +141,9 @@ void Updater::show() {
     status->setWordWrap(true);
     status->setTextFormat(Qt::PlainText);
     l->addWidget(status);
-    auto *help =
-        new QLabel(cfg->T("Installing closes and restarts the app. Your accounts and settings are kept."), d);
+    auto *help = new QLabel(cfg->T(kind() == "flatpak"
+        ? "Flatpak updates are managed outside the app. Open the release page for installation details."
+        : "Installing closes and restarts the app. Your accounts and settings are kept."), d);
     help->setWordWrap(true);
     help->setStyleSheet("color:#8b8b94;");
     l->addWidget(help);
@@ -193,14 +195,14 @@ void Updater::render() {
     status->setText(message);
     installButton->setEnabled(hasUpdate() && !busy);
     installButton->setText(
-        cfg->T(kind() == "development" ? "Open release page" : "Install update and restart"));
+        cfg->T((kind() == "development" || kind() == "flatpak") ? "Open release page" : "Install update and restart"));
 }
 
 void Updater::install() {
     if (busy || !hasUpdate()) {
         return;
     }
-    if (kind() == "development") {
+    if (kind() == "development" || kind() == "flatpak") {
         QDesktopServices::openUrl(QUrl("https://github.com/" + Repo + "/releases/latest"));
         return;
     }

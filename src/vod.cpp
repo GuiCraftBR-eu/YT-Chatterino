@@ -585,11 +585,56 @@ QJsonObject VodBridge::identifyLive(const QUrl &url) {
 }
 
 void VodBridge::removeLivePlayer(const QString &player) {
+    const auto pending = pollRequests.keys();
+    for (const auto &request : pending)
+        if (pollRequests.value(request).player == player) finishPollRequest(request, "tab_closed");
     const auto oldLogin = str(browserPanels.value(player)["login"]);
     browserPanels.remove(player);
     livePlayers.remove(player);
     if (liveItems.remove(player)) emit liveStreamsChanged();
     if (!oldLogin.isEmpty()) refreshBrowserPanels(oldLogin);
+}
+
+void VodBridge::finishPollRequest(const QString &request, const QString &status) {
+    if (!pollRequests.contains(request)) return;
+    auto callback = pollRequests.take(request).done;
+    if (callback) callback({{"status", status}}, {});
+}
+
+void VodBridge::voteTwitchPoll(Source *source, const QString &question, const QString &choice,
+                               const QString &label, JsonCallback done) {
+    if (!source || source->closed || source->isVod || source->platform != "twitch" || question.isEmpty() ||
+        !QRegularExpression("^[A-Za-z0-9_-]{1,128}$").match(choice).hasMatch() || label.isEmpty() || label.size() > 100) {
+        done({{"status", "unavailable"}}, {}); return;
+    }
+    QString player;
+    double sequence = 0;
+    for (auto it = browserPanels.cbegin(); it != browserPanels.cend(); ++it) {
+        const auto panel = it.value(); const auto poll = panel["poll"].toObject();
+        if (str(panel["login"]).compare(source->id, Qt::CaseInsensitive) != 0 ||
+            str(poll["text"]) != question || str(poll["state"]) != "open" || panel["sequence"].toDouble() <= sequence) continue;
+        bool found = false;
+        for (const auto &value : poll["choices"].toArray()) {
+            const auto item = value.toObject();
+            if (str(item["id"]) == choice && str(item["label"]) == label) { found = true; break; }
+        }
+        if (found) { player = it.key(); sequence = panel["sequence"].toDouble(); }
+    }
+    const QString client = player.section(':', 0, 0);
+    bool ok = false;
+    const int tab = player.section(':', 1, 1).toInt(&ok);
+    auto *socket = clients.key(client, nullptr);
+    if (player.isEmpty() || !ok || !socket || socket->state() != QAbstractSocket::ConnectedState) {
+        done({{"status", "tab_closed"}}, {}); return;
+    }
+    const QString request = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    pollRequests.insert(request, {socket, player, std::move(done)});
+    const QJsonObject command{{"type", "vote-poll"}, {"tab", tab}, {"channel", source->id}, {"request", request},
+                              {"question", question}, {"choice", choice}, {"label", label}};
+    if (socket->sendTextMessage(QString::fromUtf8(QJsonDocument(command).toJson(QJsonDocument::Compact))) <= 0) {
+        finishPollRequest(request, "tab_closed"); return;
+    }
+    QTimer::singleShot(10000, this, [this, request] { finishPollRequest(request, "uncertain"); });
 }
 
 void VodBridge::refreshBrowserPanels(const QString &login) {
@@ -634,8 +679,19 @@ void VodBridge::updateBrowserPanels(const QString &player, const QString &login,
             const auto source = input.toObject();
             const QString text = str(source["text"]).simplified().left(800);
             if (text.isEmpty()) return QJsonObject();
+            QJsonArray choices;
+            for (const auto &value : source["choices"].toArray()) {
+                const auto choice = value.toObject();
+                const auto id = str(choice["id"]), label = str(choice["label"]).simplified().left(100);
+                if (QRegularExpression("^[A-Za-z0-9_-]{1,128}$").match(id).hasMatch() && !label.isEmpty())
+                    choices.append(QJsonObject{{"id", id}, {"label", label}});
+                if (choices.size() >= 10) break;
+            }
+            const auto state = str(source["state"]);
             return QJsonObject{{"text", text}, {"name", str(source["name"]).simplified().left(100)},
-                               {"options", str(source["options"]).simplified().left(800)}, {"browser", true}};
+                               {"options", str(source["options"]).simplified().left(800)}, {"browser", true},
+                               {"state", QStringList{"open", "voted", "ended", "unavailable"}.contains(state) ? state : QString("unavailable")},
+                               {"choices", choices}};
         };
         browserPanels[player] = {{"login", login}, {"sequence", double(++browserPanelSequence)},
                                  {"pin", panel(chat["pin"])}, {"poll", panel(chat["poll"])},
@@ -778,6 +834,14 @@ void VodBridge::acceptConnection() {
             const auto client = clients.value(socket), type = str(data["type"]);
             if (type == "state") processState(client, data);
             else if (type == "live-state") processLiveState(client, data);
+            else if (type == "poll-result") {
+                const auto request = str(data["request"]), status = str(data["status"]);
+                const auto pending = pollRequests.value(request);
+                bool ok = false; const int tab = pending.player.section(':', 1, 1).toInt(&ok);
+                if (pending.socket == socket && ok && data["tab"].isDouble() && data["tab"].toInt(-1) == tab &&
+                    QStringList{"confirmed", "already_voted", "ended", "changed", "unavailable", "uncertain", "tab_closed"}.contains(status))
+                    finishPollRequest(request, status);
+            }
             else if ((type == "closed" || type == "vod-closed" || type == "live-closed") && data["tab"].isDouble()) {
                 const double tab = data["tab"].toDouble(-1);
                 if (!std::isfinite(tab) || tab < 0 || tab > 2147483647 || std::floor(tab) != tab) return;

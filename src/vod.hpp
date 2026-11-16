@@ -54,6 +54,8 @@ class VodBridge : public QObject {
     QHash<QString, QUrl> livePlayers;
     QHash<QString, QJsonObject> liveItems, liveCache;
     QHash<QString, QJsonObject> browserPanels;
+    struct PollRequest { QPointer<QWebSocket> socket; QString player; JsonCallback done; };
+    QHash<QString, PollRequest> pollRequests;
     quint64 browserPanelSequence = 0;
     QHash<QString, qint64> liveCacheUntil;
     QSet<QString> livePending;
@@ -67,6 +69,8 @@ class VodBridge : public QObject {
     void updateBrowserPanels(const QString &player, const QString &login, const QJsonValue &chat);
     void refreshBrowserPanels(const QString &login);
     bool openTwitchPanel(Source *source, const QString &kind);
+    void voteTwitchPoll(Source *source, const QString &question, const QString &choice, const QString &label, JsonCallback done);
+    void finishPollRequest(const QString &request, const QString &status);
     void removeLivePlayer(const QString &player);
     static QJsonObject identifyLive(const QUrl &url);
     void removePlayer(const QString &player, bool navigation = false);

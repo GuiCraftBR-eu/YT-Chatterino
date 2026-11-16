@@ -8,13 +8,15 @@ import zipfile
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--plugin', required=True, type=Path)
+    parser.add_argument('--core', required=True, type=Path)
     parser.add_argument('--windows-zip', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--version', required=True)
     args = parser.parse_args()
 
     plugin = args.plugin.read_bytes()
-    if plugin[:2] != b'MZ':
+    core = args.core.read_bytes()
+    if plugin[:2] != b'MZ' or core[:2] != b'MZ':
         raise SystemExit('OBS dock is not a Windows DLL.')
     args.output.mkdir(parents=True, exist_ok=True)
     destination = args.output / f'YT-Chatterino-OBS-Windows-{args.version}.zip'
@@ -46,13 +48,14 @@ def main():
 4. Na engrenagem, abra Contas e conecte suas contas separadamente das do app.
    Seus canais entram no mesmo chat; o YouTube precisa estar ao vivo.
 
-Para atualizar o plugin, feche o OBS e substitua a pasta pela nova versao.
+O plugin procura atualizacoes automaticamente e aplica a nova versao ao reiniciar o OBS.
 O aplicativo independente possui seu proprio atualizador.
-O plugin e para Windows; o aplicativo independente tambem possui versao para Arch Linux.
+No Linux, instale a extensao Flatpak para o OBS Flatpak pela pagina de lancamentos.
 '''
         with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as out:
             root = 'yt-chatterino-obs/'
             out.writestr(root + 'yt-chatterino-obs.dll', plugin)
+            out.writestr(root + 'yt-chatterino-obs-core.dll', core)
             out.writestr(root + 'LEIA-ME-OBS.txt', info.encode('utf-8'))
             for name, path in zip(names, relative):
                 out.writestr(root + 'data/sidecar/' + path, source.read(name))

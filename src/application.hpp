@@ -53,6 +53,7 @@ class MainWindow : public QMainWindow {
     void paneMenu(Pane *pane, QPoint position);
     void showPhone(Pane *pane);
     void openPopup(Pane *pane, bool overlay);
+    void editTwitchChatModes(Source *source);
     void showVod();
     void startVodBridge(quint16 port = 37367);
     void populatePaneMenu(QMenu &menu, Pane *pane);

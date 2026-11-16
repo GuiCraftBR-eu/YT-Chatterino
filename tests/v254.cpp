@@ -12,13 +12,13 @@ void NativeTests::closeButtonOnlyOnActiveTab() {
         return button;
     };
     int a = app->tabs->indexOf(first), b = app->tabs->indexOf(second);
-    QVERIFY(a >= 0 && b >= 0); QVERIFY(closeButton(a)); QVERIFY(closeButton(b));
-    QVERIFY(closeButton(a)->isHidden()); QVERIFY(!closeButton(b)->isHidden());
+    QVERIFY(a >= 0 && b >= 0); QVERIFY(!closeButton(a)); QVERIFY(closeButton(b));
+    QVERIFY(!closeButton(b)->isHidden());
     app->tabs->setCurrentIndex(a);
-    QVERIFY(!closeButton(a)->isHidden()); QVERIFY(closeButton(b)->isHidden());
+    QVERIFY(closeButton(a) && !closeButton(a)->isHidden()); QVERIFY(!closeButton(b));
     bar->moveTab(a, b);
     a = app->tabs->indexOf(first); b = app->tabs->indexOf(second);
-    QVERIFY(!closeButton(a)->isHidden()); QVERIFY(closeButton(b)->isHidden());
+    QVERIFY(closeButton(a) && !closeButton(a)->isHidden()); QVERIFY(!closeButton(b));
     app->closeTab(a); QCoreApplication::processEvents();
     b = app->tabs->indexOf(second); QVERIFY(b >= 0); QVERIFY(!closeButton(b)->isHidden());
 }

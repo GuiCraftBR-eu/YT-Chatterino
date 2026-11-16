@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
 Name=YT-Chatterino
-Comment=YouTube and Twitch chat
-Comment[pt_BR]=Chat do YouTube e da Twitch
+Comment=Chat for Twitch, YouTube and Kick
+Comment[pt_BR]=Chat da Twitch, do YouTube e da Kick
 Exec=yt-chatterino
-Icon=yt-chatterino
+Icon=io.github.GuiCraftBR_eu.YTChatterino
 Terminal=false
 Categories=Network;Chat;
 StartupWMClass=YT-Chatterino
