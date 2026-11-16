@@ -88,6 +88,7 @@ void NativeTests::autoModHeldMessagesCanBeReviewed() {
 }
 
 void NativeTests::browserPollVotesRouteAndHandleClosedTabs() {
+    auto *pane = app->addWorkspace({twitch})->focusedPane.data();
     app->startVodBridge(0);
     QNetworkRequest request(QUrl(QString("ws://127.0.0.1:%1").arg(app->vodBridge->server.serverPort())));
     request.setRawHeader("Origin", "chrome-extension://abcdefghijklmnopabcdefghijklmnop");
@@ -113,6 +114,20 @@ void NativeTests::browserPollVotesRouteAndHandleClosedTabs() {
     reply["tab"] = 17;
     socket.sendTextMessage(QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact)));
     QTRY_COMPARE(status, QString("confirmed"));
+    QTRY_VERIFY(pane->findChild<QComboBox *>("twitch-poll-choice"));
+    auto *choice = pane->findChild<QComboBox *>("twitch-poll-choice");
+    auto *vote = pane->findChild<QPushButton *>("twitch-poll-vote");
+    QVERIFY(vote); QVERIFY(!vote->isEnabled());
+    choice->setCurrentIndex(1); QVERIFY(vote->isEnabled());
+    vote->click(); QTRY_COMPARE(received.size(), 3);
+    const auto uiCommand = QJsonDocument::fromJson(received.last()[0].toString().toUtf8()).object();
+    QCOMPARE(str(uiCommand["question"]), QString("Which?"));
+    QCOMPARE(str(uiCommand["choice"]), QString("choice-1"));
+    QCOMPARE(str(uiCommand["label"]), QString("Yes"));
+    reply["request"] = uiCommand["request"];
+    socket.sendTextMessage(QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact)));
+    QTRY_VERIFY(pane->findChild<QLabel *>("twitch-poll-status"));
+    QTRY_VERIFY(pane->findChild<QLabel *>("twitch-poll-status")->text().contains("confirmed", Qt::CaseInsensitive));
     status.clear();
     app->vodBridge->voteTwitchPoll(twitch, "Which?", "choice-1", "Yes", [&](QJsonObject result, QString) { status = str(result["status"]); });
     socket.sendTextMessage(R"({"type":"live-closed","tab":17})");
