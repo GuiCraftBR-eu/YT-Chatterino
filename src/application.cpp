@@ -1117,6 +1117,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     if (!p) {
         return;
     }
+    const bool popupWindow = p->window()->property("yt-chat-popup").toBool();
     for (auto source : p->sources) {
         if (source) {
             auto *channel = menu.addMenu(QIcon(QPixmap::fromImage(channelIcon(source, &images, 20))),
@@ -1228,16 +1229,17 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     auto *vod = historyMenu->addAction(cfg.T("Browser extension setup…"), this, &MainWindow::showVod);
     vod->setObjectName("open-vod-replay");
     auto *layoutMenu = menu.addMenu(cfg.T("Layout"));
-    layoutMenu->menuAction()->setVisible(!obsDockMode);
+    layoutMenu->menuAction()->setVisible(!obsDockMode || popupWindow);
     layoutMenu->addAction(cfg.T("Open popup"), this, [this, p] { openPopup(p, false); })->setObjectName("open-popup");
     layoutMenu->addAction(cfg.T("Open overlay"), this, [this, p] { openPopup(p, true); })->setObjectName("open-overlay");
     if (p->window()->property("yt-chat-overlay").toBool()) {
-        layoutMenu->addAction(cfg.T("Overlay opacity…"), p, [this, p] {
+        auto *opacity = layoutMenu->addAction(cfg.T("Overlay opacity…"), p, [this, p] {
             bool ok = false;
             const int value = QInputDialog::getInt(p, cfg.T("Overlay opacity"), cfg.T("Opacity (%)"),
                                                    qRound(p->window()->windowOpacity() * 100), 20, 100, 5, &ok);
             if (ok) p->window()->setWindowOpacity(value / 100.0);
         });
+        opacity->setObjectName("overlay-opacity");
     }
     layoutMenu->addSeparator();
     auto *renameAction = menu.addAction(cfg.T("Rename tab…"), this, [this] {
@@ -1252,7 +1254,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             }
         }
     });
-    renameAction->setVisible(!obsDockMode);
+    renameAction->setVisible(!obsDockMode && !popupWindow);
     auto *zoom = layoutMenu->addAction(cfg.T("Zoom / restore pane"), p, [this, p] {
         if (auto *w = current()) {
             w->toggleZoom(p);
@@ -1298,12 +1300,19 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             w->add(s, p, Qt::Vertical);
         }
     });
+    if (popupWindow) {
+        for (auto *action : layoutMenu->actions()) {
+            const auto name = action->objectName();
+            if (name != "open-popup" && name != "open-overlay" && name != "overlay-opacity") action->setVisible(false);
+        }
+    }
     historyMenu->addAction(cfg.T("Chat filters…"), this, [this, p] { filters(p); });
     historyMenu->addAction(cfg.T("Message limit…"), this, [this, p] { setMessageCap(p); });
     historyMenu->addSeparator();
     historyMenu->addAction(cfg.T("Clear displayed messages"), p, [p] { p->view->setMessages({}); });
     menu.addSeparator();
-    auto *closeAction = menu.addAction(cfg.T(hasSplits ? "Close pane" : "Close tab") + "\tCtrl+W", this, [this, p] {
+    auto *closeAction = menu.addAction(cfg.T(popupWindow ? "Close window" : hasSplits ? "Close pane" : "Close tab") + "\tCtrl+W", this, [this, p, popupWindow] {
+        if (popupWindow) { p->window()->close(); return; }
         for (int i = 0; i < tabs->count(); ++i) {
             auto *w = qobject_cast<Workspace *>(tabs->widget(i));
             if (w && w->panes().contains(p)) {
@@ -1317,7 +1326,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
         }
         QTimer::singleShot(0, this, &MainWindow::pruneSources);
     });
-    closeAction->setVisible(!obsDockMode);
+    closeAction->setVisible(!obsDockMode || popupWindow);
 }
 
 void MainWindow::openPopup(Pane *sourcePane, bool overlay) {
@@ -1334,6 +1343,8 @@ void MainWindow::openPopup(Pane *sourcePane, bool overlay) {
     if (overlay) dialog->setWindowOpacity(0.75);
     auto *layout = new QVBoxLayout(dialog);
     layout->setContentsMargins(0, 0, 0, 0);
+    auto *closeShortcut = new QShortcut(QKeySequence::Close, dialog);
+    connect(closeShortcut, &QShortcut::activated, dialog, &QDialog::close);
     auto *pane = new Pane(&hub, sources, dialog);
     pane->filter = sourcePane->filter;
     pane->view->messageCap = sourcePane->view->messageCap;

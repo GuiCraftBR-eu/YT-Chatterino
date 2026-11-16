@@ -28,6 +28,14 @@ void NativeTests::popupKeepsSourceAlive() {
     auto popup = app->popupWindows.first(); QVERIFY(popup);
     auto *pane = popup->findChild<Pane *>(); QVERIFY(pane);
     QCOMPARE(pane->sources.size(), 1); QCOMPARE(pane->sources.first().data(), twitch);
+    QMenu menu; app->populatePaneMenu(menu, pane);
+    QAction *close = nullptr;
+    for (auto *action : menu.actions()) if (action->text().startsWith("Close window")) close = action;
+    QVERIFY(close); close->trigger();
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QVERIFY(app->tabs->indexOf(workspace) >= 0);
+    app->openPopup(workspace->focusedPane, false);
+    popup = app->popupWindows.last(); QVERIFY(popup);
     app->closeTab(app->tabs->indexOf(workspace)); app->pruneSources();
     QVERIFY(app->hub.sources.contains(twitch->key));
     popup->close(); QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
