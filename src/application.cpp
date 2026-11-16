@@ -911,9 +911,12 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
         }
         return;
     }
+    const QList<Source *> addedSources = list;
+    QPointer<Pane> addedPane;
     if (mode == "tabs") {
         for (auto *s : list) {
-            addWorkspace({s});
+            auto *workspace = addWorkspace({s});
+            addedPane = workspace ? workspace->focusedPane : nullptr;
         }
     } else if (mode == "mix") {
         if (anchor) {
@@ -929,8 +932,10 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
                 }
             }
             anchor->setSources(all);
+            addedPane = anchor;
         } else {
-            addWorkspace(list);
+            auto *workspace = addWorkspace(list);
+            addedPane = workspace ? workspace->focusedPane : nullptr;
         }
     } else {
         Workspace *w = anchor ? qobject_cast<Workspace *>(anchor->parentWidget()) : current();
@@ -949,19 +954,13 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
         for (auto *s : list) {
             anchor = w->add({s}, anchor, mode == "vertical" ? Qt::Vertical : Qt::Horizontal);
         }
+        addedPane = anchor;
     }
     refreshTabs();
     refreshQuota();
     sessionTimer.start();
-    if (list.size() == 1 && !list[0]->isVod) {
-        for (int i = 0; i < tabs->count(); ++i) {
-            auto *workspace = qobject_cast<Workspace *>(tabs->widget(i));
-            if (!workspace) continue;
-            for (auto *pane : workspace->panes()) {
-                if (pane->sources.contains(list[0])) { suggestSimilarLive(list[0], pane); return; }
-            }
-        }
-    }
+    if (addedSources.size() == 1 && !addedSources[0]->isVod && addedPane)
+        suggestSimilarLive(addedSources[0], addedPane);
 }
 
 void MainWindow::suggestSimilarLive(Source *source, Pane *pane, bool allowTest) {
