@@ -44,6 +44,12 @@ class NativeTests : public QObject {
     void browserSyncAndLateChatAttachment();
     void streamPreviewSurvivesChatScrolling();
     void closeButtonOnlyOnActiveTab();
+    void compactInactiveTabSpace();
+    void popupKeepsSourceAlive();
+    void pinnedLinksAreEscaped();
+    void moderationModeRespectsPermissions();
+    void moderationButtonTargetsOriginalMessage();
+    void similarLiveSuggestionsRequireSelection();
     void obsDockUsesOneMixedChatAndSeparateAccounts();
     void obsDockRefreshesYoutubeAndRejectsStaleResults();
     void f5ReloadsEmotesWithoutReconnecting();

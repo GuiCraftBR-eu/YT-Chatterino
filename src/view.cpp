@@ -408,6 +408,14 @@ static QImage roleBadge(const QString &role, int size) {
     return image;
 }
 
+QJsonArray moderationActions(const Config &cfg) {
+    if (cfg.data.contains("moderation_actions")) return cfg.data.value("moderation_actions").toArray();
+    return QJsonArray{QJsonObject{{"icon", "5m"}, {"command", "/timeout {user.name} 300"}},
+                      QJsonObject{{"icon", "🗑"}, {"command", "/delete {msg.id}"}},
+                      QJsonObject{{"icon", "⊘"}, {"command", "/ban {user.name}"}},
+                      QJsonObject{{"icon", "10m"}, {"command", "/timeout {user.name} 600"}}};
+}
+
 QSharedPointer<QTextDocument> ChatView::document(int row) {
     if (row < 0 || row >= messages.size()) {
         return {};
@@ -487,6 +495,19 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         documents[m.seq] = doc;
         details[m.seq] = detail;
         return doc;
+    }
+    if (moderationMode && source && !source->isVod && !m.deleted && !m.own && moderationSources.value(m.source)) {
+        const auto actions = moderationActions(*hub->cfg);
+        for (int i = 0; i < actions.size() && i < 12; ++i) {
+            const auto action = actions[i].toObject();
+            const QString icon = str(action["icon"]).trimmed().left(8);
+            if (icon.isEmpty() || str(action["command"]).trimmed().isEmpty()) continue;
+            auto button = format(normal, QColor("#a5a5ad"));
+            button.setAnchor(true);
+            button.setAnchorHref("ytmoderate:" + QString::number(i));
+            cursor.insertText(icon, button);
+            cursor.insertText(" ", normalFormat);
+        }
     }
     auto insertImage = [&](QStringList urls, QString code, int size, bool gif, bool isEmote = false,
                            bool isBadge = false) {
@@ -1189,7 +1210,13 @@ void ChatView::mouseReleaseEvent(QMouseEvent *e) {
         selectionStart = selectionEnd = {-1, 0};
         const auto m = messages[pos.first];
         auto detail = details.value(m.seq);
-        if (pos.second >= detail.nameStart && pos.second < detail.nameEnd && !m.system) {
+        const QPointF local(e->position().x() - 6, e->position().y() + verticalScrollBar()->value() - offsets.value(pos.first) - 3);
+        const QString anchor = document(pos.first)->documentLayout()->anchorAt(local);
+        if (anchor.startsWith("ytmoderate:")) {
+            bool ok = false;
+            const int index = anchor.mid(11).toInt(&ok);
+            if (ok) emit moderationRequested(m, index);
+        } else if (pos.second >= detail.nameStart && pos.second < detail.nameEnd && !m.system) {
             emit userClicked(m);
         } else if (const auto mention = mentionAt(pos.first, e->position().toPoint()); !mention.name.isEmpty()) {
             Message selected;
@@ -1213,7 +1240,11 @@ void ChatView::mouseReleaseEvent(QMouseEvent *e) {
             QTextCursor c(document(pos.first).data());
             c.setPosition(pos.second);
             QString url = c.charFormat().anchorHref();
-            if (!url.isEmpty()) {
+            if (url.startsWith("ytmoderate:")) {
+                bool ok = false;
+                const int index = url.mid(11).toInt(&ok);
+                if (ok) emit moderationRequested(m, index);
+            } else if (!url.isEmpty()) {
                 QDesktopServices::openUrl(QUrl(url));
             }
         }
@@ -1830,6 +1861,18 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
                                "QToolButton:hover{background:#245036;}");
     phoneButton->hide();
     connect(phoneButton, &QToolButton::clicked, this, [this] { emit phoneRequested(this); });
+    moderationButton = new QToolButton(header);
+    moderationButton->setObjectName("moderation-mode");
+    moderationButton->setText("⚔");
+    moderationButton->setCheckable(true);
+    moderationButton->setToolTip(hub->cfg->T("Moderation mode (beta)"));
+    moderationButton->setStyleSheet("QToolButton{color:#999;background:#202020;border:1px solid #454545;padding:2px;} QToolButton:checked{color:#71db54;background:#1b321c;}");
+    moderationButton->hide();
+    hl->addWidget(moderationButton);
+    connect(moderationButton, &QToolButton::toggled, this, [this](bool enabled) {
+        view->moderationMode = enabled;
+        view->invalidate();
+    });
     auto *actions = new QToolButton(header);
     actions->setText("▾");
     hl->addWidget(actions);
@@ -2034,6 +2077,8 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     connect(view, &ChatView::replyRequested, this, &Pane::startReply);
     connect(view, &ChatView::mentionRequested, this, &Pane::mentionUser);
     connect(view, &ChatView::messageRightClicked, this, &Pane::selectMessageSource);
+    connect(view, &ChatView::moderationRequested, this, &Pane::runModeration);
+    connect(hub->accounts, &Accounts::changed, this, &Pane::refreshModeration);
     connect(searchInput, &QLineEdit::textChanged, this,
             [this](const QString &s) { searchCount->setText(QString::number(view->search(s))); });
     connect(previous, &QToolButton::clicked, this, [this] { view->search(searchInput->text(), -1); });
@@ -2129,16 +2174,19 @@ void Pane::setSources(QList<Source *> list) {
         connect(s, &Source::changed, this, [this] {
             refresh();
             refreshChatModes();
+            refreshModeration();
             reload();
         });
         connect(s, &Source::headerChanged, this, [this, s] {
             refresh();
             refreshChatModes();
+            refreshModeration();
             if (view->streamPreviewSource == s && view->emoteTooltip && view->emoteTooltip->isVisible())
                 view->showStreamTooltip(s, view->streamPreviewGlobal);
         });
         connect(s, &Source::decorationsChanged, this, &Pane::refreshDecorations);
         connect(s, &Source::chatModesChanged, this, &Pane::refreshChatModes);
+        connect(s, &Source::permissionsChanged, this, &Pane::refreshModeration);
         connect(s, &Source::redacted, this, [this](QJsonObject target) {
             if (detached || reply.id.isEmpty()) {
                 return;
@@ -2164,7 +2212,56 @@ void Pane::setSources(QList<Source *> list) {
     refresh();
     refreshDecorations();
     refreshChatModes();
+    refreshModeration();
     emit sourcesChanged();
+}
+
+void Pane::refreshModeration() {
+    bool allowed = false;
+    const auto previous = view->moderationSources;
+    view->moderationSources.clear();
+    for (auto source : sources) if (source) {
+        const bool permitted = hub->hasModerationRole(source);
+        view->moderationSources.insert(source->key, permitted);
+        allowed |= permitted;
+    }
+    moderationButton->setVisible(!detached && allowed);
+    if (!allowed && moderationButton->isChecked()) moderationButton->setChecked(false);
+    if (view->moderationMode && previous != view->moderationSources) view->invalidate();
+}
+
+void Pane::runModeration(Message message, int index) {
+    auto *source = hub->sources.value(message.source);
+    if (!moderationButton->isChecked() || !source || source->isVod || message.system || message.deleted ||
+        message.own || !hub->hasModerationRole(source)) return;
+    const auto actions = moderationActions(*hub->cfg);
+    if (index < 0 || index >= actions.size() || index >= 12) return;
+    QString command = str(actions[index].toObject()["command"]).trimmed();
+    const QString user = !message.login.isEmpty() ? message.login : message.name;
+    command.replace("{user.name}", user).replace("{msg.id}", message.id).replace("{channel.name}", source->name());
+    const auto parts = command.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+    if (parts.isEmpty()) return;
+    const QString verb = parts[0].toLower();
+    const bool moderation = verb == "/delete" || verb == "/ban" || verb == "/unban" || verb == "/timeout";
+    auto done = [safe = QPointer<Pane>(this)](QJsonObject, QString error) {
+        if (safe && !error.isEmpty()) QMessageBox::warning(safe, safe->hub->cfg->T("Moderation"), safe->hub->cfg->T(error));
+    };
+    if (moderation) {
+        const QString expected = verb == "/delete" ? message.id : user;
+        if (parts.size() < 2 || expected.isEmpty() || parts[1].compare(expected, Qt::CaseInsensitive) != 0) {
+            QMessageBox::warning(this, hub->cfg->T("Moderation"), hub->cfg->T("The action target does not match this message."));
+            return;
+        }
+        bool ok = true;
+        const int duration = verb == "/timeout" && parts.size() >= 3 ? parts[2].toInt(&ok) : 0;
+        if (verb == "/timeout" && (!ok || duration < 1)) {
+            QMessageBox::warning(this, hub->cfg->T("Moderation"), hub->cfg->T("Enter a timeout duration in seconds."));
+            return;
+        }
+        hub->moderate(source, message, verb.mid(1), duration, done);
+    } else {
+        hub->send(source, command, {}, done);
+    }
 }
 
 void Pane::refreshChatModes() {
@@ -2194,11 +2291,31 @@ void Pane::refreshDecorations() {
             const QString author = str(value["name"]);
             text += "\n" + (author.isEmpty() ? QString() : author + ": ") + str(value["text"]);
             if (!str(value["options"]).isEmpty()) text += "\n" + str(value["options"]);
-            auto *label = new QLabel(text, decorations);
+            QString html;
+            int last = 0;
+            static const QRegularExpression links(QStringLiteral("https?://[^\\s<>\"']+"), QRegularExpression::CaseInsensitiveOption);
+            auto matches = links.globalMatch(text);
+            while (matches.hasNext()) {
+                auto match = matches.next();
+                int end = match.capturedEnd();
+                while (end > match.capturedStart() && QStringLiteral(".,;!?)").contains(text[end - 1])) --end;
+                if (end == match.capturedStart()) continue;
+                html += text.mid(last, match.capturedStart() - last).toHtmlEscaped();
+                const QString url = text.mid(match.capturedStart(), end - match.capturedStart());
+                html += "<a href=\"" + url.toHtmlEscaped() + "\" style=\"color:#80bfff;\">" + url.toHtmlEscaped() + "</a>";
+                last = end;
+            }
+            html += text.mid(last).toHtmlEscaped();
+            html.replace("\n", "<br>");
+            auto *label = new QLabel(html, decorations);
             label->setObjectName("chat-decoration");
-            label->setTextFormat(Qt::PlainText);
+            label->setTextFormat(Qt::RichText);
             label->setWordWrap(true);
-            label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            label->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse | Qt::LinksAccessibleByKeyboard);
+            connect(label, &QLabel::linkActivated, this, [](const QString &link) {
+                const QUrl url(link);
+                if (url.isValid() && (url.scheme() == "http" || url.scheme() == "https")) QDesktopServices::openUrl(url);
+            });
             label->setStyleSheet("background:#1c1c20; color:#e9e9ec; border-left:2px solid #9147ff; padding:4px;");
             box->addWidget(label);
             if (!action.isEmpty() && source->platform == "twitch" && !source->isVod && !value["ended"].toBool()) {

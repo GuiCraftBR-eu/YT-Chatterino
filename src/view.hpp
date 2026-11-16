@@ -4,6 +4,7 @@
 
 namespace yc {
 QImage channelIcon(Source *source, Images *images, int size);
+QJsonArray moderationActions(const Config &cfg);
 class ChatView : public QAbstractScrollArea {
     Q_OBJECT
   public:
@@ -31,7 +32,8 @@ class ChatView : public QAbstractScrollArea {
     };
 
     QHash<qint64, Details> details;
-    bool follow = true, mixed = false, threadMode = false;
+    bool follow = true, mixed = false, threadMode = false, moderationMode = false;
+    QHash<QString, bool> moderationSources;
     bool hoverInside = false, previewHolding = false, hoverSuspended = false, hoverResumeFollow = false;
     int messageCap = 2000;
     QString query;
@@ -92,6 +94,7 @@ class ChatView : public QAbstractScrollArea {
     void replyRequested(yc::Message message);
     void mentionRequested(yc::Message message);
     void messageRightClicked(yc::Message message);
+    void moderationRequested(yc::Message message, int action);
     void focused();
 
   protected:
@@ -167,7 +170,7 @@ class Pane : public QWidget {
     QVector<QLabel *> mixedIcons, mixedTitles;
     QLabel *mixedMore;
     QTimer headerClock, historyReload;
-    QToolButton *filterButton, *phoneButton;
+    QToolButton *filterButton, *phoneButton, *moderationButton;
     QComboBox *target;
     Composer *input;
     QPushButton *sendButton, *emoteButton;
@@ -186,6 +189,8 @@ class Pane : public QWidget {
     void refresh();
     void refreshDecorations();
     void refreshChatModes();
+    void refreshModeration();
+    void runModeration(Message message, int action);
     void applyHeaderLineLimit();
     void reload();
     void incoming(Source *source, Message message);

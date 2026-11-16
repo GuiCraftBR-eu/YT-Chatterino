@@ -11,7 +11,7 @@ class VodBridge;
 class MainWindow : public QMainWindow {
     Q_OBJECT
   public:
-    MainWindow(QString profile = {}, bool testMode = false, bool obsDock = false);
+    MainWindow(QString profile = {}, bool testMode = false, bool obsDock = false, bool embedded = false);
     ~MainWindow() override;
     Config cfg;
     Network net;
@@ -31,6 +31,7 @@ class MainWindow : public QMainWindow {
     QTranslator *standardTranslator = nullptr;
     QHash<QString, QPointer<QDialog>> userCards;
     QHash<QString, QPointer<ThreadWindow>> threads;
+    QList<QPointer<QDialog>> popupWindows;
     QTimer sessionTimer;
     bool restoring = false, testMode = false, obsDockMode = false;
     QPointer<Pane> obsPane;
@@ -46,10 +47,12 @@ class MainWindow : public QMainWindow {
     void pruneSources();
     void addChats(QString mode = "tabs", Pane *anchor = nullptr);
     void openChats(const QStringList &links, QString mode = "tabs", Pane *anchor = nullptr);
+    void suggestSimilarLive(Source *source, Pane *pane, bool allowTest = false);
     void showSettings(QString page = "Accounts");
     void gearMenu();
     void paneMenu(Pane *pane, QPoint position);
     void showPhone(Pane *pane);
+    void openPopup(Pane *pane, bool overlay);
     void showVod();
     void startVodBridge(quint16 port = 37367);
     void populatePaneMenu(QMenu &menu, Pane *pane);
@@ -124,6 +127,7 @@ class SettingsWindow : public QDialog {
     QWidget *accountsPage();
     QWidget *appearancePage();
     QWidget *messagesPage();
+    QWidget *moderationPage();
     QWidget *highlightsPage();
     QWidget *notificationsPage();
     QWidget *savedPage();

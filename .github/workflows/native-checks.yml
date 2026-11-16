@@ -1,7 +1,7 @@
 name: Native C++ checks
 on:
   push:
-    branches: [main, 'prepare-v2.5.4']
+    branches: [main, 'prepare-v2.5.5']
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,12 +35,12 @@ jobs:
         run: |
           $mingw = Get-ChildItem "${{ github.workspace }}/../Qt/Tools" -Directory -Filter 'mingw*' | Select-Object -First 1
           $env:PATH = "$($mingw.FullName)/bin;$env:PATH"
-          python packaging/windows/package.py --exe build/YT-Chatterino.exe --stage build/portable/YT-Chatterino --output release-assets --version 2.5.4
+          python packaging/windows/package.py --exe build/YT-Chatterino.exe --stage build/portable/YT-Chatterino --output release-assets --version 2.5.5
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $exe = Join-Path $env:GITHUB_WORKSPACE 'build/portable/YT-Chatterino/YT-Chatterino.exe'
-          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.5.4') { throw 'Incorrect executable version.' }
-          if ((Get-Item $exe).VersionInfo.FileDescription -ne 'YT-Chatterino 2.5.4v') { throw 'Incorrect Task Manager name.' }
-          if ((Get-Item $exe).VersionInfo.ProductName -ne 'YT-Chatterino 2.5.4v') { throw 'Incorrect product name.' }
+          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.5.5') { throw 'Incorrect executable version.' }
+          if ((Get-Item $exe).VersionInfo.FileDescription -ne 'YT-Chatterino 2.5.5v') { throw 'Incorrect Task Manager name.' }
+          if ((Get-Item $exe).VersionInfo.ProductName -ne 'YT-Chatterino 2.5.5v') { throw 'Incorrect product name.' }
           # Run with only the packaged DLLs/plugins, not the build's Qt installation.
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           Remove-Item Env:QT_PLUGIN_PATH,Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
@@ -49,10 +49,10 @@ jobs:
           $stderr = Join-Path $env:RUNNER_TEMP 'yt-version-err.txt'
           $process = Start-Process -FilePath $exe -ArgumentList '--version' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           if ($process.ExitCode -ne 0) { throw 'Packaged executable did not start.' }
-          if (((Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)) -notlike '*2.5.4*') { throw 'Wrong packaged application version.' }
+          if (((Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)) -notlike '*2.5.5*') { throw 'Wrong packaged application version.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-Windows-2.5.4
+          name: YT-Chatterino-Windows-2.5.5
           path: release-assets/*.zip
       - uses: actions/upload-artifact@v4
         if: always()
@@ -78,7 +78,7 @@ jobs:
           QT_QPA_PLATFORM=offscreen yt-chatterino --version
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-ArchLinux-2.5.4-pacman
+          name: YT-Chatterino-ArchLinux-2.5.5-pacman
           path: /tmp/yt-chatterino-build/packaging/arch/*.pkg.tar.zst
       - uses: actions/upload-artifact@v4
         if: always()
@@ -103,7 +103,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Compiler-2.5.4
+          name: YT-Chatterino-OBS-Compiler-2.5.5
           if-no-files-found: error
           path: |
             obs-build/Release/yt-chatterino-obs.dll
@@ -121,53 +121,102 @@ jobs:
           cache: true
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-Windows-2.5.4
+          name: YT-Chatterino-Windows-2.5.5
           path: windows-package
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Compiler-2.5.4
+          name: YT-Chatterino-OBS-Compiler-2.5.5
           path: obs-compiler
       - name: Package the dock and test the embedded window
         shell: pwsh
         run: |
-          python obs-plugin/package_obs.py --plugin obs-compiler/yt-chatterino-obs.dll --windows-zip windows-package/YT-Chatterino-Windows11-2.5.4.zip --output release-assets --version 2.5.4
+          python obs-plugin/package_obs.py --plugin obs-compiler/yt-chatterino-obs.dll --windows-zip windows-package/YT-Chatterino-Windows11-2.5.5.zip --output release-assets --version 2.5.5
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Expand-Archive release-assets/YT-Chatterino-OBS-Windows-2.5.4.zip -DestinationPath "$env:RUNNER_TEMP/obs-package"
+          Expand-Archive release-assets/YT-Chatterino-OBS-Windows-2.5.5.zip -DestinationPath "$env:RUNNER_TEMP/obs-package"
           $env:YTCHATTERINO_OBS_PROFILE = "$env:RUNNER_TEMP/obs-profile"
           $env:QT_QPA_PLATFORM = 'windows'
           & "$env:GITHUB_WORKSPACE/obs-compiler/obs-dock-fixture.exe" "$env:GITHUB_WORKSPACE/obs-compiler/obs-frontend-api.dll" "$env:RUNNER_TEMP/obs-package/yt-chatterino-obs/yt-chatterino-obs.dll"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Windows-2.5.4
-          path: release-assets/YT-Chatterino-OBS-Windows-2.5.4.zip
+          name: YT-Chatterino-OBS-Windows-2.5.5
+          path: release-assets/YT-Chatterino-OBS-Windows-2.5.5.zip
+          if-no-files-found: error
+  obs-linux:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install OBS and native build dependencies
+        run: pacman -Syu --noconfirm --needed git cmake ninja python zip obs-studio simde qt6-base qt6-svg qt6-imageformats qt6-websockets libsecret ttf-dejavu xorg-server-xvfb xorg-xauth mesa
+      - uses: actions/checkout@v4
+      - name: Build and exercise the native Arch OBS dock
+        run: |
+          cmake -S . -B build-obs-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_OBS_LINUX=ON
+          cmake --build build-obs-linux --target yt-chatterino-obs obs-linux-fixture --parallel 2
+          QT_QPA_PLATFORM=offscreen ./build-obs-linux/obs-linux-fixture "$(pwd)/build-obs-linux/yt-chatterino-obs.so"
+          useradd -m obscheck
+          mkdir -p /home/obscheck/.local/share/obs-studio/plugins/yt-chatterino-obs
+          cp build-obs-linux/yt-chatterino-obs.so /home/obscheck/.local/share/obs-studio/plugins/yt-chatterino-obs/
+          chown -R obscheck:obscheck /home/obscheck
+          runuser -u obscheck -- env HOME=/home/obscheck YTCHATTERINO_OBS_TEST_MODE=1 xvfb-run -a sh -c '
+            obs --multi --disable-updater --unfiltered_log > /home/obscheck/obs-test.log 2>&1 &
+            pid=$!
+            i=0
+            while [ "$i" -lt 30 ]; do
+              if grep -q "\[YT-Chatterino\] OBS dock registered" /home/obscheck/obs-test.log; then
+                kill "$pid" 2>/dev/null || true
+                wait "$pid" || true
+                echo "OBS loaded the native YT-Chatterino dock."
+                exit 0
+              fi
+              if ! kill -0 "$pid" 2>/dev/null; then break; fi
+              i=$((i + 1))
+              sleep 1
+            done
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" || true
+            cat /home/obscheck/obs-test.log
+            exit 1
+          '
+          mkdir -p obs-package/yt-chatterino-obs release-assets
+          cp build-obs-linux/yt-chatterino-obs.so obs-package/yt-chatterino-obs/
+          cp obs-plugin/LEIA-ME-LINUX.txt obs-package/yt-chatterino-obs/
+          (cd obs-package && zip -qr ../release-assets/YT-Chatterino-OBS-ArchLinux-2.5.5.zip yt-chatterino-obs)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YT-Chatterino-OBS-ArchLinux-2.5.5
+          path: release-assets/YT-Chatterino-OBS-ArchLinux-2.5.5.zip
           if-no-files-found: error
   publish-release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release 2.5.4')
-    needs: [arch-linux, windows, obs-integration]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release 2.5.5')
+    needs: [arch-linux, windows, obs-integration, obs-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    concurrency: yt-chatterino-release-2.5.4
+    concurrency: yt-chatterino-release-2.5.5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-Windows-2.5.4
+          name: YT-Chatterino-Windows-2.5.5
           path: release-assets
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-ArchLinux-2.5.4-pacman
+          name: YT-Chatterino-ArchLinux-2.5.5-pacman
           path: release-assets
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Windows-2.5.4
+          name: YT-Chatterino-OBS-Windows-2.5.5
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: YT-Chatterino-OBS-ArchLinux-2.5.5
           path: release-assets
       - name: Verify assets and publish release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: v2.5.4
+          RELEASE_TAG: v2.5.5
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
@@ -185,16 +234,17 @@ jobs:
           curl -fL --retry 3 -o /tmp/qtwebsockets-everywhere-src-6.8.3.tar.xz https://download.qt.io/archive/qt/6.8/6.8.3/submodules/qtwebsockets-everywhere-src-6.8.3.tar.xz
           echo 'fc6310c1b12d6e22a31062727aa6574ed69239d036c8a4247b3b089902709b11  /tmp/qtwebsockets-everywhere-src-6.8.3.tar.xz' | sha256sum -c -
           python ../packaging/add_qtwebsockets_source.py Qt-6.8.3-Library-Sources.zip /tmp/qtwebsockets-everywhere-src-6.8.3.tar.xz
-          test -f YT-Chatterino-Windows11-2.5.4.zip
-          test -f YT-Chatterino-OBS-Windows-2.5.4.zip
-          test -f YT-Chatterino-Cpp-Source-2.5.4.zip
-          test -f yt-chatterino-2.5.4-1-x86_64.pkg.tar.zst
+          test -f YT-Chatterino-Windows11-2.5.5.zip
+          test -f YT-Chatterino-OBS-Windows-2.5.5.zip
+          test -f YT-Chatterino-OBS-ArchLinux-2.5.5.zip
+          test -f YT-Chatterino-Cpp-Source-2.5.5.zip
+          test -f yt-chatterino-2.5.5-1-x86_64.pkg.tar.zst
           sha256sum *.pkg.tar.zst > SHA256SUMS-ArchLinux.txt
           sha256sum *.zip *.xpi *.pkg.tar.zst > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
           gh api "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA"
           actual_tag=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
           test "$actual_tag" = "$GITHUB_SHA"
-          gh release create "$RELEASE_TAG" --verify-tag --draft --title '2.5.4 — Chat misturado no OBS' --notes-file ../.github/release-notes-2.5.4.md *.zip *.xpi *.pkg.tar.zst SHA256SUMS.txt SHA256SUMS-ArchLinux.txt
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title '2.5.5 — Moderação, janelas e OBS no Arch' --notes-file ../.github/release-notes-2.5.5.md *.zip *.xpi *.pkg.tar.zst SHA256SUMS.txt SHA256SUMS-ArchLinux.txt
           python ../packaging/verify_draft_assets.py
           gh release edit "$RELEASE_TAG" --draft=false --latest

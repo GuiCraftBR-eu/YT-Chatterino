@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.5
+
+- Modo de moderação beta com ações e ícones configuráveis para canais autorizados.
+- Janelas de chat separadas, sobreposição com opacidade ajustável e links nas mensagens fixadas.
+- Sugestões opcionais de canais semelhantes ao vivo em outras plataformas.
+- Abas inativas mais compactas e plugin do OBS para Arch Linux.
+- README reorganizado em português brasileiro.
+
 ## 2.5.4
 
 - Plugin para OBS Studio 33 ou mais recente no Windows: um painel misto com as contas conectadas separadamente ao OBS.
