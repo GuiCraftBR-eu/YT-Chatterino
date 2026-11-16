@@ -7,23 +7,43 @@
 #endif
 namespace yc {
 class LiveTabBar final : public QTabBar {
+    struct CloseButton { QPointer<QWidget> widget; QTabBar::ButtonPosition side = QTabBar::RightSide; };
+    QHash<QWidget *, CloseButton> closeButtons;
   public:
     explicit LiveTabBar(QWidget *parent = nullptr) : QTabBar(parent) {
         connect(this, &QTabBar::currentChanged, this, [this] { updateCloseButtons(); });
         connect(this, &QTabBar::tabMoved, this, [this] { updateCloseButtons(); });
     }
     void updateCloseButtons() {
+        auto *tabs = qobject_cast<QTabWidget *>(parentWidget());
+        if (!tabs || !tabsClosable()) return;
         for (int i = 0; i < count(); ++i) {
-            for (const auto side : {QTabBar::LeftSide, QTabBar::RightSide})
-                if (auto *button = tabButton(i, side)) {
-                    const bool active = i == currentIndex();
-                    const QSize size = active ? button->sizeHint() : QSize(0, 0);
-                    button->setFixedSize(size);
-                    button->setVisible(active);
+            auto *page = tabs->widget(i);
+            if (!page) continue;
+            if (!closeButtons.contains(page)) {
+                for (const auto side : {QTabBar::LeftSide, QTabBar::RightSide}) {
+                    if (auto *button = tabButton(i, side)) {
+                        closeButtons.insert(page, {button, side});
+                        connect(page, &QObject::destroyed, this, [this, page] {
+                            auto button = closeButtons.take(page).widget;
+                            if (button) button->deleteLater();
+                        });
+                        break;
+                    }
                 }
+            }
+            const auto saved = closeButtons.value(page);
+            if (!saved.widget) continue;
+            auto *installed = tabButton(i, saved.side);
+            if (i == currentIndex()) {
+                if (installed != saved.widget) setTabButton(i, saved.side, saved.widget);
+                saved.widget->show();
+            } else if (installed == saved.widget) {
+                // setTabButton updates Qt's tab geometry; merely resizing the widget
+                // leaves the old button rectangle below short tabs on some styles.
+                setTabButton(i, saved.side, nullptr);
+            }
         }
-        updateGeometry();
-        update();
     }
   protected:
     void tabInserted(int index) override {
@@ -396,6 +416,11 @@ Workspace *MainWindow::addWorkspace(QList<Source *> sources, QString title) {
 void MainWindow::attachPane(Pane *p) {
     p->openBrowserPanel = [this](Source *source, const QString &kind) {
         return vodBridge && vodBridge->openTwitchPanel(source, kind);
+    };
+    p->voteBrowserPoll = [this](Source *source, const QString &question, const QString &choice,
+                                const QString &label, JsonCallback done) {
+        if (vodBridge) vodBridge->voteTwitchPoll(source, question, choice, label, std::move(done));
+        else done({{"status", "tab_closed"}}, {});
     };
     auto markVodSources = [this, p] {
         for (auto source : p->sources) if (source) {
@@ -1113,6 +1138,75 @@ void MainWindow::paneMenu(Pane *p, QPoint point) {
     menu.exec(point);
 }
 
+void MainWindow::editTwitchChatModes(Source *source) {
+    QPointer<MainWindow> self(this);
+    QPointer<Source> channel(source);
+    hub.twitchChatSettings(source, {}, [self, channel](QJsonObject result, QString error) {
+        if (!self || !channel) return;
+        if (!error.isEmpty()) {
+            QMessageBox::warning(self, self->cfg.T("Chat modes"), self->cfg.T(error)); return;
+        }
+        const auto original = result["data"].toArray().first().toObject();
+        auto *dialog = new QDialog(self);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->setObjectName("twitch-chat-modes");
+        dialog->setWindowTitle(self->cfg.T("Chat modes") + " · " + channel->name());
+        auto *layout = new QVBoxLayout(dialog);
+        auto *form = new QFormLayout;
+        QMap<QString, QCheckBox *> boxes;
+        for (const auto &item : QList<QPair<QString, QString>>{{"emote_mode", "Emotes only"},
+                 {"follower_mode", "Followers only"}, {"subscriber_mode", "Subscribers only"},
+                 {"slow_mode", "Slow mode"}, {"unique_chat_mode", "Unique messages"}}) {
+            auto *box = new QCheckBox(self->cfg.T(item.second), dialog);
+            box->setObjectName(item.first);
+            box->setChecked(original[item.first].toBool());
+            boxes[item.first] = box;
+            form->addRow(box);
+        }
+        auto *follow = new QSpinBox(dialog);
+        follow->setObjectName("follower-mode-minutes"); follow->setRange(0, 129600);
+        follow->setValue(original["follower_mode_duration"].toInt(0)); follow->setSuffix(" " + self->cfg.T("min"));
+        form->addRow(self->cfg.T("Minimum follow time"), follow);
+        auto *slow = new QSpinBox(dialog);
+        slow->setObjectName("slow-mode-seconds"); slow->setRange(3, 120);
+        slow->setValue(qBound(3, original["slow_mode_wait_time"].toInt(30), 120));
+        slow->setSuffix(" " + self->cfg.T("sec"));
+        form->addRow(self->cfg.T("Time between messages"), slow);
+        follow->setEnabled(boxes["follower_mode"]->isChecked());
+        slow->setEnabled(boxes["slow_mode"]->isChecked());
+        connect(boxes["follower_mode"], &QCheckBox::toggled, follow, &QWidget::setEnabled);
+        connect(boxes["slow_mode"], &QCheckBox::toggled, slow, &QWidget::setEnabled);
+        layout->addLayout(form);
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, dialog);
+        connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+        connect(buttons, &QDialogButtonBox::accepted, dialog, [self, channel, dialog, buttons, boxes, follow, slow, original] {
+            if (!self || !channel) { dialog->reject(); return; }
+            QJsonObject changes;
+            for (auto it = boxes.cbegin(); it != boxes.cend(); ++it)
+                if (it.value()->isChecked() != original[it.key()].toBool()) changes[it.key()] = it.value()->isChecked();
+            if (boxes["follower_mode"]->isChecked() &&
+                (changes.contains("follower_mode") || follow->value() != original["follower_mode_duration"].toInt())) {
+                changes["follower_mode"] = true; changes["follower_mode_duration"] = follow->value();
+            }
+            if (boxes["slow_mode"]->isChecked() &&
+                (changes.contains("slow_mode") || slow->value() != original["slow_mode_wait_time"].toInt())) {
+                changes["slow_mode"] = true; changes["slow_mode_wait_time"] = slow->value();
+            }
+            if (changes.isEmpty()) { dialog->accept(); return; }
+            buttons->setEnabled(false);
+            QPointer<QDialog> safeDialog(dialog);
+            self->hub.twitchChatSettings(channel, changes, [self, safeDialog, buttons](QJsonObject, QString error) {
+                if (!self || !safeDialog) return;
+                buttons->setEnabled(true);
+                if (!error.isEmpty()) QMessageBox::warning(safeDialog, self->cfg.T("Chat modes"), self->cfg.T(error));
+                else safeDialog->accept();
+            });
+        });
+        layout->addWidget(buttons);
+        dialog->show();
+    });
+}
+
 void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
     if (!p) {
         return;
@@ -1202,6 +1296,10 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
                 });
             }
             channel->addAction(cfg.T("Save channel"), this, [this, source] { saveChannel(source); });
+            if (source->platform == "twitch" && hub.hasModerationRole(source)) {
+                auto *modes = channel->addAction(cfg.T("Change chat modes…"), this, [this, source] { editTwitchChatModes(source); });
+                modes->setObjectName("edit-twitch-chat-modes");
+            }
             if (hub.canEditChannel(source)) {
                 auto *edit = channel->addAction(
                     cfg.T(source->platform == "youtube" ? "Change title…" : "Change title / category…"),
@@ -1236,8 +1334,12 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
         auto *opacity = layoutMenu->addAction(cfg.T("Overlay opacity…"), p, [this, p] {
             bool ok = false;
             const int value = QInputDialog::getInt(p, cfg.T("Overlay opacity"), cfg.T("Opacity (%)"),
-                                                   qRound(p->window()->windowOpacity() * 100), 20, 100, 5, &ok);
-            if (ok) p->window()->setWindowOpacity(value / 100.0);
+                                                   qRound(p->window()->windowOpacity() * 100), 10, 100, 1, &ok);
+            if (ok) {
+                p->window()->setWindowOpacity(value / 100.0);
+                cfg.data["overlay_opacity"] = value;
+                cfg.save();
+            }
         });
         opacity->setObjectName("overlay-opacity");
     }
@@ -1340,7 +1442,7 @@ void MainWindow::openPopup(Pane *sourcePane, bool overlay) {
     dialog->setProperty("yt-chat-overlay", overlay);
     dialog->setWindowTitle(cfg.T(overlay ? "Chat overlay" : "Chat popup"));
     dialog->resize(420, 650);
-    if (overlay) dialog->setWindowOpacity(0.75);
+    if (overlay) dialog->setWindowOpacity(qBound(10, cfg.data["overlay_opacity"].toInt(75), 100) / 100.0);
     auto *layout = new QVBoxLayout(dialog);
     layout->setContentsMargins(0, 0, 0, 0);
     auto *closeShortcut = new QShortcut(QKeySequence::Close, dialog);
@@ -1375,7 +1477,8 @@ void MainWindow::showVod() {
 #ifdef Q_OS_WIN
         const auto path = app.filePath("browser-extension");
 #else
-        const auto path = app.filePath("../share/yt-chatterino/browser-extension");
+        const QString extension = QStringLiteral("/app/plugins/YTChatterino/share/yt-chatterino/browser-extension");
+        const auto path = obsDockMode && QFileInfo::exists(extension) ? extension : app.filePath("../share/yt-chatterino/browser-extension");
 #endif
         QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::cleanPath(path)));
     }

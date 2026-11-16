@@ -1,4 +1,5 @@
 #include "chat.hpp"
+#include "automod.hpp"
 #include <algorithm>
 #include <climits>
 #ifdef Q_OS_WIN
@@ -1892,6 +1893,7 @@ void TwitchConnection::close() {
 
 Hub::Hub(Config *c, Network *n, Accounts *a, Images *i, Quota *q, QObject *p)
     : QObject(p), cfg(c), net(n), accounts(a), images(i), quota(q), twitch(this) {
+    autoMod = new TwitchAutoMod(this);
     youtubeClock.start();
     globalsRetry.setSingleShot(true);
     globalsRetry.setInterval(30000);
@@ -1939,6 +1941,7 @@ void Hub::remove(Source *s) {
     }
     sources.remove(s->key);
     s->stop();
+    if (autoMod) autoMod->scheduleRefresh();
     s->deleteLater();
 }
 
@@ -2430,6 +2433,54 @@ void Hub::youtubeMessageId(Source *s, Message m, std::function<void(QString, QSt
                 done(id, error);
             },
             "GET", {{"liveChatId", chat}, {"part", "snippet,authorDetails"}, {"maxResults", "200"}}, {}, 5);
+    });
+}
+
+void Hub::twitchChatSettings(Source *source, QJsonObject changes, JsonCallback done) {
+    if (!source || source->closed || source->isVod || source->platform != "twitch") {
+        done({}, "Twitch chat settings are unavailable for this chat."); return;
+    }
+    static const QSet<QString> switches{"emote_mode", "follower_mode", "subscriber_mode", "slow_mode", "unique_chat_mode"};
+    for (auto it = changes.constBegin(); it != changes.constEnd(); ++it) {
+        if (switches.contains(it.key())) {
+            if (!it.value().isBool()) { done({}, "Invalid chat mode."); return; }
+        } else if (it.key() == "follower_mode_duration") {
+            if (!it.value().isDouble() || !changes["follower_mode"].toBool() ||
+                it.value().toDouble() != it.value().toInt() || it.value().toInt() < 0 || it.value().toInt() > 129600) {
+                done({}, "Invalid follower duration."); return;
+            }
+        } else if (it.key() == "slow_mode_wait_time") {
+            if (!it.value().isDouble() || !changes["slow_mode"].toBool() ||
+                it.value().toDouble() != it.value().toInt() || it.value().toInt() < 3 || it.value().toInt() > 120) {
+                done({}, "Invalid slow mode duration."); return;
+            }
+        } else { done({}, "Invalid chat mode."); return; }
+    }
+    QPointer<Source> safe(source);
+    accounts->requireTwitch({"moderator:manage:chat_settings"}, [this, safe, changes, done](QString, QString error) {
+        if (!safe) { done({}, "The channel was closed."); return; }
+        if (!error.isEmpty()) { done({}, error); return; }
+        canModerate(safe, [this, safe, changes, done](bool allowed, QString error) {
+            if (!safe) { done({}, "The channel was closed."); return; }
+            if (!error.isEmpty() || !allowed) {
+                done({}, error.isEmpty() ? "Your Twitch account is not the owner or a moderator of this channel." : error); return;
+            }
+            const QMap<QString, QString> params{{"broadcaster_id", safe->room()},
+                                                 {"moderator_id", str(accounts->twitch["user_id"])}};
+            accounts->helix("chat/settings", [safe, done](QJsonObject result, QString error) {
+                if (!safe) { done({}, "The channel was closed."); return; }
+                const auto rows = result["data"].toArray();
+                if (error.isEmpty() && rows.isEmpty()) error = "Twitch did not return chat settings.";
+                if (error.isEmpty()) {
+                    const auto data = rows.first().toObject();
+                    safe->updateChatModes({{"emotes", data["emote_mode"]}, {"followers", data["follower_mode"]},
+                                           {"follow_minutes", data["follower_mode_duration"]},
+                                           {"subscribers", data["subscriber_mode"]}, {"slow", data["slow_mode"]},
+                                           {"slow_seconds", data["slow_mode_wait_time"]}, {"unique", data["unique_chat_mode"]}});
+                }
+                done(result, error);
+            }, changes.isEmpty() ? "GET" : "PATCH", params, changes);
+        });
     });
 }
 

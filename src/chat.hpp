@@ -5,6 +5,7 @@
 namespace yc {
 class Hub;
 class VodReplay;
+class TwitchAutoMod;
 
 class Source : public QObject {
     Q_OBJECT
@@ -20,6 +21,7 @@ class Source : public QObject {
     QJsonObject pinned, activePoll, activePrediction;
     QJsonObject browserPinned, browserPoll, browserPrediction;
     QJsonObject chatModes;
+    QSet<QString> autoModPending, autoModInFlight;
     bool chatModesKnown = false;
     QString youtubeModeNotice;
     QVector<Message> history;
@@ -191,6 +193,7 @@ class Hub : public QObject {
     QHash<QString, Source *> sources;
     QHash<QString, QUrl> knownVodUrls;
     TwitchConnection twitch;
+    TwitchAutoMod *autoMod = nullptr;
     qint64 sequence = 0;
     QHash<QString, Span> globals;
     QHash<QString, Badge> vodGlobalBadges;
@@ -228,6 +231,7 @@ class Hub : public QObject {
     void provider(Source *source, const QJsonValue &data, QString provider, QString scope);
     void send(Source *source, QString text, Message reply, JsonCallback done);
     void moderate(Source *source, const Message &message, QString action, int duration, JsonCallback done);
+    void twitchChatSettings(Source *source, QJsonObject changes, JsonCallback done);
     void canModerate(Source *source, std::function<void(bool, QString)> done);
     void moderatedPage(QPointer<Source> source, QString userId, QString cursor, int page,
                        std::function<void(bool, QString)> done);

@@ -75,7 +75,7 @@ static QWidget *pageWidget(Config &cfg, const QString &title, QVBoxLayout **layo
     static const QMap<QString, QString> descriptions{
         {"Accounts", "Connect accounts and manage permissions."},
         {"Appearance", "Customize the window, chat text and stream header."},
-        {"Messages", "Choose how much history to keep and how deleted messages appear."},
+        {"Messages", "Choose how much message history to keep."},
         {"Highlights", "Choose which messages stand out and their colors."},
         {"Notifications", "Choose sounds and channels to follow."},
         {"Saved channels", "Keep favorite channels ready to open."},
@@ -281,7 +281,9 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
                            << "Date format\tdates time seconds formato data am pm";
     searchItems["Updates"]
         << "Check for updates automatically\tupdates native automatic download atualizar atualizacoes";
-    searchItems["Moderation"] << "Moderation actions\tmoderation actions commands icons moderacao comandos";
+    searchItems["Moderation"] << "Moderation actions\tmoderation actions commands icons moderacao comandos"
+                              << "Show deleted messages received while connected\tdeleted removed mensagem excluida apagada moderacao";
+    searchItems["Display"] << "Overlay opacity (%)\toverlay opacity transparency opacidade transparencia";
     rebuildLanguage();
 }
 
@@ -582,7 +584,8 @@ QWidget *SettingsWindow::accountsPage() {
                  {"Subscriber emotes", {"user:read:emotes"}},
                  {"Moderation",
                   {"user:read:moderated_channels", "moderator:manage:chat_messages",
-                   "moderator:manage:banned_users"}},
+                   "moderator:manage:banned_users", "moderator:manage:chat_settings",
+                   "moderator:manage:automod"}},
                  {"Polls in your channel", {"channel:read:polls"}},
                  {"Predictions in your channel", {"channel:read:predictions"}},
                  {"Title / category editing", {"channel:manage:broadcast"}}}) {
@@ -662,6 +665,12 @@ QWidget *SettingsWindow::appearancePage() {
     auto *top = new QCheckBox(cfg.T("Always on top"), w);
     top->setChecked(cfg.data["topmost"].toBool());
     form->addRow(top);
+    auto *overlayOpacity = new QSpinBox(w);
+    overlayOpacity->setObjectName("overlay-opacity-setting");
+    overlayOpacity->setRange(10, 100);
+    overlayOpacity->setSuffix("%");
+    overlayOpacity->setValue(qBound(10, cfg.data["overlay_opacity"].toInt(75), 100));
+    form->addRow(cfg.T("Overlay opacity (%)"), overlayOpacity);
     section("Message layout");
     QMap<QString, QCheckBox *> checks;
     for (const auto &pair :
@@ -731,7 +740,7 @@ QWidget *SettingsWindow::appearancePage() {
             (*baseline)[i.key()] = a[i.key()].toInt();
         }
     });
-    l->addWidget(action(cfg, "Apply", w, [this, checks, sizes, top, date, time, scrollSpeed] {
+    l->addWidget(action(cfg, "Apply", w, [this, checks, sizes, top, date, time, scrollSpeed, overlayOpacity] {
         auto a = main->cfg.appearance();
         for (auto i = checks.begin(); i != checks.end(); ++i) {
             a[i.key()] = i.value()->isChecked();
@@ -744,7 +753,10 @@ QWidget *SettingsWindow::appearancePage() {
         a["time_format"] = time->currentText();
         a["scroll_multiplier"] = scrollSpeed->value();
         main->cfg.data["topmost"] = top->isChecked();
+        main->cfg.data["overlay_opacity"] = overlayOpacity->value();
         main->cfg.setAppearance(a);
+        for (auto popup : main->popupWindows)
+            if (popup && popup->property("yt-chat-overlay").toBool()) popup->setWindowOpacity(overlayOpacity->value() / 100.0);
         main->applyTopmost();
     }));
     connect(lang, qOverload<int>(&QComboBox::activated), w, [this](int i) {
@@ -768,11 +780,6 @@ QWidget *SettingsWindow::messagesPage() {
     auto *history = new QCheckBox(main->cfg.T("Load recent Twitch messages when opening a channel"), w);
     history->setChecked(main->cfg.data["load_twitch_history"].toBool(true));
     form->addRow(history);
-    form = settingsCard(main->cfg, l, w, "Deleted messages");
-    auto *deleted = new QCheckBox(main->cfg.T("Show deleted messages received while connected"), w);
-    deleted->setObjectName("show-deleted-messages");
-    deleted->setChecked(main->cfg.data["show_deleted_messages"].toBool(false));
-    form->addRow(deleted);
     form = settingsCard(main->cfg, l, w, "Chat behavior");
     auto *hoverPause = new QCheckBox(main->cfg.T("Pause scrolling while hovering over chat"), w);
     hoverPause->setObjectName("pause-on-hover");
@@ -787,10 +794,9 @@ QWidget *SettingsWindow::messagesPage() {
                       "YouTube and Twitch stay connected in background tabs. Pause YouTube manually from "
                       "Channel actions when needed.",
                       true));
-    l->addWidget(action(main->cfg, "Apply message limits / history", w, [this, cap, history, deleted, hoverPause] {
+    l->addWidget(action(main->cfg, "Apply message limits / history", w, [this, cap, history, hoverPause] {
         main->cfg.data["message_limit"] = cap->value();
         main->cfg.data["load_twitch_history"] = history->isChecked();
-        main->cfg.data["show_deleted_messages"] = deleted->isChecked();
         main->cfg.data["pause_on_hover"] = hoverPause->isChecked();
         main->cfg.save();
         for (auto s : main->hub.sources) {
@@ -806,7 +812,11 @@ QWidget *SettingsWindow::moderationPage() {
     auto &cfg = main->cfg;
     QVBoxLayout *layout;
     auto *page = pageWidget(cfg, "Moderation", &layout);
-    layout->addWidget(text(cfg, "Moderation mode (beta): use the sword in a channel you moderate.", true));
+    layout->addWidget(text(cfg, "Moderation mode: use the sword in a channel you moderate.", true));
+    auto *deleted = new QCheckBox(cfg.T("Show deleted messages received while connected"), page);
+    deleted->setObjectName("show-deleted-messages");
+    deleted->setChecked(cfg.data["show_deleted_messages"].toBool(false));
+    layout->addWidget(deleted);
     layout->addWidget(text(cfg, "Use {user.name}, {msg.id} and {channel.name} in actions. Timeout durations are in seconds.", true));
     auto *table = new QTableWidget(page);
     table->setObjectName("moderation-actions");
@@ -839,7 +849,7 @@ QWidget *SettingsWindow::moderationPage() {
         }));
     }
     buttons->addStretch(); layout->addLayout(buttons);
-    layout->addWidget(action(cfg, "Apply moderation actions", page, [this, table] {
+    layout->addWidget(action(cfg, "Apply moderation actions", page, [this, table, deleted] {
         QJsonArray actions;
         for (int row = 0; row < table->rowCount(); ++row) {
             const auto icon = table->item(row, 0) ? table->item(row, 0)->text().trimmed().left(8) : QString();
@@ -847,6 +857,7 @@ QWidget *SettingsWindow::moderationPage() {
             if (!icon.isEmpty() && !command.isEmpty()) actions.append(QJsonObject{{"icon", icon}, {"command", command}});
         }
         main->cfg.data["moderation_actions"] = actions;
+        main->cfg.data["show_deleted_messages"] = deleted->isChecked();
         main->cfg.save(); emit main->cfg.appearanceChanged();
     }));
     layout->addStretch(); return page;

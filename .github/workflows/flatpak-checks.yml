@@ -1,0 +1,71 @@
+name: Flatpak checks
+on:
+  push:
+    branches: [main, 'prepare-v2.5.6']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/io.github.GuiCraftBR_eu.YTChatterino.json
+          bundle: YT-Chatterino-Linux-2.5.6.flatpak
+          branch: stable
+          run-tests: true
+          artifact-name: YT-Chatterino-Flatpak-2.5.6
+      - name: Install and smoke-test the app
+        run: |
+          flatpak install --user --noninteractive ./YT-Chatterino-Linux-2.5.6.flatpak
+          QT_QPA_PLATFORM=offscreen flatpak run io.github.GuiCraftBR_eu.YTChatterino --version | grep 2.5.6
+  obs:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the OBS Flatpak
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub com.obsproject.Studio
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/com.obsproject.Studio.Plugin.YTChatterino.json
+          branch: stable
+          build-bundle: false
+          repo-dir: flatpak-repo
+      - name: Package and exercise the OBS extension
+        run: |
+          flatpak build-bundle --runtime flatpak-repo YT-Chatterino-OBS-Linux-2.5.6.flatpak com.obsproject.Studio.Plugin.YTChatterino stable
+          flatpak install --user --noninteractive ./YT-Chatterino-OBS-Linux-2.5.6.flatpak
+          xvfb-run -a sh -c '
+            flatpak run --env=YTCHATTERINO_OBS_TEST_MODE=1 com.obsproject.Studio --multi --disable-updater --unfiltered_log > obs-test.log 2>&1 &
+            pid=$!
+            i=0
+            while [ "$i" -lt 45 ]; do
+              if grep -q "\[YT-Chatterino\] OBS dock registered" obs-test.log; then
+                kill "$pid" 2>/dev/null || true
+                wait "$pid" || true
+                echo "OBS loaded the Flatpak dock."
+                exit 0
+              fi
+              if ! kill -0 "$pid" 2>/dev/null; then break; fi
+              i=$((i + 1)); sleep 1
+            done
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" || true
+            cat obs-test.log
+            exit 1
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YT-Chatterino-OBS-Flatpak-2.5.6
+          path: YT-Chatterino-OBS-Linux-2.5.6.flatpak
+          if-no-files-found: error

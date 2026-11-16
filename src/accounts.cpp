@@ -5,6 +5,12 @@
 #include <wincrypt.h>
 #endif
 namespace yc {
+#ifndef Q_OS_WIN
+static QString secretToolPath() {
+    const QString extension = QStringLiteral("/app/plugins/YTChatterino/bin/secret-tool");
+    return QFileInfo::exists(extension) ? extension : QStringLiteral("secret-tool");
+}
+#endif
 Vault::Vault(Config *c) : QObject(c), cfg(c) {}
 
 QString Vault::target(const QString &provider) const {
@@ -61,7 +67,7 @@ void Vault::read(const QString &provider, BytesCallback done) {
             done({}, {});
         }
     });
-    p->start("secret-tool", {"lookup", "service", target(provider), "username", "YT-Chatterino"});
+    p->start(secretToolPath(), {"lookup", "service", target(provider), "username", "YT-Chatterino"});
 #endif
 }
 
@@ -116,7 +122,7 @@ void Vault::write(const QString &provider, const QByteArray &bytes, BytesCallbac
             }
         }
     });
-    p->start("secret-tool",
+    p->start(secretToolPath(),
              {"store", "--label=YT-Chatterino", "service", target(provider), "username", "YT-Chatterino"});
 #endif
 }
@@ -281,6 +287,8 @@ QSet<QString> Accounts::fullTwitchScopes() {
             "user:read:moderated_channels",
             "moderator:manage:chat_messages",
             "moderator:manage:banned_users",
+            "moderator:manage:chat_settings",
+            "moderator:manage:automod",
             "channel:read:polls",
             "channel:read:predictions",
             "channel:manage:broadcast"};

@@ -50,6 +50,10 @@ class NativeTests : public QObject {
     void moderationModeRespectsPermissions();
     void moderationButtonTargetsOriginalMessage();
     void similarLiveSuggestionsRequireSelection();
+    void twitchChatModesUseValidatedRequests();
+    void autoModHeldMessagesCanBeReviewed();
+    void browserPollVotesRouteAndHandleClosedTabs();
+    void overlayOpacityPersistsInSettings();
     void obsDockUsesOneMixedChatAndSeparateAccounts();
     void obsDockRefreshesYoutubeAndRejectsStaleResults();
     void f5ReloadsEmotesWithoutReconnecting();

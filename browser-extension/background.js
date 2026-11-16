@@ -2,6 +2,7 @@
 const api = globalThis.browser || globalThis.chrome;
 const states = new Map();
 const liveStates = new Map();
+const pendingVotes = new Set();
 const client = crypto.randomUUID();
 const endpoints = [37367, 37368].map(port => ({port, socket:null, retry:null, ready:false}));
 function status() {
@@ -72,6 +73,30 @@ function connectEndpoint(endpoint) {
       api.tabs.sendMessage(tab,{type:"open-panel",kind:data.kind,channel}).catch(()=>{});
       return;
     }
+    if (data.type === "vote-poll" && endpoint.ready) {
+      const tab=data.tab, channel=typeof data.channel === "string" ? data.channel.toLowerCase() : "";
+      const request=typeof data.request === "string" ? data.request : "";
+      if (!Number.isInteger(tab) || !/^[a-z0-9_]{1,25}$/.test(channel) ||
+          !/^[a-f0-9-]{36}$/i.test(request) || pendingVotes.has(request)) return;
+      const finish = status => {
+        pendingVotes.delete(request);
+        sendTo(endpoint, {type:"poll-result",request,tab,status});
+      };
+      const state=liveStates.get(tab);
+      if (!state || state.url !== "https://www.twitch.tv/"+channel) { finish("tab_closed"); return; }
+      const poll=state.chat?.poll;
+      if (!poll || poll.text !== data.question) { finish("changed"); return; }
+      if (poll.state === "ended") { finish("ended"); return; }
+      if (poll.state === "voted") { finish("already_voted"); return; }
+      if (poll.state !== "open" || !poll.choices?.some(c => c.id === data.choice && c.label === data.label)) {
+        finish("unavailable"); return;
+      }
+      pendingVotes.add(request);
+      api.tabs.sendMessage(tab,{type:"vote-poll",channel,question:poll.text,choice:data.choice,label:data.label})
+        .then(result => finish(["confirmed","already_voted","ended","changed","unavailable","uncertain"].includes(result?.status)
+          ? result.status : "uncertain"), () => finish("tab_closed"));
+      return;
+    }
     if (data.type !== "ready") return;
     endpoint.ready = true;
     for (const state of states.values()) sendTo(endpoint, {...state, seek:true});
@@ -126,7 +151,12 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
     if (url.startsWith("https://www.twitch.tv/") && message.chat && typeof message.chat === "object") {
       const panel = value => value && typeof value === "object" && typeof value.text === "string"
         ? {text:value.text.slice(0,800),name:typeof value.name === "string" ? value.name.slice(0,100) : "",
-           options:typeof value.options === "string" ? value.options.slice(0,800) : ""} : {};
+           options:typeof value.options === "string" ? value.options.slice(0,800) : "",
+           state:["open","voted","ended","unavailable"].includes(value.state) ? value.state : "unavailable",
+           choices:Array.isArray(value.choices) ? value.choices.slice(0,10).filter(c => c &&
+             typeof c.id === "string" && /^[a-z0-9_-]{1,128}$/i.test(c.id) &&
+             typeof c.label === "string" && c.label.length > 0 && c.label.length <= 100)
+             .map(c => ({id:c.id,label:c.label})) : []} : {};
       state.chat={available:message.chat.available === true,pin:panel(message.chat.pin),
         poll:panel(message.chat.poll),prediction:panel(message.chat.prediction)};
     }

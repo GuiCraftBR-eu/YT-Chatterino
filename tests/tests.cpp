@@ -29,7 +29,8 @@ void NativeTests::authenticate() {
         {"expires_at", double(QDateTime::currentSecsSinceEpoch() + 3600)},
         {"scope", QJsonArray{"chat:read", "user:write:chat", "user:read:emotes",
                              "user:read:moderated_channels", "moderator:manage:chat_messages",
-                             "moderator:manage:banned_users", "channel:read:polls", "channel:read:predictions", "channel:manage:broadcast"}}};
+                             "moderator:manage:banned_users", "moderator:manage:chat_settings", "moderator:manage:automod",
+                             "channel:read:polls", "channel:read:predictions", "channel:manage:broadcast"}}};
     app->accounts.google = {{"access_token", "fake-google-token"},
                             {"scope", "https://www.googleapis.com/auth/youtube.force-ssl"},
                             {"channel_id", "UCtest"},

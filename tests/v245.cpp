@@ -1,7 +1,7 @@
 #include "native_tests.hpp"
 
 void NativeTests::settingsLayoutNavigationAndApply() {
-    app->addWorkspace({twitch}); app->show(); app->showSettings("Messages");
+    app->addWorkspace({twitch}); app->show(); app->showSettings("Moderation");
     auto *settings = app->settings.data(); QVERIFY(settings);
     settings->resize(850, 650); QTest::qWait(50);
     QVERIFY(settings->applyBar->isVisible());
@@ -9,7 +9,7 @@ void NativeTests::settingsLayoutNavigationAndApply() {
     deleted->setChecked(true);
     settings->showPage("Accounts");
     QVERIFY(settings->applyBar->isHidden());
-    settings->showPage("Messages");
+    settings->showPage("Moderation");
     QVERIFY(deleted->isChecked()); // Switching pages must keep unsaved edits.
     settings->applyButton->click();
     QVERIFY(app->cfg.data["show_deleted_messages"].toBool());

@@ -1,0 +1,21 @@
+{
+  "id": "com.obsproject.Studio.Plugin.YTChatterino",
+  "branch": "stable",
+  "runtime": "com.obsproject.Studio",
+  "runtime-version": "stable",
+  "sdk": "org.freedesktop.Sdk//26.08",
+  "build-extension": true,
+  "separate-locales": false,
+  "appstream-compose": false,
+  "build-options": {"prefix": "/app/plugins/YTChatterino"},
+  "modules": [
+    "libsecret.json",
+    {
+      "name": "yt-chatterino-obs",
+      "buildsystem": "cmake-ninja",
+      "config-opts": ["-DCMAKE_BUILD_TYPE=Release", "-DBUILD_STANDALONE=OFF", "-DBUILD_OBS_LINUX=ON", "-DBUILD_TESTING=OFF"],
+      "post-install": ["install -Dm644 packaging/flatpak/com.obsproject.Studio.Plugin.YTChatterino.metainfo.xml ${FLATPAK_DEST}/share/metainfo/com.obsproject.Studio.Plugin.YTChatterino.metainfo.xml"],
+      "sources": [{"type": "dir", "path": "../..", "skip": [".git", ".flatpak-builder", "build", "release-assets", "google-oauth-client.json"]}]
+    }
+  ]
+}

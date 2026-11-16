@@ -12,13 +12,16 @@ void NativeTests::compactInactiveTabSpace() {
     auto *active = bar->tabButton(b, QTabBar::RightSide);
     if (!inactive) inactive = bar->tabButton(a, QTabBar::LeftSide);
     if (!active) active = bar->tabButton(b, QTabBar::LeftSide);
-    QVERIFY(inactive); QVERIFY(active);
-    QCOMPARE(inactive->size(), QSize(0, 0));
+    QVERIFY(!inactive); QVERIFY(active);
     QVERIFY(active->width() > 0);
+    QVERIFY(bar->tabRect(b).contains(active->geometry()));
     QVERIFY(bar->tabRect(a).width() < bar->tabRect(b).width());
     app->tabs->setCurrentIndex(a);
-    QCOMPARE(active->size(), QSize(0, 0));
-    QVERIFY(inactive->width() > 0);
+    QVERIFY(!bar->tabButton(b, QTabBar::RightSide));
+    inactive = bar->tabButton(a, QTabBar::RightSide);
+    if (!inactive) inactive = bar->tabButton(a, QTabBar::LeftSide);
+    QVERIFY(inactive && inactive->width() > 0);
+    QVERIFY(bar->tabRect(a).contains(inactive->geometry()));
 }
 
 void NativeTests::popupKeepsSourceAlive() {
