@@ -2174,11 +2174,13 @@ void Pane::setSources(QList<Source *> list) {
         connect(s, &Source::changed, this, [this] {
             refresh();
             refreshChatModes();
+            refreshModeration();
             reload();
         });
         connect(s, &Source::headerChanged, this, [this, s] {
             refresh();
             refreshChatModes();
+            refreshModeration();
             if (view->streamPreviewSource == s && view->emoteTooltip && view->emoteTooltip->isVisible())
                 view->showStreamTooltip(s, view->streamPreviewGlobal);
         });
@@ -2216,6 +2218,7 @@ void Pane::setSources(QList<Source *> list) {
 
 void Pane::refreshModeration() {
     bool allowed = false;
+    const auto previous = view->moderationSources;
     view->moderationSources.clear();
     for (auto source : sources) if (source) {
         const bool permitted = hub->hasModerationRole(source);
@@ -2224,7 +2227,7 @@ void Pane::refreshModeration() {
     }
     moderationButton->setVisible(!detached && allowed);
     if (!allowed && moderationButton->isChecked()) moderationButton->setChecked(false);
-    if (view->moderationMode) view->invalidate();
+    if (view->moderationMode && previous != view->moderationSources) view->invalidate();
 }
 
 void Pane::runModeration(Message message, int index) {

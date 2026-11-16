@@ -49,7 +49,7 @@ void NativeTests::moderationModeRespectsPermissions() {
     auto *workspace = app->addWorkspace({twitch});
     auto *pane = workspace->focusedPane.data();
     pane->refreshModeration(); QVERIFY(pane->moderationButton->isHidden());
-    twitch->header["channel_id"] = "42"; pane->refreshModeration();
+    twitch->header["channel_id"] = "42"; emit twitch->changed();
     QVERIFY(!pane->moderationButton->isHidden());
     pane->moderationButton->setChecked(true);
     Message message; message.seq = 777; message.id = "id1"; message.source = twitch->key;
