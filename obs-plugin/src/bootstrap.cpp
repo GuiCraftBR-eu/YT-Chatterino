@@ -43,8 +43,12 @@ QJsonObject readJson(const QString &path) {
 }
 
 QString cachedCore() {
-    const QDir root(QDir(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
-                        .filePath("YT-Chatterino/OBS/plugin-updates"));
+    QString rootPath = QDir(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
+                           .filePath("YT-Chatterino/OBS/plugin-updates");
+#ifdef YT_OBS_BOOTSTRAP_TEST
+    rootPath = qEnvironmentVariable("YTCHATTERINO_OBS_TEST_UPDATE_ROOT", rootPath);
+#endif
+    const QDir root(rootPath);
     const auto marker = readJson(root.filePath("current.json"));
     const auto directory = marker.value("directory").toString(), version = marker.value("version").toString();
     if (!QRegularExpression("^[0-9]+\\.[0-9]+\\.[0-9]+-[a-f0-9-]{36}$").match(directory).hasMatch() ||

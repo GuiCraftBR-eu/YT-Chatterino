@@ -88,6 +88,7 @@ jobs:
           path: |
             obs-build/Release/yt-chatterino-obs.dll
             obs-build/Release/yt-chatterino-obs-core.dll
+            obs-build/Release/yt-chatterino-obs-test-bootstrap.dll
             obs-build/Release/obs-frontend-api.dll
             obs-build/Release/obs-dock-fixture.exe
   obs-integration:
@@ -118,6 +119,8 @@ jobs:
           $env:YTCHATTERINO_OBS_PROFILE = "$env:RUNNER_TEMP/obs-profile"
           $env:QT_QPA_PLATFORM = 'windows'
           & "$env:GITHUB_WORKSPACE/obs-compiler/obs-dock-fixture.exe" "$env:GITHUB_WORKSPACE/obs-compiler/obs-frontend-api.dll" "$env:RUNNER_TEMP/obs-package/yt-chatterino-obs/yt-chatterino-obs.dll"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/obs-cache-fixture.py release-assets/YT-Chatterino-OBS-Windows-2.5.6.zip obs-compiler/obs-dock-fixture.exe obs-compiler/obs-frontend-api.dll obs-compiler/yt-chatterino-obs-test-bootstrap.dll
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
