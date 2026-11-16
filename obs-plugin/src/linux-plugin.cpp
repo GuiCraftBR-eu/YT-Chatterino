@@ -25,6 +25,7 @@ bool obs_module_load(void) {
                           "QToolButton:hover,QPushButton:hover{background:#303030;} QLabel{color:#efeff1;}");
     if (!obs_frontend_add_dock_by_id(dockId, "YT-Chatterino", window)) { delete window; return false; }
     dock = window;
+    blog(LOG_INFO, "[YT-Chatterino] OBS dock registered");
     return true;
 }
 

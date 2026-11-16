@@ -147,13 +147,37 @@ jobs:
     container: archlinux:base-devel
     steps:
       - name: Install OBS and native build dependencies
-        run: pacman -Syu --noconfirm --needed git cmake ninja python zip obs-studio simde qt6-base qt6-svg qt6-imageformats qt6-websockets libsecret ttf-dejavu
+        run: pacman -Syu --noconfirm --needed git cmake ninja python zip obs-studio simde qt6-base qt6-svg qt6-imageformats qt6-websockets libsecret ttf-dejavu xorg-server-xvfb xorg-xauth mesa
       - uses: actions/checkout@v4
       - name: Build and exercise the native Arch OBS dock
         run: |
           cmake -S . -B build-obs-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_OBS_LINUX=ON
           cmake --build build-obs-linux --target yt-chatterino-obs obs-linux-fixture --parallel 2
           QT_QPA_PLATFORM=offscreen ./build-obs-linux/obs-linux-fixture "$(pwd)/build-obs-linux/yt-chatterino-obs.so"
+          useradd -m obscheck
+          mkdir -p /home/obscheck/.local/share/obs-studio/plugins/yt-chatterino-obs
+          cp build-obs-linux/yt-chatterino-obs.so /home/obscheck/.local/share/obs-studio/plugins/yt-chatterino-obs/
+          chown -R obscheck:obscheck /home/obscheck
+          runuser -u obscheck -- env HOME=/home/obscheck YTCHATTERINO_OBS_TEST_MODE=1 xvfb-run -a sh -c '
+            obs --multi --disable-updater --unfiltered_log > /home/obscheck/obs-test.log 2>&1 &
+            pid=$!
+            i=0
+            while [ "$i" -lt 30 ]; do
+              if grep -q "\[YT-Chatterino\] OBS dock registered" /home/obscheck/obs-test.log; then
+                kill "$pid" 2>/dev/null || true
+                wait "$pid" || true
+                echo "OBS loaded the native YT-Chatterino dock."
+                exit 0
+              fi
+              if ! kill -0 "$pid" 2>/dev/null; then break; fi
+              i=$((i + 1))
+              sleep 1
+            done
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" || true
+            cat /home/obscheck/obs-test.log
+            exit 1
+          '
           mkdir -p obs-package/yt-chatterino-obs release-assets
           cp build-obs-linux/yt-chatterino-obs.so obs-package/yt-chatterino-obs/
           cp obs-plugin/LEIA-ME-LINUX.txt obs-package/yt-chatterino-obs/

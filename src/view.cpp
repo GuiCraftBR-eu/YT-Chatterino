@@ -2294,7 +2294,7 @@ void Pane::refreshDecorations() {
                 if (end == match.capturedStart()) continue;
                 html += text.mid(last, match.capturedStart() - last).toHtmlEscaped();
                 const QString url = text.mid(match.capturedStart(), end - match.capturedStart());
-                html += "<a href=\"" + url.toHtmlEscaped() + "\">" + url.toHtmlEscaped() + "</a>";
+                html += "<a href=\"" + url.toHtmlEscaped() + "\" style=\"color:#80bfff;\">" + url.toHtmlEscaped() + "</a>";
                 last = end;
             }
             html += text.mid(last).toHtmlEscaped();

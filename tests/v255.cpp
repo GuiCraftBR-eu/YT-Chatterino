@@ -106,7 +106,9 @@ void NativeTests::moderationButtonTargetsOriginalMessage() {
         ++requests; done("{}", {});
     };
     auto doc = pane->view->document(0);
+    doc->documentLayout()->documentSize();
     auto block = doc->begin(); auto line = block.layout()->lineAt(0);
+    QVERIFY(line.isValid());
     const QPoint point(qRound(6 + line.cursorToX(1)), qRound(3 + line.height() / 2));
     QTest::mouseClick(pane->view->viewport(), Qt::LeftButton, Qt::NoModifier, point);
     QCOMPARE(requests, 1);
