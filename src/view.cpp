@@ -496,7 +496,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         details[m.seq] = detail;
         return doc;
     }
-    if (moderationMode && source && !source->isVod && !m.deleted && !m.own && hub->hasModerationRole(source)) {
+    if (moderationMode && source && !source->isVod && !m.deleted && !m.own && moderationSources.value(m.source)) {
         const auto actions = moderationActions(*hub->cfg);
         for (int i = 0; i < actions.size() && i < 12; ++i) {
             const auto action = actions[i].toObject();
@@ -2216,7 +2216,12 @@ void Pane::setSources(QList<Source *> list) {
 
 void Pane::refreshModeration() {
     bool allowed = false;
-    for (auto source : sources) if (source && hub->hasModerationRole(source)) { allowed = true; break; }
+    view->moderationSources.clear();
+    for (auto source : sources) if (source) {
+        const bool permitted = hub->hasModerationRole(source);
+        view->moderationSources.insert(source->key, permitted);
+        allowed |= permitted;
+    }
     moderationButton->setVisible(!detached && allowed);
     if (!allowed && moderationButton->isChecked()) moderationButton->setChecked(false);
     if (view->moderationMode) view->invalidate();

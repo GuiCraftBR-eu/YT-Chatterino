@@ -57,6 +57,12 @@ void NativeTests::moderationModeRespectsPermissions() {
     pane->view->setMessages({message});
     auto doc = pane->view->document(0); QVERIFY(doc);
     QVERIFY(doc->toHtml().contains("ytmoderate:0"));
+    auto *other = app->hub.source("youtube", "abcdefghijk");
+    pane->setSources({twitch, other});
+    message.source = other->key; message.seq = 779;
+    pane->view->setMessages({message});
+    QVERIFY(!pane->view->document(0)->toHtml().contains("ytmoderate:"));
+    message.source = twitch->key;
     message.own = true; message.seq = 778; pane->view->setMessages({message});
     QVERIFY(!pane->view->document(0)->toHtml().contains("ytmoderate:"));
     app->accounts.twitch = {}; pane->refreshModeration();

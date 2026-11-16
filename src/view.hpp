@@ -33,6 +33,7 @@ class ChatView : public QAbstractScrollArea {
 
     QHash<qint64, Details> details;
     bool follow = true, mixed = false, threadMode = false, moderationMode = false;
+    QHash<QString, bool> moderationSources;
     bool hoverInside = false, previewHolding = false, hoverSuspended = false, hoverResumeFollow = false;
     int messageCap = 2000;
     QString query;
