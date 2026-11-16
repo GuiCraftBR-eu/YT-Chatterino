@@ -4,6 +4,7 @@
 #include "vendor/qrcodegen.hpp"
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include "obsupdate.hpp"
 #endif
 namespace yc {
 class LiveTabBar final : public QTabBar {
@@ -364,6 +365,14 @@ MainWindow::MainWindow(QString profile, bool testing, bool obsDock, bool embedde
     if (!testMode) {
         accounts.load();
         if (!obsDockMode) updater.start();
+#ifdef Q_OS_WIN
+        else if (!embedded && qEnvironmentVariableIntValue("YTCHATTERINO_OBS_AUTO_UPDATE") == 1 &&
+                 !qEnvironmentVariableIsSet("YTCHATTERINO_OBS_DISABLE_UPDATES")) {
+            auto *obsUpdater = new ObsPluginUpdater(&net, this);
+            obsUpdater->notify = [this](const QString &text) { statusBar()->showMessage(cfg.T(text), 15000); };
+            obsUpdater->start();
+        }
+#endif
     }
 }
 

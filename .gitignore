@@ -2,6 +2,8 @@
 /dist*/
 /Qt/
 /vcpkg*/
+__pycache__/
+*.pyc
 *.user
 *.exe
 *.dll

@@ -56,7 +56,7 @@ void TwitchAutoMod::connectSocket(const QUrl &url, bool migration) {
         const auto document = QJsonDocument::fromJson(text.toUtf8());
         if (document.isObject()) frame(socket, document.object());
     });
-    connect(socket, &QWebSocket::disconnected, this, [this, socket] {
+    auto disconnected = [this, socket] {
         if (socket == migrating) { migrating.clear(); socket->deleteLater(); return; }
         if (socket == active) {
             active.clear(); session.clear(); subscribed.clear(); pending.clear(); subscriptionIds.clear(); retryAfter.clear(); watchdog.stop();
@@ -65,6 +65,13 @@ void TwitchAutoMod::connectSocket(const QUrl &url, bool migration) {
             }
         }
         socket->deleteLater();
+    };
+    connect(socket, &QWebSocket::disconnected, this, disconnected);
+    connect(socket, &QWebSocket::errorOccurred, this, [this, socket, disconnected](QAbstractSocket::SocketError) {
+        // A connection that never opened need not emit disconnected().
+        QTimer::singleShot(0, this, [socket = QPointer<QWebSocket>(socket), disconnected] {
+            if (socket && socket->state() == QAbstractSocket::UnconnectedState) disconnected();
+        });
     });
     socket->open(url);
 }
@@ -116,15 +123,16 @@ void TwitchAutoMod::subscribe() {
             const QJsonObject body{{"type", type}, {"version", "2"},
                 {"condition", QJsonObject{{"broadcaster_user_id", source->room()}, {"moderator_user_id", moderator}}},
                 {"transport", QJsonObject{{"method", "websocket"}, {"session_id", currentSession}}}};
-            hub->accounts->helix("eventsub/subscriptions", [this, currentSession, key](QJsonObject result, QString error) {
-                if (session != currentSession) return;
-                pending.remove(key);
+            QPointer<TwitchAutoMod> self(this);
+            hub->accounts->helix("eventsub/subscriptions", [self, currentSession, key](QJsonObject result, QString error) {
+                if (!self || self->session != currentSession) return;
+                self->pending.remove(key);
                 const auto id = str(firstItem(result["data"].toArray()).toObject()["id"]);
                 if (error.isEmpty() && !id.isEmpty()) {
-                    subscribed.insert(key); subscriptionIds[key] = id; scheduleRefresh();
+                    self->subscribed.insert(key); self->subscriptionIds[key] = id; self->scheduleRefresh();
                 } else {
-                    retryAfter[key] = QDateTime::currentMSecsSinceEpoch() + 30000;
-                    if (!retryTimer.isActive()) retryTimer.start(30000);
+                    self->retryAfter[key] = QDateTime::currentMSecsSinceEpoch() + 30000;
+                    if (!self->retryTimer.isActive()) self->retryTimer.start(30000);
                 }
             }, "POST", {}, body);
         }
@@ -134,13 +142,14 @@ void TwitchAutoMod::subscribe() {
         const auto id = subscriptionIds.value(key), marker = "remove:" + key;
         if (wanted.contains(key) || id.isEmpty() || pending.contains(marker) || retryAfter.value(marker) > QDateTime::currentMSecsSinceEpoch()) continue;
         pending.insert(marker);
-        hub->accounts->helix("eventsub/subscriptions", [this, currentSession, key, marker](QJsonObject, QString error) {
-            if (session != currentSession) return;
-            pending.remove(marker);
-            if (error.isEmpty()) { subscribed.remove(key); subscriptionIds.remove(key); scheduleRefresh(); }
+        QPointer<TwitchAutoMod> self(this);
+        hub->accounts->helix("eventsub/subscriptions", [self, currentSession, key, marker](QJsonObject, QString error) {
+            if (!self || self->session != currentSession) return;
+            self->pending.remove(marker);
+            if (error.isEmpty()) { self->subscribed.remove(key); self->subscriptionIds.remove(key); self->scheduleRefresh(); }
             else {
-                retryAfter[marker] = QDateTime::currentMSecsSinceEpoch() + 30000;
-                if (!retryTimer.isActive()) retryTimer.start(30000);
+                self->retryAfter[marker] = QDateTime::currentMSecsSinceEpoch() + 30000;
+                if (!self->retryTimer.isActive()) self->retryTimer.start(30000);
             }
         }, "DELETE", {{"id", id}});
     }
@@ -200,10 +209,12 @@ void TwitchAutoMod::review(Source *source, const QString &messageId, bool allow,
     QPointer<Source> safe(source);
     const QJsonObject body{{"user_id", str(hub->accounts->twitch["user_id"])}, {"msg_id", messageId},
                            {"action", allow ? "ALLOW" : "DENY"}};
-    hub->accounts->helix("moderation/automod/message", [this, safe, messageId, allow, done](QJsonObject result, QString error) {
+    QPointer<TwitchAutoMod> self(this);
+    hub->accounts->helix("moderation/automod/message", [self, safe, messageId, allow, done](QJsonObject result, QString error) {
+        if (!self) return;
         if (safe) {
             safe->autoModInFlight.remove(messageId);
-            if (error.isEmpty()) resolve(safe, messageId, allow ? "approved" : "denied");
+            if (error.isEmpty()) self->resolve(safe, messageId, allow ? "approved" : "denied");
         }
         done(result, error);
     }, "POST", {}, body);

@@ -1,6 +1,9 @@
 #include "native_tests.hpp"
 #include "automod.hpp"
 #include "vod.hpp"
+#ifdef Q_OS_WIN
+#include "obsupdate.hpp"
+#endif
 
 void NativeTests::twitchChatModesUseValidatedRequests() {
     twitch->header["channel_id"] = "42";
@@ -62,6 +65,26 @@ void NativeTests::autoModHeldMessagesCanBeReviewed() {
     QCOMPARE(twitch->history.last().special, QString("automod-resolved"));
     app->hub.autoMod->review(twitch, "held-1", true, [&](QJsonObject, QString e) { error = e; });
     QVERIFY(!error.isEmpty()); QCOMPARE(requests, 1);
+    auto held2 = held;
+    auto item2 = item; item2["message_id"] = "held-2"; held2["event"] = item2;
+    app->hub.autoMod->event(held2);
+    auto changed = held2; auto subscription = changed["subscription"].toObject();
+    subscription["type"] = "automod.message.update"; changed["subscription"] = subscription;
+    item2["status"] = "expired"; changed["event"] = item2;
+    app->hub.autoMod->event(changed);
+    QVERIFY(!twitch->autoModPending.contains("held-2"));
+    QCOMPARE(twitch->history.last().special, QString("automod-resolved"));
+    QCOMPARE(twitch->history.last().alertKind, QString("expired"));
+    auto item3 = item; item3["message_id"] = "held-3"; held2["event"] = item3;
+    app->hub.autoMod->event(held2);
+    app->net.transport = [&](QUrl, QByteArray method, QByteArray body, QMap<QByteArray, QByteArray>, BytesCallback done) {
+        QCOMPARE(method, QByteArray("POST"));
+        QCOMPARE(str(QJsonDocument::fromJson(body).object()["action"]), QString("DENY"));
+        ++requests; done("{}", {});
+    };
+    app->hub.autoMod->review(twitch, "held-3", false, [&](QJsonObject, QString e) { error = e; });
+    QVERIFY(error.isEmpty()); QCOMPARE(requests, 2);
+    QCOMPARE(twitch->history.last().alertKind, QString("denied"));
 }
 
 void NativeTests::browserPollVotesRouteAndHandleClosedTabs() {
@@ -108,4 +131,45 @@ void NativeTests::overlayOpacityPersistsInSettings() {
     spin->setValue(61); app->settings->applyButton->click();
     QCOMPARE(app->cfg.data["overlay_opacity"].toInt(), 61);
     QVERIFY(qAbs(overlay->windowOpacity() - 0.61) < 0.02);
+}
+
+void NativeTests::obsUpdaterValidatesAndStagesUpdates() {
+#ifndef Q_OS_WIN
+    QSKIP("The Windows OBS bootstrapper runs on Windows only.");
+#else
+    const QString version = "9.8.7", name = "YT-Chatterino-OBS-Windows-" + version + ".zip";
+    const auto url = "https://github.com/" + Repo + "/releases/download/v" + version + '/' + name;
+    const QJsonObject asset{{"name", name}, {"browser_download_url", url}, {"size", 123},
+                            {"digest", "sha256:" + QString(64, 'a')}};
+    const QJsonObject release{{"tag_name", "v" + version}, {"assets", QJsonArray{asset}}};
+    QCOMPARE(str(ObsPluginUpdater::releaseInfo(release, "2.5.6")["version"]), version);
+    auto invalid = release; auto bad = asset; bad["browser_download_url"] = "https://example.com/update.zip";
+    invalid["assets"] = QJsonArray{bad}; QVERIFY(ObsPluginUpdater::releaseInfo(invalid, "2.5.6").isEmpty());
+    QVERIFY(!ObsPluginUpdater::safeListing("yt-chatterino-obs/../../evil.dll\n"));
+    QVERIFY(!ObsPluginUpdater::safeListing("yt-chatterino-obs/a\nyt-chatterino-obs/a\n"));
+    const QString input = temp.path() + "/obs-update-fixture", folder = input + "/yt-chatterino-obs";
+    QVERIFY(QDir().mkpath(folder + "/data/sidecar"));
+    auto write = [](const QString &path, const QByteArray &bytes) {
+        QFile file(path); return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size();
+    };
+    QVERIFY(write(folder + "/yt-chatterino-obs.dll", "MZbootstrap"));
+    QVERIFY(write(folder + "/yt-chatterino-obs-core.dll", "MZcore"));
+    QVERIFY(write(folder + "/LEIA-ME-OBS.txt", "fixture"));
+    QVERIFY(write(folder + "/data/sidecar/YT-Chatterino.exe", "MZsidecar"));
+    QVERIFY(writeObject(folder + "/data/sidecar/update-manifest.json",
+                        {{"version", version}, {"files", QJsonArray{"YT-Chatterino.exe", "update-manifest.json"}}}));
+    const auto archive = temp.path() + "/obs-update.zip";
+    const auto tar = qEnvironmentVariable("SystemRoot", "C:/Windows") + "/System32/tar.exe";
+    QCOMPARE(QProcess::execute(tar, {"-a", "-cf", archive, "-C", input, "yt-chatterino-obs"}), 0);
+    QFile zip(archive); QVERIFY(zip.open(QIODevice::ReadOnly));
+    ObsPluginUpdater updater(&app->net, nullptr, temp.path() + "/obs-updates");
+    bool notified = false; updater.notify = [&](const QString &) { notified = true; }; updater.busy = true;
+    updater.stage({{"version", version}}, zip.readAll());
+    QTRY_VERIFY_WITH_TIMEOUT(notified, 15000);
+    const auto marker = readObject(updater.rootPath + "/current.json");
+    QCOMPARE(str(marker["version"]), version);
+    const auto directory = str(marker["directory"]);
+    QVERIFY(QFileInfo::exists(updater.rootPath + '/' + directory + "/yt-chatterino-obs-core.dll"));
+    QCOMPARE(str(marker["core_sha256"]), QString::fromLatin1(QCryptographicHash::hash("MZcore", QCryptographicHash::Sha256).toHex()));
+#endif
 }

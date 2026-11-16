@@ -54,6 +54,7 @@ class NativeTests : public QObject {
     void autoModHeldMessagesCanBeReviewed();
     void browserPollVotesRouteAndHandleClosedTabs();
     void overlayOpacityPersistsInSettings();
+    void obsUpdaterValidatesAndStagesUpdates();
     void obsDockUsesOneMixedChatAndSeparateAccounts();
     void obsDockRefreshesYoutubeAndRejectsStaleResults();
     void f5ReloadsEmotesWithoutReconnecting();

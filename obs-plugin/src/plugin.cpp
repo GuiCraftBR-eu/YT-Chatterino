@@ -95,6 +95,7 @@ class ChatDock final : public QWidget {
         auto environment = QProcessEnvironment::systemEnvironment();
         environment.remove("QT_PLUGIN_PATH"); environment.remove("QT_QPA_PLATFORM_PLUGIN_PATH");
         environment.remove("QT_QPA_PLATFORM");
+        environment.insert("YTCHATTERINO_OBS_AUTO_UPDATE", "1");
         process.setProcessEnvironment(environment);
         process.setWorkingDirectory(QFileInfo(exe).absolutePath());
         QStringList arguments{"--obs-dock", "--obs-window-id", handlePath};

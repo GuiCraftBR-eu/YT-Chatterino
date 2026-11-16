@@ -350,6 +350,11 @@ Config::Config(QString dir, QObject *parent) : QObject(parent) {
     if (dir.isEmpty()) {
         dir = qEnvironmentVariable("YTCHATTERINO_DATA_DIR");
     }
+#ifdef Q_OS_LINUX
+    if (dir.isEmpty() && QFileInfo::exists("/.flatpak-info")) {
+        dir = QDir(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)).filePath("YT-Chatterino");
+    }
+#endif
     if (dir.isEmpty()) {
         dir = QDir::homePath();
     }

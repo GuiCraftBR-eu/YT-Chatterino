@@ -17,6 +17,7 @@ target_link_libraries(chatterino_core PUBLIC Qt6::Widgets Qt6::Network Qt6::Svg 
 target_include_directories(chatterino_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(chatterino_core PUBLIC APP_VERSION="${PROJECT_VERSION}")
 if(WIN32)
+  target_sources(chatterino_core PRIVATE src/obsupdate.cpp src/obsupdate.hpp)
   target_link_libraries(chatterino_core PUBLIC advapi32 crypt32 winmm dwmapi shell32)
 endif()
 if(MSVC)

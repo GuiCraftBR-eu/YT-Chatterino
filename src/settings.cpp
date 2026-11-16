@@ -1289,7 +1289,11 @@ QWidget *SettingsWindow::updatesPage() {
     auto *w = pageWidget(main->cfg, "Updates", &l);
     l->addWidget(text(main->cfg, main->cfg.T("Installed version: {version}", {{"version", APP_VERSION}})));
     if (main->obsDockMode) {
-        l->addWidget(text(main->cfg, "Update the OBS dock by installing the latest OBS plugin release while OBS is closed.", true));
+#ifdef Q_OS_WIN
+        l->addWidget(text(main->cfg, "The OBS dock checks for updates automatically and applies them when OBS restarts.", true));
+#else
+        l->addWidget(text(main->cfg, "The OBS Flatpak extension is updated outside OBS. Restart OBS after an update.", true));
+#endif
         l->addWidget(action(main->cfg, "Open releases…", w, [] {
             QDesktopServices::openUrl(QUrl("https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/latest"));
         }));

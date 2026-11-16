@@ -1,9 +1,0 @@
-YT-Chatterino para OBS Studio 33 ou mais recente no Arch Linux x86_64
-
-Feche o OBS e extraia a pasta yt-chatterino-obs para:
-  ~/.local/share/obs-studio/plugins/
-Reabra o OBS e ative Paineis > YT-Chatterino. Conecte suas contas em
-Configuracoes > Contas no proprio painel. As contas sao separadas das do aplicativo.
-O OBS deve ser instalado pelo repositorio do Arch e usar as bibliotecas Qt do sistema.
-O pacote Flatpak do OBS usa outro ambiente de bibliotecas e nao e suportado por este ZIP.
-Para atualizar o plugin, feche o OBS e substitua a pasta pela nova versao.
