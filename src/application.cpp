@@ -428,7 +428,7 @@ void MainWindow::attachPane(Pane *p) {
     };
     p->voteBrowserPoll = [this](Source *source, const QString &question, const QString &choice,
                                 const QString &label, JsonCallback done) {
-        if (vodBridge) vodBridge->voteTwitchPoll(source, question, choice, label, std::move(done));
+        if (vodBridge) vodBridge->voteBrowserPoll(source, question, choice, label, std::move(done));
         else done({{"status", "tab_closed"}}, {});
     };
     auto markVodSources = [this, p] {
@@ -436,8 +436,8 @@ void MainWindow::attachPane(Pane *p) {
             if (source->isVod) {
                 source->header["vod_shown"] = true;
                 if (vodBridge) vodBridge->allow(source->key);
-            } else if (vodBridge && source->platform == "twitch") {
-                vodBridge->refreshBrowserPanels(source->id);
+            } else if (vodBridge && (source->platform == "twitch" || source->platform == "kick" || source->platform == "youtube")) {
+                vodBridge->refreshBrowserPanels(source->platform, source->id);
             }
         }
         if (vodBridge) vodBridge->requestSync();

@@ -210,6 +210,7 @@ void Source::stop() {
     pollResultTimer.stop();
     kickSocketRetry.stop(); kickSocketWatchdog.stop(); kickSocketRenew.stop();
     kickModesTimer.stop(); kickModesPending = false;
+    kickPollSnapshotPending = false;
     kickSocket.abort();
     if (platform == "twitch" && !isVod) {
         hub->twitch.part(this);
@@ -250,6 +251,7 @@ void Source::reconnect() {
     } else if (platform == "kick") {
         poll.stop();
         kickModesTimer.stop(); kickModesPending = false; kickModesRetryMs = 60000;
+        kickPollSnapshotPending = false; ++kickPollRevision;
         kickSocketRetry.stop(); kickSocketWatchdog.stop(); kickSocketRenew.stop();
         kickSocketStarting = false; kickSocketActive = false; kickSocket.abort();
         kickConnecting = false;

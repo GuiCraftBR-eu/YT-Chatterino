@@ -2370,7 +2370,7 @@ void Pane::refreshDecorations() {
             ++count;
         };
         const auto pin = source->pinned.isEmpty() ? source->browserPinned : source->pinned;
-        const auto poll = source->activePoll.isEmpty() ? source->browserPoll : source->activePoll;
+        const auto poll = str(source->activePoll.value("text")).isEmpty() ? source->browserPoll : source->activePoll;
         const auto prediction = source->activePrediction.isEmpty() ? source->browserPrediction : source->activePrediction;
         add(hub->cfg->T("Pinned message"), pin);
         QString pollHeading = hub->cfg->T(poll.value("ended").toBool() ? "Poll result" : "Poll");
@@ -2383,12 +2383,13 @@ void Pane::refreshDecorations() {
             pollQuestions[key] = question; pollSelection.remove(key); pollFeedback.remove(key);
         }
         const auto choices = browserPoll["choices"].toArray();
-        if (source->platform == "twitch" && !source->isVod && !question.isEmpty() &&
-            (source->activePoll.isEmpty() || str(source->activePoll["text"]) == question)) {
+        if ((source->platform == "twitch" || source->platform == "kick" || source->platform == "youtube") && !source->isVod && !question.isEmpty() &&
+            (source->activePoll.isEmpty() || (!source->activePoll.value("ended").toBool() &&
+                (str(source->activePoll.value("text")).isEmpty() || str(source->activePoll.value("text")).simplified() == question)))) {
             if (str(browserPoll["state"]) == "open" && !choices.isEmpty() && voteBrowserPoll) {
                 auto *row = new QWidget(decorations);
                 auto *layout = new QHBoxLayout(row); layout->setContentsMargins(2, 0, 2, 0);
-                auto *select = new QComboBox(row); select->setObjectName("twitch-poll-choice");
+                auto *select = new QComboBox(row); select->setObjectName(source->platform + "-poll-choice");
                 select->addItem(hub->cfg->T("Choose an option"), QString());
                 for (const auto &value : choices) {
                     const auto choice = value.toObject();
@@ -2399,7 +2400,7 @@ void Pane::refreshDecorations() {
                 connect(select, qOverload<int>(&QComboBox::currentIndexChanged), this, [this, select, key] {
                     pollSelection[key] = select->currentData().toString();
                 });
-                auto *vote = new QPushButton(hub->cfg->T("Vote"), row); vote->setObjectName("twitch-poll-vote");
+                auto *vote = new QPushButton(hub->cfg->T("Vote"), row); vote->setObjectName(source->platform + "-poll-vote");
                 vote->setEnabled(select->currentIndex() > 0 && !pollRequests.contains(key));
                 connect(select, qOverload<int>(&QComboBox::currentIndexChanged), vote, [this, vote, key](int index) {
                     vote->setEnabled(index > 0 && !pollRequests.contains(key));
@@ -2416,11 +2417,11 @@ void Pane::refreshDecorations() {
                         safe->pollRequests.remove(key);
                         if (safe->pollQuestions.value(key) != question) return;
                         const auto status = str(result["status"]);
-                        const QMap<QString, QString> messages{{"confirmed", "Vote confirmed on Twitch."},
+                        const QMap<QString, QString> messages{{"confirmed", "Vote confirmed."},
                             {"already_voted", "Your vote was already recorded."}, {"ended", "This poll has ended."},
-                            {"changed", "The poll changed. Choose again."}, {"tab_closed", "The Twitch browser tab was closed."},
+                            {"changed", "The poll changed. Choose again."}, {"tab_closed", "The browser tab was closed."},
                             {"unavailable", "Voting is unavailable in the browser tab."},
-                            {"uncertain", "Vote submitted, but Twitch did not confirm it. Check the browser before retrying."}};
+                            {"uncertain", "Vote submitted, but it was not confirmed. Check the browser before retrying."}};
                         safe->pollFeedback[key] = error.isEmpty() ? messages.value(status, "Voting is unavailable in the browser tab.") : error;
                         QTimer::singleShot(0, safe, [safe] { if (safe) safe->refreshDecorations(); });
                     });
@@ -2431,13 +2432,13 @@ void Pane::refreshDecorations() {
             }
             if (!pollFeedback.value(key).isEmpty()) {
                 auto *status = new QLabel(hub->cfg->T(pollFeedback.value(key)), decorations);
-                status->setObjectName("twitch-poll-status"); status->setWordWrap(true);
+                status->setObjectName(source->platform + "-poll-status"); status->setWordWrap(true);
                 status->setStyleSheet("color:#bcbcc6; padding:2px 4px;"); box->addWidget(status);
             }
         }
         if (question.isEmpty() && !pollFeedback.value(key).isEmpty()) {
             auto *status = new QLabel(hub->cfg->T(pollFeedback.value(key)), decorations);
-            status->setObjectName("twitch-poll-status"); status->setWordWrap(true);
+            status->setObjectName(source->platform + "-poll-status"); status->setWordWrap(true);
             status->setStyleSheet("color:#bcbcc6; padding:2px 4px;"); box->addWidget(status); ++count;
         }
         QString predictionHeading = hub->cfg->T(prediction.value("ended").toBool() ? "Prediction result" : "Prediction");

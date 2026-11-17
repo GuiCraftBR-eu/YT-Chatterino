@@ -1,6 +1,7 @@
 const api = globalThis.browser || globalThis.chrome;
 let lastVideo = null, seek = false, vodReporting = false, liveReporting = false, lastLiveUrl = "", lastLiveAt = 0;
 const expandedPolls = new WeakSet();
+let kickVotePending = "";
 function isVodPage() {
   const host = location.hostname.toLowerCase(), path = location.pathname;
   if (["www.youtube.com", "youtube.com", "m.youtube.com"].includes(host))
@@ -38,7 +39,10 @@ function pollSnapshot(root) {
   const content = root.querySelector('[data-test-selector="expanded-content"]');
   const text = cleanPollText(content?.innerText, 1200);
   const ended = /\b(poll (ended|results?|closed)|final results?)\b|enquete encerrada|resultado da enquete/i.test(header + " " + text);
-  const voted = /(you(?:'ve| have)? voted|your vote (?:was|has been) (?:counted|recorded)|vote (?:recorded|submitted))\b|voc[eê] votou|seu voto (?:foi|est[aá]) (?:registrado|computado)/i.test(text);
+  const confirmation = [...(content?.querySelectorAll('p') || [])].some(node =>
+    visiblePollNode(node) && !node.closest('button[role="progressbar"]') &&
+    /^voted!?$/i.test(cleanPollText(node.innerText, 40)));
+  const voted = confirmation || /(you(?:'ve| have)? voted|your vote (?:was|has been) (?:counted|recorded)|vote (?:recorded|submitted))\b|voc[eê] votou|seu voto (?:foi|est[aá]) (?:registrado|computado)/i.test(text);
   const choices = [...(content?.querySelectorAll('button[role="progressbar"]') || [])].filter(visiblePollNode).map(node => {
     const input = node.querySelector('input[type="radio"]');
     return {id:cleanPollText(input?.value || input?.id, 128),
@@ -48,6 +52,69 @@ function pollSnapshot(root) {
   const voteButton = [...(content?.querySelectorAll('button') || [])].find(node =>
     visiblePollNode(node) && /^(vote|votar)$/i.test(cleanPollText(node.getAttribute('aria-label') || node.innerText, 40)));
   return {text:title, choices, state:ended ? "ended" : voted ? "voted" : (voteButton && choices.length ? "open" : "unavailable")};
+}
+// Kick's poll uses a radio group. Its options submit immediately and the UI is
+// updated optimistically, so a checked button alone is not a confirmation.
+function kickPollSnapshot() {
+  const titles = [...document.querySelectorAll('[data-testid="poll-title"]')].filter(visiblePollNode);
+  if (titles.length !== 1) return null;
+  const title = titles[0];
+  const root = title.parentElement?.parentElement?.parentElement;
+  const lists = [...(root?.querySelectorAll('[data-testid="poll-option-list"]') || [])].filter(visiblePollNode);
+  const text = cleanPollText(title.innerText);
+  if (!text || lists.length !== 1) return {text, choices:[], state:"unavailable"};
+  const buttons = [...lists[0].querySelectorAll('button[role="radio"]')].filter(visiblePollNode);
+  const choices = buttons.map(button => ({id:button.getAttribute("id") || "",
+    label:cleanPollText(button.getAttribute("title"), 100)}))
+    .filter(choice => /^[0-9]{1,10}$/.test(choice.id) && choice.label).slice(0, 10);
+  const voted = buttons.some(button => button.getAttribute("data-state") === "checked");
+  const enabled = buttons.some(button => !button.disabled && button.getAttribute("aria-disabled") !== "true");
+  return {text, choices, state:voted && kickVotePending !== text ? "voted" :
+    !voted && enabled && choices.length === buttons.length && choices.length ? "open" : "unavailable"};
+}
+function kickChatPanels() {
+  if (!["kick.com", "www.kick.com"].includes(location.hostname.toLowerCase())) return undefined;
+  return {available:true, poll:kickPollSnapshot() || {}};
+}
+async function voteOnKickPoll(message) {
+  const snapshot = kickPollSnapshot();
+  if (!snapshot) return {status:"ended"};
+  if (snapshot.text !== message.question) return {status:"changed"};
+  if (snapshot.state === "voted") return {status:"already_voted"};
+  if (snapshot.state !== "open" || !snapshot.choices.some(choice => choice.id === message.choice && choice.label === message.label))
+    return {status:"unavailable"};
+  const titles = [...document.querySelectorAll('[data-testid="poll-title"]')].filter(visiblePollNode);
+  const root = titles[0]?.parentElement?.parentElement?.parentElement;
+  const option = [...(root?.querySelectorAll('[data-testid="poll-option-list"] button[role="radio"]') || [])]
+    .find(button => visiblePollNode(button) && button.getAttribute("id") === message.choice &&
+      cleanPollText(button.getAttribute("title"), 100) === message.label);
+  if (!option || option.disabled || option.getAttribute("aria-disabled") === "true") return {status:"unavailable"};
+  kickVotePending = message.question;
+  try {
+    option.click();
+    // Ask the same-origin endpoint for the server's state; this uses the browser's
+    // existing session without exposing any credentials to the app.
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    for (let attempt = 0; attempt < 6; ++attempt) {
+      await wait(400);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 900);
+      try {
+        const response = await fetch('/api/v2/channels/' + encodeURIComponent(message.channel) + '/polls',
+          {credentials:"same-origin", cache:"no-store", signal:controller.signal});
+        if (!response.ok) continue;
+        const poll = (await response.json())?.data?.poll;
+        if (cleanPollText(poll?.title) !== message.question) return {status:"uncertain"};
+        if (poll?.has_voted === true && String(poll.voted_option_id) === message.choice &&
+            poll.options?.some(choice => String(choice.id) === message.choice && cleanPollText(choice.label, 100) === message.label))
+          return {status:"confirmed"};
+      } catch (_) { /* The server did not confirm; do not submit again. */ }
+      finally { clearTimeout(timeout); }
+    }
+    return {status:"uncertain"};
+  } finally {
+    kickVotePending = "";
+  }
 }
 function twitchChatPanels() {
   if (!["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(location.hostname.toLowerCase())) return undefined;
@@ -149,6 +216,12 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== api.runtime.id) return;
   if (message?.type === "sync-now") { report(true); return; }
   if (!["open-panel", "vote-poll"].includes(message?.type) || !isLiveCandidate()) return;
+  if (["kick.com", "www.kick.com"].includes(location.hostname.toLowerCase())) {
+    const match = location.pathname.match(/^\/([A-Za-z0-9_-]{1,80})\/?$/);
+    if (message.type !== "vote-poll" || !match || match[1].toLowerCase() !== message.channel || message.platform !== "kick") return;
+    voteOnKickPoll(message).then(respond, () => respond({status:"uncertain"}));
+    return true;
+  }
   if (!["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(location.hostname.toLowerCase())) return;
   const match=location.pathname.match(/^\/(?:popout\/)?([A-Za-z0-9_]{1,25})(?:\/chat)?\/?$/);
   if (!match || match[1].toLowerCase() !== message.channel) return;
@@ -200,7 +273,7 @@ function report(force = false) {
   if (!isLive && liveReporting) { api.runtime.sendMessage({type:"live-end"}).catch(() => {}); liveReporting=false; lastLiveUrl=""; }
   if (isLive && (force || location.href !== lastLiveUrl || Date.now()-lastLiveAt >= 2000)) {
     liveReporting=true;lastLiveUrl=location.href;lastLiveAt=Date.now();
-    api.runtime.sendMessage({type:"live-state",url:location.href,...liveHint(),chat:twitchChatPanels()}).catch(() => {});
+    api.runtime.sendMessage({type:"live-state",url:location.href,...liveHint(),chat:twitchChatPanels() || kickChatPanels()}).catch(() => {});
   }
   if (!isVod) return;
   const video = findVideo(); if (!video) return;

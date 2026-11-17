@@ -48,6 +48,25 @@ void NativeTests::kickRealtimeEventsAndAlerts() {
     QVERIFY(source->activePoll["ended"].toBool());
     QVERIFY(source->activePoll["last_observed"].toBool());
     QVERIFY(source->pollResultTimer.isActive());
+    source->kickChannelId = "123";
+    BytesCallback pending;
+    int requests = 0;
+    app->net.transport = [&](QUrl url, QByteArray method, QByteArray, QMap<QByteArray, QByteArray>, BytesCallback done) {
+        QCOMPARE(url.path(), QString("/api/v2/channels/test/polls"));
+        QCOMPARE(method, QByteArray("GET")); ++requests; pending = std::move(done);
+    };
+    source->kickRefreshPoll(); source->kickRefreshPoll(); QCOMPARE(requests, 1);
+    auto newer = poll; newer["title"] = "New poll";
+    source->kickSocketMessage(kickEnvelope("PollUpdateEvent", {{"poll", newer}}));
+    pending(QJsonDocument(poll).toJson(), {});
+    QCOMPARE(str(source->activePoll["text"]), QString("New poll"));
+    source->kickRefreshPoll(); QCOMPARE(requests, 2);
+    pending(QJsonDocument(QJsonObject{{"data", poll}}).toJson(), {});
+    QCOMPARE(str(source->activePoll["text"]), QString("Pick one"));
+    source->kickRefreshPoll(); QCOMPARE(requests, 3);
+    pending(QJsonDocument(QJsonObject{{"status", QJsonObject{{"code", 404}}}, {"data", QJsonValue(QJsonValue::Null)}}).toJson(), {});
+    QVERIFY(source->activePoll["ended"].toBool());
+    QVERIFY(source->activePoll["last_observed"].toBool());
 }
 
 void NativeTests::kickEmoteCatalogCompletesAndDisplays() {

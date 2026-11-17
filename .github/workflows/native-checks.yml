@@ -15,6 +15,8 @@ jobs:
         run: |
           node tests/browser-extension.js
           node tests/browser-poll.js
+          node tests/browser-kick-poll.js
+          node tests/browser-youtube-poll.js
           node tests/browser-poll-bridge.js
           python tests/flatpak-updater.py
           python packaging/verify_firefox_release.py

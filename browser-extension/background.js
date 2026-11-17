@@ -2,7 +2,9 @@
 const api = globalThis.browser || globalThis.chrome;
 const states = new Map();
 const liveStates = new Map();
+const youtubeFrames = new Map();
 const pendingVotes = new Set();
+const pendingPolls = new Set();
 const client = crypto.randomUUID();
 const endpoints = [37367, 37368].map(port => ({port, socket:null, retry:null, ready:false}));
 function status() {
@@ -44,6 +46,23 @@ function liveUrl(raw) {
   if (!match || ["directory","downloads","jobs","login","p","settings","signup","subscriptions","turbo","videos","wallet","categories","browse","search"].includes(match[1].toLowerCase())) return "";
   return (twitch ? "https://www.twitch.tv/" : "https://kick.com/") + match[1].toLowerCase();
 }
+function youtubeChatId(raw) {
+  let url; try { url = new URL(raw); } catch (_) { return ""; }
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443") ||
+      !["www.youtube.com", "youtube.com", "m.youtube.com"].includes(url.hostname.toLowerCase()) || url.pathname !== "/live_chat") return "";
+  const id = url.searchParams.get("v") || "";
+  return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : "";
+}
+function panel(value) {
+  return value && typeof value === "object" && typeof value.text === "string"
+    ? {text:value.text.slice(0,800),name:typeof value.name === "string" ? value.name.slice(0,100) : "",
+       options:typeof value.options === "string" ? value.options.slice(0,800) : "",
+       state:["open","voted","ended","unavailable"].includes(value.state) ? value.state : "unavailable",
+       choices:Array.isArray(value.choices) ? value.choices.slice(0,10).filter(c => c &&
+         typeof c.id === "string" && /^[a-z0-9_-]{1,128}$/i.test(c.id) &&
+         typeof c.label === "string" && c.label.length > 0 && c.label.length <= 100)
+         .map(c => ({id:c.id,label:c.label})) : []} : {};
+}
 function sendTo(endpoint, data) {
   if (endpoint.socket?.readyState === WebSocket.OPEN && endpoint.ready) endpoint.socket.send(JSON.stringify(data));
 }
@@ -74,16 +93,30 @@ function connectEndpoint(endpoint) {
       return;
     }
     if (data.type === "vote-poll" && endpoint.ready) {
-      const tab=data.tab, channel=typeof data.channel === "string" ? data.channel.toLowerCase() : "";
+      const tab=data.tab;
+      const platform=data.platform || "twitch";
+      const channel=typeof data.channel === "string" ? (platform === "youtube" ? data.channel : data.channel.toLowerCase()) : "";
       const request=typeof data.request === "string" ? data.request : "";
-      if (!Number.isInteger(tab) || !/^[a-z0-9_]{1,25}$/.test(channel) ||
+      const allowed=platform === "twitch" ? /^[a-z0-9_]{1,25}$/.test(channel) :
+        platform === "kick" ? /^[a-z0-9_-]{1,80}$/.test(channel) :
+        platform === "youtube" && /^[A-Za-z0-9_-]{11}$/.test(channel);
+      if (!Number.isInteger(tab) || !allowed ||
           !/^[a-f0-9-]{36}$/i.test(request) || pendingVotes.has(request)) return;
+      let ownsPoll=false;
       const finish = status => {
         pendingVotes.delete(request);
+        if (ownsPoll) pendingPolls.delete(pollKey);
         sendTo(endpoint, {type:"poll-result",request,tab,status});
       };
+      const pollKey=platform + ":" + tab + ":" + data.question;
       const state=liveStates.get(tab);
-      if (!state || state.url !== "https://www.twitch.tv/"+channel) { finish("tab_closed"); return; }
+      const origin=platform === "kick" ? "https://kick.com/" : platform === "youtube" ?
+        "https://www.youtube.com/watch?v=" : "https://www.twitch.tv/";
+      if (!state || state.url !== origin+channel) { finish("tab_closed"); return; }
+      const frame=youtubeFrames.get(tab);
+      if (platform === "youtube" && (!frame || frame.video !== channel || Date.now()-frame.at > 5000)) {
+        finish("tab_closed"); return;
+      }
       const poll=state.chat?.poll;
       if (!poll || poll.text !== data.question) { finish("changed"); return; }
       if (poll.state === "ended") { finish("ended"); return; }
@@ -91,8 +124,14 @@ function connectEndpoint(endpoint) {
       if (poll.state !== "open" || !poll.choices?.some(c => c.id === data.choice && c.label === data.label)) {
         finish("unavailable"); return;
       }
+      // Separate app windows can address the same tab; do not submit twice.
+      if (pendingPolls.has(pollKey)) { sendTo(endpoint, {type:"poll-result",request,tab,status:"unavailable"}); return; }
       pendingVotes.add(request);
-      api.tabs.sendMessage(tab,{type:"vote-poll",channel,question:poll.text,choice:data.choice,label:data.label})
+      pendingPolls.add(pollKey);
+      ownsPoll=true;
+      const message={type:"vote-poll",platform,channel,question:poll.text,choice:data.choice,label:data.label};
+      const action=platform === "youtube" ? api.tabs.sendMessage(tab,message,{frameId:frame.frameId}) : api.tabs.sendMessage(tab,message);
+      action
         .then(result => finish(["confirmed","already_voted","ended","changed","unavailable","uncertain"].includes(result?.status)
           ? result.status : "uncertain"), () => finish("tab_closed"));
       return;
@@ -119,6 +158,7 @@ function disconnectAll() {
   }
 }
 function closeTab(tab) {
+  youtubeFrames.delete(tab);
   const hadVod = states.delete(tab), hadLive = liveStates.delete(tab);
   if (!hadVod && !hadLive) return;
   send({type:"closed", tab});
@@ -130,10 +170,23 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
   if (message.type === "vod-status" && sender.url === api.runtime.getURL("popup.html")) {
     respond({status:status(), count:new Set([...states.keys(), ...liveStates.keys()]).size}); return;
   }
-  if (!sender.tab || sender.frameId !== 0 || !Number.isInteger(sender.tab.id)) return;
+  if (!sender.tab || !Number.isInteger(sender.tab.id)) return;
   const tab = sender.tab.id;
+  if (message.type === "youtube-chat-state") {
+    if (!Number.isInteger(sender.frameId) || sender.frameId <= 0) return;
+    const video=youtubeChatId(sender.url);
+    if (!video || youtubeChatId(message.url) !== video) return;
+    const state=liveStates.get(tab);
+    if (!state || state.url !== "https://www.youtube.com/watch?v=" + video ||
+        (sender.tab.url && liveUrl(sender.tab.url) !== state.url)) return;
+    const chat={available:true,poll:panel(message.poll)};
+    youtubeFrames.set(tab,{video,frameId:sender.frameId,chat,at:Date.now()});
+    const updated={...state,chat}; liveStates.set(tab,updated); send(updated); return;
+  }
+  if (sender.frameId !== 0) return;
   if (message.type === "vod-close") { closeTab(tab); return; }
   if (message.type === "vod-end" || message.type === "live-end") {
+    if (message.type === "live-end") youtubeFrames.delete(tab);
     const map = message.type === "vod-end" ? states : liveStates;
     if (map.delete(tab)) send({type:message.type === "vod-end" ? "vod-closed" : "live-closed", tab});
     if (!states.size && !liveStates.size) disconnectAll();
@@ -148,17 +201,16 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
     if (!url) return;
     const name=typeof message.name === "string" ? message.name.trim().slice(0,100) : "";
     const state={type:"live-state",tab,url,live:message.live === true && !!name,name};
-    if (url.startsWith("https://www.twitch.tv/") && message.chat && typeof message.chat === "object") {
-      const panel = value => value && typeof value === "object" && typeof value.text === "string"
-        ? {text:value.text.slice(0,800),name:typeof value.name === "string" ? value.name.slice(0,100) : "",
-           options:typeof value.options === "string" ? value.options.slice(0,800) : "",
-           state:["open","voted","ended","unavailable"].includes(value.state) ? value.state : "unavailable",
-           choices:Array.isArray(value.choices) ? value.choices.slice(0,10).filter(c => c &&
-             typeof c.id === "string" && /^[a-z0-9_-]{1,128}$/i.test(c.id) &&
-             typeof c.label === "string" && c.label.length > 0 && c.label.length <= 100)
-             .map(c => ({id:c.id,label:c.label})) : []} : {};
+    if ((url.startsWith("https://www.twitch.tv/") || url.startsWith("https://kick.com/")) && message.chat && typeof message.chat === "object") {
       state.chat={available:message.chat.available === true,pin:panel(message.chat.pin),
         poll:panel(message.chat.poll),prediction:panel(message.chat.prediction)};
+      youtubeFrames.delete(tab);
+    } else if (url.startsWith("https://www.youtube.com/watch?v=")) {
+      const frame=youtubeFrames.get(tab);
+      if (frame && url === "https://www.youtube.com/watch?v=" + frame.video && Date.now()-frame.at <= 5000) state.chat=frame.chat;
+      else youtubeFrames.delete(tab);
+    } else {
+      youtubeFrames.delete(tab);
     }
     liveStates.set(tab,state); connect(); send(state); return;
   }

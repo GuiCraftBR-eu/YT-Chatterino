@@ -58,6 +58,8 @@ class Source : public QObject {
     QTimer kickSocketRetry, kickSocketWatchdog, kickSocketRenew;
     QTimer kickModesTimer;
     bool kickModesPending = false;
+    bool kickPollSnapshotPending = false;
+    quint64 kickPollRevision = 0;
     int kickModesRetryMs = 60000;
     bool kickSocketActive = false, kickSocketStarting = false;
     bool kickThumbnailPending = false;
@@ -123,6 +125,7 @@ class Source : public QObject {
     void kickConnect();
     void kickLoadThumbnail();
     void kickPoll();
+    void kickRefreshPoll();
     void kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Message>> batch, bool historical);
     void kickError(QString error);
     void kickLoadEmotes(bool notify = false);

@@ -103,7 +103,7 @@ void NativeTests::browserPollVotesRouteAndHandleClosedTabs() {
     socket.sendTextMessage(QString::fromUtf8(QJsonDocument(state).toJson(QJsonDocument::Compact)));
     QTRY_COMPARE(str(twitch->browserPoll["state"]), QString("open"));
     QString status;
-    app->vodBridge->voteTwitchPoll(twitch, "Which?", "choice-1", "Yes", [&](QJsonObject result, QString) { status = str(result["status"]); });
+    app->vodBridge->voteBrowserPoll(twitch, "Which?", "choice-1", "Yes", [&](QJsonObject result, QString) { status = str(result["status"]); });
     QTRY_COMPARE(received.size(), 2);
     const auto command = QJsonDocument::fromJson(received.last()[0].toString().toUtf8()).object();
     QCOMPARE(str(command["type"]), QString("vote-poll"));
@@ -129,9 +129,71 @@ void NativeTests::browserPollVotesRouteAndHandleClosedTabs() {
     QTRY_VERIFY(pane->findChild<QLabel *>("twitch-poll-status"));
     QTRY_VERIFY(pane->findChild<QLabel *>("twitch-poll-status")->text().contains("confirmed", Qt::CaseInsensitive));
     status.clear();
-    app->vodBridge->voteTwitchPoll(twitch, "Which?", "choice-1", "Yes", [&](QJsonObject result, QString) { status = str(result["status"]); });
+    app->vodBridge->voteBrowserPoll(twitch, "Which?", "choice-1", "Yes", [&](QJsonObject result, QString) { status = str(result["status"]); });
     socket.sendTextMessage(R"({"type":"live-closed","tab":17})");
     QTRY_COMPARE(status, QString("tab_closed"));
+
+    // Identical Twitch and Kick channel names must never share a poll or tab.
+    auto *kick = app->hub.source("kick", "guicraft_");
+    auto *kickPane = app->addWorkspace({kick})->focusedPane.data();
+    socket.sendTextMessage(QString::fromUtf8(QJsonDocument(state).toJson(QJsonDocument::Compact)));
+    QTRY_COMPARE(str(twitch->browserPoll["state"]), QString("open"));
+    status.clear();
+    app->vodBridge->voteBrowserPoll(kick, "Which?", "0", "Yes", [&](QJsonObject result, QString) { status = str(result["status"]); });
+    QCOMPARE(status, QString("tab_closed"));
+    const QJsonObject kickPoll{{"text", "Which?"}, {"state", "open"},
+                               {"choices", QJsonArray{QJsonObject{{"id", "0"}, {"label", "Yes"}}}}};
+    const QJsonObject kickState{{"type", "live-state"}, {"tab", 18}, {"url", "https://kick.com/guicraft_"},
+                                {"chat", QJsonObject{{"available", true}, {"poll", kickPoll}}}};
+    socket.sendTextMessage(QString::fromUtf8(QJsonDocument(kickState).toJson(QJsonDocument::Compact)));
+    QTRY_COMPARE(str(kick->browserPoll["state"]), QString("open"));
+    QCOMPARE(str(twitch->browserPoll["choices"].toArray().first().toObject()["id"]), QString("choice-1"));
+    QTRY_VERIFY(kickPane->findChild<QComboBox *>("kick-poll-choice"));
+    auto *kickChoice = kickPane->findChild<QComboBox *>("kick-poll-choice");
+    auto *kickVote = kickPane->findChild<QPushButton *>("kick-poll-vote");
+    QVERIFY(kickVote); kickChoice->setCurrentIndex(1); QVERIFY(kickVote->isEnabled());
+    QTest::qWait(100); received.clear(); kickVote->click();
+    QTRY_VERIFY(!received.isEmpty());
+    const auto kickCommand = QJsonDocument::fromJson(received.last()[0].toString().toUtf8()).object();
+    QCOMPARE(str(kickCommand["type"]), QString("vote-poll"));
+    QCOMPARE(str(kickCommand["platform"]), QString("kick"));
+    QCOMPARE(str(kickCommand["choice"]), QString("0"));
+    QCOMPARE(kickCommand["tab"].toInt(), 18);
+    reply["tab"] = 18; reply["request"] = kickCommand["request"];
+    socket.sendTextMessage(QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact)));
+    QTRY_VERIFY(kickPane->findChild<QLabel *>("kick-poll-status"));
+    QTRY_VERIFY(kickPane->findChild<QLabel *>("kick-poll-status")->text().contains("confirmed", Qt::CaseInsensitive));
+    socket.sendTextMessage(R"({"type":"live-closed","tab":18})");
+    QTRY_VERIFY(kick->browserPoll.isEmpty());
+    QVERIFY(!twitch->browserPoll.isEmpty());
+
+    // YouTube video IDs are case-sensitive, including when selecting a frame.
+    auto *youtube = app->hub.source("youtube", "Abcdefgh123");
+    auto *otherVideo = app->hub.source("youtube", "abcdefgh123");
+    auto *youtubePane = app->addWorkspace({youtube})->focusedPane.data();
+    const QJsonObject youtubePoll{{"text", "Which?"}, {"state", "open"},
+        {"choices", QJsonArray{QJsonObject{{"id", "option-0"}, {"label", "Yes"}}}}};
+    const QJsonObject youtubeState{{"type", "live-state"}, {"tab", 19}, {"url", "https://www.youtube.com/watch?v=Abcdefgh123"},
+        {"chat", QJsonObject{{"available", true}, {"poll", youtubePoll}}}};
+    socket.sendTextMessage(QString::fromUtf8(QJsonDocument(youtubeState).toJson(QJsonDocument::Compact)));
+    QTRY_COMPARE(str(youtube->browserPoll["state"]), QString("open"));
+    QVERIFY(otherVideo->browserPoll.isEmpty());
+    // Some YouTube banner updates contain choices before the question text.
+    youtube->setDecorations({}, {{"options", "Yes · No"}});
+    status.clear();
+    app->vodBridge->voteBrowserPoll(otherVideo, "Which?", "option-0", "Yes", [&](QJsonObject result, QString) { status = str(result["status"]); });
+    QCOMPARE(status, QString("tab_closed"));
+    QTRY_VERIFY(youtubePane->findChild<QComboBox *>("youtube-poll-choice"));
+    auto *youtubeChoice = youtubePane->findChild<QComboBox *>("youtube-poll-choice");
+    auto *youtubeVote = youtubePane->findChild<QPushButton *>("youtube-poll-vote");
+    QVERIFY(youtubeVote); youtubeChoice->setCurrentIndex(1); QVERIFY(youtubeVote->isEnabled());
+    QTest::qWait(100); received.clear(); youtubeVote->click();
+    QTRY_VERIFY(!received.isEmpty());
+    const auto youtubeCommand = QJsonDocument::fromJson(received.last()[0].toString().toUtf8()).object();
+    QCOMPARE(str(youtubeCommand["type"]), QString("vote-poll"));
+    QCOMPARE(str(youtubeCommand["platform"]), QString("youtube"));
+    QCOMPARE(str(youtubeCommand["channel"]), QString("Abcdefgh123"));
+    QCOMPARE(youtubeCommand["tab"].toInt(), 19);
 }
 
 void NativeTests::overlayOpacityPersistsInSettings() {

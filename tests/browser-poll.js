@@ -4,7 +4,7 @@ const fs = require('fs');
 const vm = require('vm');
 
 function fixture(config = {}) {
-  let listener, optionClicks = 0, voteClicks = 0;
+  let listener, optionClicks = 0, voteClicks = 0, confirmed = false;
   const input = {value:'choice-1', id:'choice-1', checked:false};
   const title = {innerText:'Yes'};
   const header = {innerText:config.ended ? 'Poll results' : 'Current Poll'};
@@ -12,13 +12,15 @@ function fixture(config = {}) {
   const visible = {getClientRects:()=>[{}]};
   const vote = {...visible, disabled:true, innerText:config.paid ? 'Vote 100 points' : 'Vote',
     getAttribute:name=>name === 'aria-label' ? 'Vote' : null,
-    click(){ ++voteClicks; if (config.confirm !== false) content.innerText = 'Your vote was recorded'; }};
+    click(){ ++voteClicks; if (config.confirm !== false) { confirmed = true; content.innerText = config.realConfirmation ? 'Voted!' : 'Your vote was recorded'; } }};
   const option = {...visible, disabled:false, getAttribute:name=>name === 'aria-label' ? 'Yes' : null,
     querySelector:selector=>selector === 'input[type="radio"]' ? input : selector.includes('title') ? title : null,
     click(){ ++optionClicks; input.checked = true; vote.disabled = !!config.disabled; }};
-  const content = {innerText:config.voted ? 'You have voted' : '',
+  const content = {innerText:config.optionVoted ? 'Voted!' : config.voted ? 'You have voted' : '',
     querySelectorAll:selector=>selector === 'button[role="progressbar"]' ? [option] :
-      selector === 'input[type="radio"]' ? [input] : selector === 'button' ? [option,vote] : []};
+      selector === 'input[type="radio"]' ? [input] : selector === 'button' ? [option,vote] :
+      selector === 'p' && config.realConfirmation && confirmed ? [{...visible,innerText:'Voted!',closest:()=>null}] :
+      selector === 'p' && config.optionVoted ? [{...visible,innerText:'Voted!',closest:()=>option}] : []};
   const root = {...visible, querySelector:selector=>selector.includes('header-content') && selector.includes('header"]') ? header :
       selector.includes('header-content') && selector.includes('strong') ? question :
       selector.includes('expanded-content') ? content : null};
@@ -37,13 +39,15 @@ function fixture(config = {}) {
       const keep=listener(message,{id:'test-extension'},resolve);
       assert.equal(keep,true);
     });
-  }, counts:()=>({optionClicks,voteClicks})};
+  }, counts:()=>({optionClicks,voteClicks}), state:()=>vm.runInContext('pollSnapshot(twitchEngagementCard("poll")).state',context)};
 }
 
 (async()=>{
   let test=fixture();
   assert.equal((await test.vote()).status,'confirmed');
   assert.deepEqual(test.counts(),{optionClicks:1,voteClicks:1});
+  test=fixture({realConfirmation:true}); assert.equal((await test.vote()).status,'confirmed');
+  test=fixture({optionVoted:true}); assert.equal(test.state(),'open');
   test=fixture({voted:true}); assert.equal((await test.vote()).status,'already_voted'); assert.equal(test.counts().voteClicks,0);
   test=fixture({ended:true}); assert.equal((await test.vote()).status,'ended'); assert.equal(test.counts().voteClicks,0);
   test=fixture({absent:true}); assert.equal((await test.vote()).status,'ended'); assert.equal(test.counts().voteClicks,0);

@@ -34,6 +34,17 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/live_chat*",
+        "https://m.youtube.com/live_chat*"
+      ],
+      "js": [
+        "youtube-chat.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
     }
   ],
   "browser_specific_settings": {
