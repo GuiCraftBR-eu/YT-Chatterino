@@ -231,6 +231,9 @@ class Hub : public QObject {
     void provider(Source *source, const QJsonValue &data, QString provider, QString scope);
     void send(Source *source, QString text, Message reply, JsonCallback done);
     void moderate(Source *source, const Message &message, QString action, int duration, JsonCallback done);
+    void setUserRole(Source *source, const Message &message, QString role, bool add, JsonCallback done);
+    void youtubeRemoveModeratorPage(QPointer<Source> source, QString chat, QString user, QString cursor,
+                                    int page, JsonCallback done);
     void twitchChatSettings(Source *source, QJsonObject changes, JsonCallback done);
     void canModerate(Source *source, std::function<void(bool, QString)> done);
     void moderatedPage(QPointer<Source> source, QString userId, QString cursor, int page,

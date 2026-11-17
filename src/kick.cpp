@@ -426,6 +426,37 @@ void Source::kickSocketMessage(const QString &text) {
 }
 
 void Source::kickEvent(QString event, QJsonObject data) {
+    if (event.endsWith("PollUpdateEvent")) {
+        const auto pollData = data["poll"].toObject();
+        const auto title = str(pollData["title"]).simplified().left(400);
+        if (title.isEmpty() || !pollData["options"].isArray()) return;
+        QStringList options;
+        QJsonArray choices;
+        for (const auto &item : pollData["options"].toArray()) {
+            const auto option = item.toObject();
+            const auto label = str(option["label"]).simplified().left(100);
+            if (label.isEmpty()) continue;
+            const auto votes = option["votes"];
+            options << (votes.isDouble() && votes.toDouble() >= 0
+                            ? label + " (" + QString::number(votes.toInteger()) + ")" : label);
+            choices.append(QJsonObject{{"id", str(option["id"])}, {"label", label}});
+            if (choices.size() >= 10) break;
+        }
+        if (choices.isEmpty()) return;
+        const bool ended = pollData["remaining"].isDouble() && pollData["remaining"].toDouble() <= 0;
+        QJsonObject state{{"text", title}, {"options", options.join(" · ")}, {"choices", choices}};
+        if (ended) { state["ended"] = true; pollResultTimer.start(180000); }
+        else pollResultTimer.stop();
+        setDecorations(pinned, state);
+        return;
+    }
+    if (event.endsWith("PollDeleteEvent")) {
+        if (!activePoll.isEmpty()) {
+            auto state = activePoll; state["ended"] = true; state["last_observed"] = true;
+            setDecorations(pinned, state); pollResultTimer.start(180000);
+        }
+        return;
+    }
     if (event.endsWith("ChatroomUpdatedEvent") || event.endsWith("ChatroomSettingsUpdatedEvent")) {
         const auto room = data["chatroom"].isObject() ? data["chatroom"].toObject() : data;
         kickUpdateChatModes(room); return;

@@ -77,11 +77,10 @@ void NativeTests::twitchBrowserPanelsFollowTabsAndPermissions() {
     QCOMPARE(labels.size(), 3);
     QVERIFY(labels[0]->text().contains("Alice: Please read"));
     const auto actions = pane->decorations->findChildren<QToolButton *>("open-twitch-engagement");
-    QCOMPARE(actions.size(), 2);
+    QCOMPARE(actions.size(), 1);
     QString requested;
     pane->openBrowserPanel = [&](Source *source, const QString &kind) { if (source == twitch) requested = kind; return true; };
-    actions[0]->click(); QCOMPARE(requested, "poll");
-    actions[1]->click(); QCOMPARE(requested, "prediction");
+    actions[0]->click(); QCOMPARE(requested, "prediction");
     twitch->setDecorations({{"text", "Official pin"}}, {});
     labels = pane->decorations->findChildren<QLabel *>("chat-decoration");
     QVERIFY(labels[0]->text().contains("Official pin"));

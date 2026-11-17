@@ -382,13 +382,16 @@ static QImage roleBadge(const QString &role, int size) {
         p.drawPolyline(QPolygonF{{4.2, 9.2}, {7.4, 12.2}, {13.8, 5.8}});
         return image;
     }
-    p.setBrush(QColor(role == "moderator" ? "#00ad03"
+    p.setBrush(QColor(role == "og" ? "#53fc18" : role == "moderator" ? "#00ad03"
                       : role == "owner"   ? "#e91916"
                       : role == "vip"     ? "#e005b9"
                                           : "#7349b8"));
     p.drawRoundedRect(QRectF(0, 0, 18, 18), 2, 2);
     p.setBrush(Qt::white);
-    if (role == "owner") {
+    if (role == "og") {
+        QFont font = p.font(); font.setBold(true); font.setPixelSize(9); p.setFont(font);
+        p.setPen(Qt::black); p.drawText(QRectF(0, 0, 18, 18), Qt::AlignCenter, "OG");
+    } else if (role == "owner") {
         p.drawPolygon(QPolygonF{{3, 6}, {6, 9}, {9, 4}, {12, 9}, {15, 6}, {14, 14}, {4, 14}});
     } else if (role == "moderator") {
         p.drawPolygon(QPolygonF{{5, 3}, {10, 4}, {15, 9}, {12, 12}, {7, 7}});
@@ -576,7 +579,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
             }
         }
         if (source && source->isVod && badge.urls.isEmpty() && badge.role != "owner" &&
-            badge.role != "moderator" && badge.role != "subscriber" && badge.role != "vip") continue;
+            badge.role != "moderator" && badge.role != "subscriber" && badge.role != "vip" &&
+            !(source->platform == "kick" && badge.role == "og")) continue;
         QString label = badge.label;
         if (label.isEmpty() || (label.startsWith('[') && label.endsWith(']'))) {
             if (badge.role == "owner") label = hub->cfg->T(source && source->platform == "twitch" ? "Broadcaster" : "Owner");
@@ -588,7 +592,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         }
         const bool youtubeVerified = source && source->platform == "youtube" && badge.role == "verified";
         if (youtubeVerified || (badge.urls.isEmpty() && (badge.role == "owner" || badge.role == "moderator" ||
-                                                        badge.role == "subscriber" || badge.role == "vip"))) {
+                                                        badge.role == "subscriber" || badge.role == "vip" ||
+                                                        (source && source->platform == "kick" && badge.role == "og")))) {
             const int size = a["badge_size"].toInt(18);
             QString url = "badge:" + badge.role;
             doc->addResource(QTextDocument::ImageResource, QUrl(url), roleBadge(badge.role, size));
@@ -2006,7 +2011,12 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         auto s = targetSource();
         if (s) {
             const auto prefix = input->completionPrefix();
-            if (prefix.startsWith('@')) {
+            if (prefix.startsWith('/') && input->text().left(input->cursorPosition()).trimmed() == prefix && !s->isVod) {
+                c = {"/ban", "/timeout"};
+                if (s->platform != "youtube") c << "/unban";
+                if (s->platform == "twitch" || s->platform == "youtube") c << "/mod" << "/unmod";
+                if (s->platform == "twitch") c << "/vip" << "/unvip";
+            } else if (prefix.startsWith('@')) {
                 QSet<QString> seen;
                 for (auto it = s->history.crbegin(); it != s->history.crend(); ++it) {
                     if (it->system) continue;
@@ -2365,7 +2375,7 @@ void Pane::refreshDecorations() {
         add(hub->cfg->T("Pinned message"), pin);
         QString pollHeading = hub->cfg->T(poll.value("ended").toBool() ? "Poll result" : "Poll");
         if (poll.value("last_observed").toBool()) pollHeading += " · " + hub->cfg->T("last observed");
-        add(pollHeading, poll, "Vote on Twitch");
+        add(pollHeading, poll);
         const auto browserPoll = source->browserPoll;
         const auto question = str(browserPoll["text"]);
         const auto key = source->key;

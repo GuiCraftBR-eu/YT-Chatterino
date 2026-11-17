@@ -2128,7 +2128,66 @@ void Hub::youtubeChatId(Source *s, std::function<void(QString, QString)> done) {
 }
 
 void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
+    if (!s) { done({}, "No channel selected."); return; }
     if (s && s->isVod) { done({}, "VOD replay is read-only."); return; }
+    const QString trimmed = text.trimmed();
+    static const QRegularExpression whitespace("\\s+");
+    const auto parts = trimmed.startsWith('/') ? trimmed.split(whitespace, Qt::SkipEmptyParts) : QStringList();
+    const QString command = parts.value(0).toLower();
+    static const QSet<QString> commands{"/ban", "/timeout", "/unban", "/mod", "/unmod", "/vip", "/unvip"};
+    if (commands.contains(command)) {
+        const bool role = command == "/mod" || command == "/unmod" || command == "/vip" || command == "/unvip";
+        if ((!role && command == "/unban" && s->platform == "youtube") ||
+            (role && (s->platform == "kick" || (s->platform == "youtube" && (command == "/vip" || command == "/unvip"))))) {
+            done({}, "This command is not supported on this platform."); return;
+        }
+        if (parts.size() < 2 || parts.size() > (command == "/timeout" ? 3 : 2)) {
+            done({}, command == "/timeout" ? "Use /timeout username [seconds]." : "Use the command followed by a username."); return;
+        }
+        QString target = parts[1]; while (target.startsWith('@')) target.remove(0, 1);
+        Message match; QSet<QString> ids;
+        for (const auto &message : s->history) {
+            if (!message.uid.isEmpty() && (message.login.compare(target, Qt::CaseInsensitive) == 0 ||
+                                           message.name.compare(target, Qt::CaseInsensitive) == 0)) {
+                ids.insert(message.uid); match = message;
+            }
+        }
+        if (target.isEmpty() || ids.size() > 1) {
+            done({}, "User not found or ambiguous in recent chat. Open the user's card instead."); return;
+        }
+        bool valid = true; int duration = 600;
+        if (command == "/timeout" && parts.size() == 3) duration = parts[2].toInt(&valid);
+        if (!valid || duration < 1 || duration > 1209600) {
+            done({}, "Timeout must be between 1 and 1209600 seconds."); return;
+        }
+        if (command == "/timeout" && s->platform == "kick" && duration > 604800) {
+            done({}, "Kick timeouts cannot exceed 7 days."); return;
+        }
+        QPointer<Source> safe(s);
+        auto run = [this, safe, command, role, duration, done](Message resolved) {
+            if (!safe) { done({}, "Channel closed."); return; }
+            if (role) setUserRole(safe, resolved, command.contains("vip") ? "vip" : "moderator",
+                                  command == "/mod" || command == "/vip", done);
+            else moderate(safe, resolved, command.mid(1), command == "/timeout" ? duration : 0, done);
+        };
+        if (ids.size() == 1) { run(match); return; }
+        static const QRegularExpression twitchName("^[A-Za-z0-9_]{1,25}$");
+        if (s->platform != "twitch" || !twitchName.match(target).hasMatch()) {
+            done({}, "User not found or ambiguous in recent chat. Open the user's card instead."); return;
+        }
+        accounts->helix("users", [target, run, done](QJsonObject result, QString error) {
+            if (!error.isEmpty()) { done({}, error); return; }
+            const auto users = result["data"].toArray();
+            if (users.size() != 1 || str(users.first().toObject()["login"]).compare(target, Qt::CaseInsensitive) != 0 ||
+                str(users.first().toObject()["id"]).isEmpty()) {
+                done({}, "Twitch user not found."); return;
+            }
+            const auto user = users.first().toObject();
+            Message resolved; resolved.uid = str(user["id"]); resolved.login = str(user["login"]);
+            resolved.name = str(user["display_name"]); run(resolved);
+        }, "GET", {{"login", target.toLower()}});
+        return;
+    }
     if (!reply.id.isEmpty()) {
         bool deleted = reply.deleted;
         for (const auto &m : s->history) {
@@ -2482,6 +2541,66 @@ void Hub::twitchChatSettings(Source *source, QJsonObject changes, JsonCallback d
             }, changes.isEmpty() ? "GET" : "PATCH", params, changes);
         });
     });
+}
+
+void Hub::setUserRole(Source *s, const Message &m, QString role, bool add, JsonCallback done) {
+    if (!s || s->isVod || !canEditChannel(s) || m.uid.isEmpty() || m.uid == s->room()) {
+        done({}, "Role changes require the channel owner's account and a valid user."); return;
+    }
+    if (s->platform == "twitch" && (role == "moderator" || role == "vip")) {
+        if (s->room().isEmpty() || s->room() != str(accounts->twitch["user_id"])) {
+            done({}, "Channel owner information is still loading or does not match your account."); return;
+        }
+        const QString scope = role == "vip" ? "channel:manage:vips" : "channel:manage:moderators";
+        const QString endpoint = role == "vip" ? "channels/vips" : "moderation/moderators";
+        QPointer<Source> safe(s);
+        accounts->requireTwitch({scope}, [this, safe, m, endpoint, add, done](QString, QString error) {
+            if (!safe) { done({}, "Channel closed."); return; }
+            if (!error.isEmpty()) { done({}, error); return; }
+            if (!canEditChannel(safe) || safe->room() != str(accounts->twitch["user_id"])) {
+                done({}, "The channel owner account changed."); return;
+            }
+            accounts->helix(endpoint, done, add ? "POST" : "DELETE",
+                            {{"broadcaster_id", safe->room()}, {"user_id", m.uid}});
+        });
+        return;
+    }
+    if (s->platform == "youtube" && role == "moderator") {
+        QPointer<Source> safe(s);
+        youtubeChatId(s, [this, safe, m, add, done](QString chat, QString error) {
+            if (!safe) { done({}, "Channel closed."); return; }
+            if (!error.isEmpty()) { done({}, error); return; }
+            if (!canEditChannel(safe)) { done({}, "The channel owner account changed."); return; }
+            if (add) {
+                accounts->youtube("liveChat/moderators", done, "POST", {{"part", "snippet"}},
+                    {{"snippet", QJsonObject{{"liveChatId", chat}, {"moderatorDetails", QJsonObject{{"channelId", m.uid}}}}}}, 200);
+            } else youtubeRemoveModeratorPage(safe, chat, m.uid, {}, 0, done);
+        });
+        return;
+    }
+    done({}, "This platform does not expose that role action in its public API.");
+}
+
+void Hub::youtubeRemoveModeratorPage(QPointer<Source> source, QString chat, QString user, QString cursor,
+                                    int page, JsonCallback done) {
+    if (!source || !canEditChannel(source)) { done({}, "The channel owner account changed."); return; }
+    if (page >= 20) { done({}, "Moderator list is too long to search safely."); return; }
+    QMap<QString, QString> params{{"part", "snippet"}, {"liveChatId", chat}, {"maxResults", "50"}};
+    if (!cursor.isEmpty()) params["pageToken"] = cursor;
+    accounts->youtube("liveChat/moderators", [this, source, chat, user, cursor, page, done](QJsonObject data, QString error) {
+        if (!source || !canEditChannel(source)) { done({}, "The channel owner account changed."); return; }
+        if (!error.isEmpty()) { done({}, error); return; }
+        for (const auto &item : data["items"].toArray()) {
+            const auto obj = item.toObject();
+            if (str(at(obj, {"snippet", "moderatorDetails", "channelId"})) == user && !str(obj["id"]).isEmpty()) {
+                accounts->youtube("liveChat/moderators", done, "DELETE", {{"id", str(obj["id"])}}, {}, 200); return;
+            }
+        }
+        const QString next = str(data["nextPageToken"]);
+        if (next.isEmpty()) { done({}, "This user was not found in the moderator list."); return; }
+        if (next == cursor) { done({}, "Moderator list pagination failed."); return; }
+        youtubeRemoveModeratorPage(source, chat, user, next, page + 1, done);
+    }, "GET", params, {}, 50);
 }
 
 void Hub::moderate(Source *s, const Message &m, QString action, int duration, JsonCallback done) {

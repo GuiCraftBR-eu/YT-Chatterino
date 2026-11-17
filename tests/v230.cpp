@@ -36,6 +36,18 @@ void NativeTests::kickRealtimeEventsAndAlerts() {
     QCOMPARE(source->history.last().special, QString("alert"));
     source->kickSocketMessage(kickEnvelope("App\\Events\\MessageDeletedEvent", {{"message", QJsonObject{{"id", "live-1"}}}}));
     QVERIFY(source->history.first().deleted);
+    const QJsonObject poll{{"title", "Pick one"}, {"remaining", 20},
+        {"options", QJsonArray{QJsonObject{{"id", 0}, {"label", "Yes"}, {"votes", 3}},
+                               QJsonObject{{"id", 1}, {"label", "No"}, {"votes", 1}}}}};
+    source->kickSocketMessage(kickEnvelope("App\\Events\\PollUpdateEvent", {{"poll", poll}}));
+    QCOMPARE(str(source->activePoll["text"]), QString("Pick one"));
+    QCOMPARE(str(source->activePoll["options"]), QString("Yes (3) · No (1)"));
+    QCOMPARE(source->activePoll["choices"].toArray().size(), 2);
+    QVERIFY(!source->activePoll["ended"].toBool());
+    source->kickSocketMessage(kickEnvelope("App\\Events\\PollDeleteEvent", {}));
+    QVERIFY(source->activePoll["ended"].toBool());
+    QVERIFY(source->activePoll["last_observed"].toBool());
+    QVERIFY(source->pollResultTimer.isActive());
 }
 
 void NativeTests::kickEmoteCatalogCompletesAndDisplays() {

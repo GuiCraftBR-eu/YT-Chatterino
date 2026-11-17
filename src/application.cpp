@@ -2518,13 +2518,46 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
         mods->addWidget(b);
     }
     layout->addWidget(moderationRow);
+    auto *roleRow = new QWidget(d);
+    roleRow->setObjectName("user-card-roles");
+    auto *roleStatus = label(cfg, "", true);
+    roleStatus->setObjectName("user-card-role-status");
+    roleStatus->setWordWrap(true);
+    auto *roleButtons = new QHBoxLayout(roleRow);
+    roleButtons->setContentsMargins(0, 0, 0, 0);
+    for (const auto &entry : QList<QPair<QString, QString>>{{"Add moderator", "mod"}, {"Remove moderator", "unmod"},
+                                                          {"Add VIP", "vip"}, {"Remove VIP", "unvip"}}) {
+        if (source->platform != "twitch" && (entry.second == "vip" || entry.second == "unvip")) continue;
+        auto *control = new QPushButton(cfg.T(entry.first), d);
+        connect(control, &QPushButton::clicked, d, [this, s = QPointer<Source>(source), message, entry,
+                                                    safeRow = QPointer<QWidget>(roleRow),
+                                                    safeStatus = QPointer<QLabel>(roleStatus)] {
+            if (!s) return;
+            const bool vip = entry.second.contains("vip"), add = !entry.second.startsWith("un");
+            if (safeRow) safeRow->setEnabled(false);
+            if (safeStatus) safeStatus->setText(cfg.T("Updating role…"));
+            QPointer<MainWindow> safe(this);
+            hub.setUserRole(s, message, vip ? "vip" : "moderator", add, [safe, safeRow, safeStatus](QJsonObject, QString error) {
+                if (!safe) return;
+                if (safeRow) safeRow->setEnabled(true);
+                if (safeStatus) safeStatus->setText(safe->cfg.T(error.isEmpty() ? "Role updated." : error));
+            });
+        });
+        control->setObjectName("role-" + entry.second);
+        control->setEnabled(!message.uid.isEmpty() && message.uid != source->room());
+        roleButtons->addWidget(control);
+    }
+    layout->addWidget(roleRow);
+    layout->addWidget(roleStatus);
     QPointer<Source> permissionSource(source);
-    auto updateModeration = [this, permissionSource, moderationRow] {
+    auto updateModeration = [this, permissionSource, moderationRow, roleRow] {
         moderationRow->setVisible(permissionSource && hub.hasModerationRole(permissionSource) &&
             (permissionSource->platform != "kick" || accounts.kickAllows({"moderation:ban"})));
+        roleRow->setVisible(permissionSource && permissionSource->platform != "kick" && hub.canEditChannel(permissionSource));
     };
     updateModeration();
     connect(source, &Source::permissionsChanged, d, updateModeration);
+    connect(source, &Source::headerChanged, d, updateModeration);
     connect(source, &Source::message, d, [updateModeration](Message) { updateModeration(); });
     connect(&accounts, &Accounts::changed, d, updateModeration);
     auto *count = label(cfg, "Recent messages retained in this channel", true);
