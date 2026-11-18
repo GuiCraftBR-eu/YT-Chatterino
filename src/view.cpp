@@ -421,6 +421,29 @@ QJsonArray moderationActions(const Config &cfg) {
                       QJsonObject{{"icon", "10m"}, {"command", "/timeout {user.name} 600"}}};
 }
 
+const Span *ChatView::emoteFor(Source *source, const QString &code) const {
+    if (!source) return nullptr;
+    const auto own = source->emotes.constFind(code);
+    if (own != source->emotes.cend()) return &own.value();
+    for (auto peer : emoteSources) {
+        if (!peer || peer == source) continue;
+        const auto found = peer->channelEmotes.constFind(code);
+        if (found != peer->channelEmotes.cend()) return &found.value();
+    }
+    return nullptr;
+}
+
+QHash<QString, Span> ChatView::emoteCatalog(Source *source) const {
+    QHash<QString, Span> result = source ? source->emotes : QHash<QString, Span>();
+    if (!source) return result;
+    for (auto peer : emoteSources) {
+        if (!peer || peer == source) continue;
+        for (auto it = peer->channelEmotes.cbegin(); it != peer->channelEmotes.cend(); ++it)
+            if (!result.contains(it.key())) result.insert(it.key(), it.value());
+    }
+    return result;
+}
+
 QSharedPointer<QTextDocument> ChatView::document(int row) {
     if (row < 0 || row >= messages.size()) {
         return {};
@@ -621,10 +644,10 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
     QString body = visibleMessageText(m, *hub->cfg);
     QVector<Span> spans = m.deleted && !revealDeleted ? QVector<Span>() : m.emotes;
     if (!hub->cfg->data["show_explicit_7tv"].toBool(true))
-        spans.erase(std::remove_if(spans.begin(), spans.end(), [source](const Span &span) {
+        spans.erase(std::remove_if(spans.begin(), spans.end(), [this, source](const Span &span) {
             const auto host = QUrl(span.urls.value(0)).host().toLower();
-            return span.explicit7tv || (source && (host.endsWith(".7tv.app") || host.endsWith(".7tv.io")) &&
-                                       source->emotes.value(span.code).explicit7tv);
+            const auto known = emoteFor(source, span.code);
+            return span.explicit7tv || (known && (host.endsWith(".7tv.app") || host.endsWith(".7tv.io")) && known->explicit7tv);
         }), spans.end());
     if (isAlert && bodyOffset > 0 && (!m.deleted || revealDeleted)) {
         body.remove(0, bodyOffset);
@@ -696,9 +719,9 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         auto matches = QRegularExpression("\\S+").globalMatch(body);
         while (matches.hasNext()) {
             auto match = matches.next();
-            auto it = source->emotes.constFind(match.captured());
-            if (it != source->emotes.cend() && (!it->explicit7tv || hub->cfg->data["show_explicit_7tv"].toBool(true))) {
-                auto span = it.value();
+            const auto found = emoteFor(source, match.captured());
+            if (found && (!found->explicit7tv || hub->cfg->data["show_explicit_7tv"].toBool(true))) {
+                auto span = *found;
                 span.start = match.capturedStart();
                 span.end = match.capturedEnd();
                 span.code = match.captured();
@@ -2051,7 +2074,8 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
                     }
                 }
             } else if (!prefix.isEmpty()) {
-                for (auto it = s->emotes.cbegin(); it != s->emotes.cend(); ++it) {
+                const auto available = view->emoteCatalog(s);
+                for (auto it = available.cbegin(); it != available.cend(); ++it) {
                     if ((!it->explicit7tv || hub->cfg->data["show_explicit_7tv"].toBool(true)) && it.key().startsWith(prefix, Qt::CaseInsensitive)) {
                         c << it.key();
                         input->candidateVisuals[it.key()] = {it->urls, false};
@@ -2224,7 +2248,7 @@ void Pane::setSources(QList<Source *> list) {
             refreshChatModes();
             refreshModeration();
             reload();
-            if (!s->pinned.isEmpty() || !s->browserPinned.isEmpty()) refreshDecorations();
+            if (sources.size() > 1 || !s->pinned.isEmpty() || !s->browserPinned.isEmpty()) refreshDecorations();
         });
         connect(s, &Source::headerChanged, this, [this, s] {
             refresh();
@@ -2253,6 +2277,7 @@ void Pane::setSources(QList<Source *> list) {
     filter = hub->cfg->data["chat_filters"].toObject()[key()].toObject();
     view->messageCap = hub->cfg->cap(key());
     view->mixed = sources.size() > 1;
+    view->emoteSources = sources;
     for (auto s : sources) {
         if (s) {
             s->viewCaps[reinterpret_cast<quintptr>(this)] = view->messageCap;
@@ -2379,17 +2404,17 @@ void Pane::refreshDecorations() {
             if (withEmotes) {
                 spans = Message::fromJson(value).emotes;
                 if (!hub->cfg->data["show_explicit_7tv"].toBool(true))
-                    spans.erase(std::remove_if(spans.begin(), spans.end(), [source](const Span &span) {
+                    spans.erase(std::remove_if(spans.begin(), spans.end(), [this, source](const Span &span) {
                         const auto host = QUrl(span.urls.value(0)).host().toLower();
-                        return span.explicit7tv || ((host.endsWith(".7tv.app") || host.endsWith(".7tv.io")) &&
-                                                    source->emotes.value(span.code).explicit7tv);
+                        const auto known = view->emoteFor(source, span.code);
+                        return span.explicit7tv || (known && (host.endsWith(".7tv.app") || host.endsWith(".7tv.io")) && known->explicit7tv);
                     }), spans.end());
                 auto words = QRegularExpression("\\S+").globalMatch(body);
                 while (words.hasNext()) {
                     const auto word = words.next();
-                    const auto it = source->emotes.constFind(word.captured());
-                    if (it == source->emotes.cend() || (it->explicit7tv && !hub->cfg->data["show_explicit_7tv"].toBool(true))) continue;
-                    auto span = it.value(); span.start = word.capturedStart(); span.end = word.capturedEnd(); span.code = word.captured();
+                    const auto found = view->emoteFor(source, word.captured());
+                    if (!found || (found->explicit7tv && !hub->cfg->data["show_explicit_7tv"].toBool(true))) continue;
+                    auto span = *found; span.start = word.capturedStart(); span.end = word.capturedEnd(); span.code = word.captured();
                     spans << span;
                 }
                 std::stable_sort(spans.begin(), spans.end(), [](const Span &a, const Span &b) {
@@ -3097,6 +3122,10 @@ void Pane::openEmotes() {
         QHash<QString, Span> catalog = tabs->currentIndex() == 0   ? unlocked->items
                                        : tabs->currentIndex() == 1 ? source->channelEmotes
                                                                    : hub->globals;
+        if (tabs->currentIndex() == 1)
+            for (auto peer : sources) if (peer && peer != source)
+                for (auto it = peer->channelEmotes.cbegin(); it != peer->channelEmotes.cend(); ++it)
+                    if (!catalog.contains(it.key())) catalog.insert(it.key(), it.value());
         if (tabs->currentIndex() == 2 && source->platform == "kick")
             for (auto i = source->kickGlobalEmotes.cbegin(); i != source->kickGlobalEmotes.cend(); ++i) catalog[i.key()] = i.value();
         grid->clear();
@@ -3191,6 +3220,7 @@ void Pane::openEmotes() {
         }
     });
     connect(s, &Source::changed, dialog, populate);
+    for (auto peer : sources) if (peer && peer != s) connect(peer, &Source::changed, dialog, populate);
     connect(hub->cfg, &Config::appearanceChanged, dialog, populate);
     connect(s, &Source::emoteRefreshRequested, dialog, load);
     connect(authorize, &QPushButton::clicked, dialog, [=, this] {

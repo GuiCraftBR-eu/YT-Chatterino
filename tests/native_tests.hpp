@@ -11,6 +11,9 @@ class NativeTests : public QObject {
     QStringList unexpectedRequests;
     void authenticate();
   private slots:
+    void emotesPreloadInBackground();
+    void mixedChatSharesChannelEmotes();
+    void animatedSevenTvShowsStillWhileLoading();
     void sevenTvFallbackAndExplicitEmotes();
     void similarChannelVariantsAndConcurrency();
     void pinnedEmotesAndHypeTrain();

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.10
+
+- Preload available channel and global emotes in the background with bounded concurrency.
+- Improve 7TV animated emote loading with a still preview and more reliable connections.
+- Share channel emotes within mixed chats while preserving each source's own emote priority.
+
 ## 2.5.9
 
 - Find more live channel name variants across platforms while limiting concurrent lookups.

@@ -179,6 +179,7 @@ void Source::kickConnect() {
             if (months > 0 && !url.isEmpty()) self->kickSubscriberBadges[months] = url;
         }
         self->header["channel_id"] = user["id"];
+        self->loadEmotes(str(user["id"]));
         self->header["channel"] = user["username"];
         self->header["avatar"] = user["profile_pic"];
         self->header["live"] = !stream.isEmpty();
@@ -352,6 +353,8 @@ void Source::kickLoadEmotes(bool notify) {
                 if(!self->channelEmotes.contains(it.key())) self->emotes[it.key()]=it.value();
         }
         self->kickGlobalEmotes = global;
+        self->hub->preloadEmotes(self, global, false);
+        self->hub->preloadEmotes(self, channel);
         for (auto i = global.cbegin(); i != global.cend(); ++i)
             if (!self->channelEmotes.contains(i.key())) self->emotes[i.key()] = i.value();
         for (auto i = channel.cbegin(); i != channel.cend(); ++i) {

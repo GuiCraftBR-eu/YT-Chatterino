@@ -225,14 +225,20 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
                                   {"url", safeImage(badge.urls)}});
     }
     QVector<Span> images = m.emotes;
+    if (!hub->cfg->data["show_explicit_7tv"].toBool(true))
+        images.erase(std::remove_if(images.begin(), images.end(), [this, source](const Span &span) {
+            const auto host = QUrl(span.urls.value(0)).host().toLower();
+            const auto known = pane && pane->view ? pane->view->emoteFor(source, span.code) : nullptr;
+            return span.explicit7tv || (known && (host.endsWith(".7tv.app") || host.endsWith(".7tv.io")) && known->explicit7tv);
+        }), images.end());
     const QString text = visibleMessageText(m, *hub->cfg);
     if (source && !m.deleted) {
         auto matches = QRegularExpression("\\S+").globalMatch(text);
         while (matches.hasNext()) {
             const auto match = matches.next();
-            auto i = source->emotes.constFind(match.captured());
-            if (i != source->emotes.cend()) {
-                auto span = i.value(); span.start = match.capturedStart(); span.end = match.capturedEnd();
+            const auto found = pane && pane->view ? pane->view->emoteFor(source, match.captured()) : nullptr;
+            if (found && (!found->explicit7tv || hub->cfg->data["show_explicit_7tv"].toBool(true))) {
+                auto span = *found; span.start = match.capturedStart(); span.end = match.capturedEnd();
                 images << span;
             }
         }
@@ -487,9 +493,12 @@ void PhoneServer::handle(QTcpSocket *socket, QByteArray method, QUrl target,
         auto *source = allowedSource(QUrlQuery(target).queryItemValue("source", QUrl::FullyDecoded));
         if (!source) { respond(socket, 400, "application/json", "{\"error\":\"Invalid channel.\"}"); return; }
         QJsonArray emotes;
-        QStringList names = source->emotes.keys(); names.sort(Qt::CaseInsensitive);
+        const auto catalog = pane && pane->view ? pane->view->emoteCatalog(source) : source->emotes;
+        QStringList names = catalog.keys(); names.sort(Qt::CaseInsensitive);
         for (const auto &name : names) {
-            const auto url = safeImage(source->emotes.value(name).urls);
+            const auto emote = catalog.value(name);
+            if (emote.explicit7tv && !hub->cfg->data["show_explicit_7tv"].toBool(true)) continue;
+            const auto url = safeImage(emote.urls);
             if (!url.isEmpty()) emotes.append(QJsonObject{{"name", name}, {"url", url}});
             if (emotes.size() >= 500) break;
         }
