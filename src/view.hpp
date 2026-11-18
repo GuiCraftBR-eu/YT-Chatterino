@@ -10,6 +10,9 @@ class ChatView : public QAbstractScrollArea {
   public:
     ChatView(Hub *hub, QWidget *parent = nullptr);
     Hub *hub;
+    QList<QPointer<Source>> emoteSources;
+    const Span *emoteFor(Source *source, const QString &code) const;
+    QHash<QString, Span> emoteCatalog(Source *source) const;
     QVector<Message> messages;
     QVector<int> heights, offsets;
     QVector<QColor> highlightColors;

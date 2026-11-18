@@ -33,6 +33,7 @@ class Images : public QObject {
         qint64 use = 0;
         qint64 visibleAt = 0;
         qint64 cost = 0;
+        bool preview = false;
     };
 
     Network *net;
@@ -40,9 +41,16 @@ class Images : public QObject {
     QSet<QString> pending;
     QHash<QString, qint64> failures;
     qint64 clock = 0, total = 0;
-    QTimer visibilityTimer;
+    QTimer visibilityTimer, preloadTimer;
+    struct PreloadItem { QStringList urls; std::function<bool()> active; bool priority = false; int attempt = 0; };
+    QQueue<PreloadItem> preloadQueue;
+    QSet<QString> preloadKeys;
+    int preloadActive = 0;
+    void preload(const QStringList &urls, std::function<bool()> active = {}, bool priority = false, int attempt = 0);
+    void pumpPreloads();
     QImage get(const QStringList &urls, bool animate = true);
     void request(const QStringList &urls, int alternative = 0);
+    void requestStillPreview(const QString &key, const QUrl &url, int attempt = 0);
     void trim();
     void retryExpired();
     static bool allowed(const QUrl &url);

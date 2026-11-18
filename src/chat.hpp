@@ -203,6 +203,7 @@ class Hub : public QObject {
     std::function<void(Source *, const QString &, const QString &, const QString &, JsonCallback)> kickRoleInBrowser;
     qint64 sequence = 0;
     QHash<QString, Span> globals;
+    void preloadEmotes(Source *source, const QHash<QString, Span> &emotes, bool priority = true);
     QHash<QString, Badge> vodGlobalBadges;
     QHash<QString, QHash<QString, Badge>> vodChannelBadges;
     QHash<QString, QJsonObject> vodBadgeProfiles;

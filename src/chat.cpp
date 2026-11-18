@@ -1041,6 +1041,7 @@ void Source::loadEmotes(QString channelId) {
         return;
     }
     hub->globalEmotes();
+    hub->preloadEmotes(this, hub->globals, false);
     for (auto i = hub->globals.begin(); i != hub->globals.end(); ++i) {
         if (!emotes.contains(i.key())) {
             emotes[i.key()] = i.value();
@@ -1060,7 +1061,9 @@ void Source::loadEmotes(QString channelId) {
         auto done = [self, epoch, cacheKey, provider](QJsonObject d, QString error) {
             if (!self || self->closed || self->emoteRefreshEpoch != epoch) return;
             self->emotePending.remove(cacheKey);
-            const bool missing = error.contains("404") && provider != "twitch";
+            const bool unsupported = provider == "7tv" && self->platform == "youtube" &&
+                                     error.startsWith("HTTP 400") && error.contains("invalid platform", Qt::CaseInsensitive);
+            const bool missing = (error.startsWith("HTTP 404") || unsupported) && provider != "twitch";
             bool valid = missing;
             if (error.isEmpty()) {
                 if (provider == "bttv") valid = d["channelEmotes"].isArray() || d["sharedEmotes"].isArray();
@@ -1141,13 +1144,16 @@ void Source::reloadChannelEmotes() {
     hub->net->sevenTv("users/"+platform+'/'+channelId, false, [self,valid,channelId](QJsonObject d,QString error) {
         if(!valid())return;
         const auto values=at(d,{"emote_set","emotes"});
-        if ((!error.isEmpty() && !error.contains("404")) || (error.isEmpty() && !values.isArray() && !d["emote_set"].isNull())) {
+        const bool unsupported = self->platform == "youtube" && error.startsWith("HTTP 400") &&
+                                 error.contains("invalid platform", Qt::CaseInsensitive);
+        if ((!error.isEmpty() && !error.startsWith("HTTP 404") && !unsupported) || (error.isEmpty() && !values.isArray() && !d["emote_set"].isNull())) {
             self->emoteRetryUntil[channelId+":7tv"]=QDateTime::currentSecsSinceEpoch()+30; self->emoteRetry.start();
             self->status("Could not reload 7TV channel emotes."); return;
         }
         self->emoteLoaded[channelId+":7tv"]=QDateTime::currentSecsSinceEpoch();
         self->clearChannelEmotes("7tv"); self->hub->provider(self,values.toArray(),"7tv","channel");
-        self->status(values.toArray().isEmpty() ? "This channel has no 7TV emotes." : "7TV channel emotes reloaded.");
+        self->status(unsupported ? "7TV does not provide a channel set for this platform."
+                                 : values.toArray().isEmpty() ? "This channel has no 7TV emotes." : "7TV channel emotes reloaded.");
     });
     if(platform=="twitch") hub->accounts->helix("chat/emotes", [self,valid,channelId](QJsonObject d,QString error) {
         if(!valid())return;
@@ -2088,6 +2094,20 @@ void Hub::globalEmotes() {
     }
 }
 
+void Hub::preloadEmotes(Source *source, const QHash<QString, Span> &emotes, bool priority) {
+    if (testMode) return;
+    QPointer<Hub> safeHub(this); QPointer<Source> safeSource(source);
+    const bool global = !source;
+    for (auto it = emotes.cbegin(); it != emotes.cend(); ++it) {
+        if (it->explicit7tv && !cfg->data["show_explicit_7tv"].toBool(true)) continue;
+        const bool explicit7tv = it->explicit7tv;
+        images->preload(it->urls, [safeHub, safeSource, global, explicit7tv] {
+            return safeHub && (!explicit7tv || safeHub->cfg->data["show_explicit_7tv"].toBool(true)) &&
+                   (global ? !safeHub->sources.isEmpty() : safeSource && !safeSource->closed);
+        }, priority);
+    }
+}
+
 void Hub::provider(Source *s, const QJsonValue &data, QString provider, QString scope) {
     Q_UNUSED(scope)
     QHash<QString, Span> found;
@@ -2122,17 +2142,29 @@ void Hub::provider(Source *s, const QJsonValue &data, QString provider, QString 
             for (const auto &f : files) {
                 sorted << f.toObject();
             }
-            std::sort(sorted.begin(), sorted.end(),
-                      [](auto a, auto b) { return a["width"].toInt() > b["width"].toInt(); });
+            std::stable_sort(sorted.begin(), sorted.end(), [](const auto &a, const auto &b) {
+                const int da = qAbs(a["height"].toInt() - 64), db = qAbs(b["height"].toInt() - 64);
+                return da < db;
+            });
+            QString preview;
+            int previewHeight = INT_MAX;
             for (const auto &f : sorted) {
                 QString format = str(f["format"]).toUpper();
                 if (format == "WEBP" || format == "GIF" || format == "PNG") {
-                    e.urls << base + '/' + str(f["name"]);
+                    const auto name = str(f["name"]), still = str(f["static_name"]);
+                    if (!name.isEmpty()) e.urls << base + '/' + name;
+                    const int height = f["height"].toInt();
+                    if (format == "WEBP" && !still.isEmpty() && still != name && height > 0 && height < previewHeight) {
+                        preview = base + '/' + still;
+                        previewHeight = height;
+                    }
                 }
             }
+            if (!preview.isEmpty() && !e.urls.contains(preview)) e.urls << preview;
         }
         found[e.code] = e;
     }
+    preloadEmotes(s, found, s != nullptr);
     if (s) {
         for (auto i = found.begin(); i != found.end(); ++i) {
             s->channelEmotes[i.key()] = i.value();

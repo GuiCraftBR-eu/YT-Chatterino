@@ -793,6 +793,7 @@ QWidget *SettingsWindow::messagesPage() {
     connect(explicit7tv, &QCheckBox::toggled, w, [this](bool enabled) {
         main->cfg.data["show_explicit_7tv"] = enabled;
         main->cfg.save();
+        if (enabled) for (auto source : main->hub.sources) if (source) main->hub.preloadEmotes(source, source->emotes);
         emit main->cfg.appearanceChanged();
     });
     form->addRow(text(main->cfg, "Messages keep arriving. Scrolling resumes on leaving unless you scroll up.", true));

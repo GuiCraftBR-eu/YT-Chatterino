@@ -68,6 +68,13 @@ void NativeTests::kickChatPollingAndRetry() {
             return;
         }
         if (url.path() == "/emotes/example") { done("[]", {}); return; }
+        if (url.host() == "api.betterttv.net" && url.path() == "/3/cached/emotes/global") { done("[]", {}); return; }
+        if (url.host() == "api.betterttv.net" && url.path() == "/3/cached/users/kick/456") {
+            done(R"({"channelEmotes":[],"sharedEmotes":[]})", {}); return;
+        }
+        if (url.host() == "7tv.io" && url.path() == "/v3/emote-sets/global") { done(R"({"emotes":[]})", {}); return; }
+        if (url.host() == "7tv.io" && url.path() == "/v3/users/kick/456") { done(R"({"emote_set":null})", {}); return; }
+        if (url.path() == "/helix/chat/emotes/global") { done(R"({"data":[]})", {}); return; }
         if (url.path() == "/api/v2/channels/example/polls") { done({}, "HTTP 404: no active poll"); return; }
         if (url.path() == "/api/v2/channels/example/chatroom") {
             done(R"({"followers_mode":{"enabled":true,"min_duration":15},"subscribers_mode":{"enabled":false},"emotes_mode":{"enabled":false},"slow_mode":{"enabled":true,"message_interval":8}})", {});

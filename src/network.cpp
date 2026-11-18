@@ -32,6 +32,9 @@ void Network::bytes(QUrl url, BytesCallback done, QByteArray method, QByteArray 
     }
     QNetworkRequest request(url);
     request.setTransferTimeout(timeoutMs);
+    // Avoid sharing a stalled HTTP/2 connection between 7TV animations and still previews.
+    if (url.host().compare("cdn.7tv.app", Qt::CaseInsensitive) == 0)
+        request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
     request.setRawHeader("User-Agent", "YT-Chatterino/" APP_VERSION);
     request.setRawHeader("Accept-Language", "en-US,en;q=0.9");
     for (auto i = headers.begin(); i != headers.end(); ++i) {
@@ -57,6 +60,9 @@ void Network::bytes(QUrl url, BytesCallback done, QByteArray method, QByteArray 
             QString detail = str(o["message"]);
             if (detail.isEmpty()) {
                 detail = str(o["error_description"]);
+            }
+            if (detail.isEmpty() && o["error"].isString()) {
+                detail = str(o["error"]);
             }
             if (detail.isEmpty()) {
                 detail = reply->errorString();
@@ -104,7 +110,8 @@ void Network::sevenTv(const QString &path, bool global, JsonCallback done) {
              32 * 1024 * 1024, 35000);
     };
     request("7tv.io", [request, valid, complete](QJsonObject data, QString error) {
-        if ((error.isEmpty() && valid(data)) || error.startsWith("HTTP 404") || error.startsWith("HTTP 429")) {
+        if ((error.isEmpty() && valid(data)) || error.startsWith("HTTP 404") || error.startsWith("HTTP 429") ||
+            (error.startsWith("HTTP 400") && error.contains("invalid platform", Qt::CaseInsensitive))) {
             complete(data, error);
             return;
         }
@@ -134,6 +141,8 @@ Images::Images(Network *n, QObject *p) : QObject(p), net(n) {
         retryExpired();
     });
     visibilityTimer.start();
+    preloadTimer.setSingleShot(true);
+    connect(&preloadTimer, &QTimer::timeout, this, &Images::pumpPreloads);
 }
 
 void Images::retryExpired() {
@@ -174,6 +183,9 @@ QImage Images::get(const QStringList &urls, bool animate) {
     }
     auto e = cache.value(urls[0]);
     if (e) {
+        if (e->preview && animate && !pending.contains(urls[0])) request(urls);
+        e = cache.value(urls[0]);
+        if (!e) return {};
         e->use = ++clock;
         if (animate) {
             e->visibleAt = QDateTime::currentMSecsSinceEpoch();
@@ -201,11 +213,20 @@ void Images::request(const QStringList &urls, int alternative) {
     }
     const auto key = urls[0];
     if (alternative == 0) {
-        if (cache.contains(key) || pending.contains(key) ||
+        if ((cache.contains(key) && !cache.value(key)->preview) || pending.contains(key) ||
             failures.value(key) > QDateTime::currentSecsSinceEpoch()) {
             return;
         }
         pending.insert(key);
+        // 7TV animated images can be large or stall; show its small still frame
+        // while the animated request continues, then replace it if that succeeds.
+        for (const auto &candidate : urls) {
+            const QUrl preview(candidate);
+            if (preview.host().toLower() != "cdn.7tv.app" ||
+                !preview.path().endsWith("_static.webp") || !allowed(preview)) continue;
+            requestStillPreview(key, preview);
+            break;
+        }
     }
     const auto u = QUrl(urls[alternative]);
     if (!allowed(u)) {
@@ -252,6 +273,7 @@ void Images::request(const QStringList &urls, int alternative) {
                     e->use = ++clock;
                     QSize decoded = e->movie ? e->movie->frameRect().size() : e->image.size();
                     e->cost = bytes.size() + decoded.width() * decoded.height() * 4;
+                    if (auto old = cache.value(key)) total -= old->cost;
                     total += e->cost;
                     cache[key] = e;
                     pending.remove(key);
@@ -270,6 +292,93 @@ void Images::request(const QStringList &urls, int alternative) {
             emit ready(key);
         }
     });
+}
+
+void Images::requestStillPreview(const QString &key, const QUrl &url, int attempt) {
+    if (cache.contains(key)) return;
+    net->bytes(url, [this, key, url, attempt](QByteArray bytes, QString error) {
+        if (cache.contains(key)) return;
+        if (!error.isEmpty()) {
+            if (attempt < 2 && !error.startsWith("HTTP 429"))
+                QTimer::singleShot(1500, this, [this, key, url, attempt] { requestStillPreview(key, url, attempt + 1); });
+            return;
+        }
+        QBuffer buffer(&bytes); buffer.open(QIODevice::ReadOnly);
+        QImageReader reader(&buffer);
+        const QSize size = reader.size();
+        if (size.width() <= 0 || size.height() <= 0 || size.width() > 4096 || size.height() > 4096) return;
+        if (size.width() > 512 || size.height() > 512) {
+            QSize scaled = size; scaled.scale(256, 256, Qt::KeepAspectRatio); reader.setScaledSize(scaled);
+        }
+        const auto image = reader.read();
+        if (image.isNull() || cache.contains(key)) return;
+        auto entry = QSharedPointer<Entry>::create();
+        entry->image = image; entry->bytes = bytes; entry->use = ++clock; entry->preview = true;
+        entry->cost = bytes.size() + image.width() * image.height() * 4;
+        total += entry->cost; cache[key] = entry; failures.remove(key); trim(); emit ready(key);
+    }, "GET", {}, {}, 2 * 1024 * 1024, 10000);
+}
+
+void Images::preload(const QStringList &urls, std::function<bool()> active, bool priority, int attempt) {
+    if (urls.isEmpty() || !allowed(QUrl(urls.first()))) return;
+    const auto key = urls.first();
+    if (cache.contains(key) || pending.contains(key) || preloadKeys.contains(key)) return;
+    preloadKeys.insert(key);
+    PreloadItem item{urls, std::move(active), priority, attempt};
+    if (priority) preloadQueue.prepend(item); else preloadQueue.enqueue(item);
+    if (!preloadTimer.isActive()) preloadTimer.start(0);
+}
+
+void Images::pumpPreloads() {
+    while (preloadActive < 3 && !preloadQueue.isEmpty()) {
+        const auto item = preloadQueue.dequeue();
+        const auto key = item.urls.first();
+        if ((item.active && !item.active()) || cache.contains(key) || pending.contains(key)) {
+            preloadKeys.remove(key); continue;
+        }
+        QString selected = key;
+        bool still = false;
+        for (const auto &candidate : item.urls) {
+            const QUrl url(candidate);
+            if (url.host().compare("cdn.7tv.app", Qt::CaseInsensitive) == 0 &&
+                url.path().endsWith("_static.webp") && allowed(url)) {
+                selected = candidate; still = true; break;
+            }
+        }
+        if (!still && QUrl(key).host().compare("cdn.betterttv.net", Qt::CaseInsensitive) == 0 && item.urls.size() > 1 && allowed(QUrl(item.urls[1])))
+            selected = item.urls[1];
+        ++preloadActive;
+        net->bytes(QUrl(selected), [this, key, still, item](QByteArray bytes, QString error) {
+            --preloadActive; preloadKeys.remove(key);
+            if (!error.isEmpty() && !error.startsWith("HTTP 429") && item.attempt < 1 && (!item.active || item.active()))
+                QTimer::singleShot(2000, this, [this, item] { preload(item.urls, item.active, item.priority, item.attempt + 1); });
+            if (error.isEmpty() && (!item.active || item.active()) && !cache.contains(key) && !pending.contains(key)) {
+                QBuffer probe(&bytes); probe.open(QIODevice::ReadOnly);
+                QImageReader reader(&probe); const QSize size = reader.size();
+                if (size.width() > 0 && size.height() > 0 && size.width() <= 4096 && size.height() <= 4096) {
+                    auto entry = QSharedPointer<Entry>::create(); entry->bytes = bytes; entry->preview = still;
+                    if (!still && reader.supportsAnimation()) {
+                        entry->buffer = QSharedPointer<QBuffer>::create(); entry->buffer->setData(bytes);
+                        entry->buffer->open(QIODevice::ReadOnly); entry->movie = QSharedPointer<QMovie>::create(entry->buffer.data());
+                        QSize scaled = size; if (scaled.width() > 384 || scaled.height() > 180) scaled.scale(384, 180, Qt::KeepAspectRatio);
+                        entry->movie->setScaledSize(scaled); entry->movie->setCacheMode(QMovie::CacheNone);
+                        if (!entry->movie->jumpToFrame(0) || entry->movie->frameCount() > 1500) entry->movie.reset();
+                        else connect(entry->movie.data(), &QMovie::frameChanged, this, [this, key](int) { emit frame(key); });
+                    } else {
+                        if (size.width() > 512 || size.height() > 512) { QSize scaled = size; scaled.scale(256, 256, Qt::KeepAspectRatio); reader.setScaledSize(scaled); }
+                        entry->image = reader.read();
+                    }
+                    if (entry->movie || !entry->image.isNull()) {
+                        entry->use = ++clock;
+                        const QSize decoded = entry->movie ? entry->movie->frameRect().size() : entry->image.size();
+                        entry->cost = bytes.size() + decoded.width() * decoded.height() * 4;
+                        total += entry->cost; cache[key] = entry; failures.remove(key); trim(); emit ready(key);
+                    }
+                }
+            }
+            if (!preloadTimer.isActive()) preloadTimer.start(25);
+        }, "GET", {}, {}, 8 * 1024 * 1024, 15000);
+    }
 }
 
 void Images::trim() {
