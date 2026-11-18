@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(YTChatterinoObs VERSION 2.5.8 LANGUAGES CXX)
+project(YTChatterinoObs VERSION 2.5.9 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets)

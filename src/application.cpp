@@ -1019,9 +1019,25 @@ void MainWindow::suggestSimilarLive(Source *source, Pane *pane, bool allowTest) 
     name = name.toLower(); name.remove(QRegularExpression("[^a-z0-9_-]"));
     if (name.size() < 3 || name.size() > 21) return;
     QString base = name;
-    if (base.endsWith("live") && base.size() > 7) base.chop(4);
-    QStringList candidates{name, base, base + "live"}; candidates.removeDuplicates();
-    struct Search { int remaining = 0; QJsonArray found; };
+    static const QStringList prefixes{"livesdo_", "livedo_", "livesde_", "livede_", "lives_", "live_",
+                                      "livesdo", "livedo", "livesde", "livede"};
+    for (const auto &prefix : prefixes) {
+        if (base.startsWith(prefix) && base.size() >= prefix.size() + 3) { base.remove(0, prefix.size()); break; }
+    }
+    for (const auto &suffix : QStringList{"_lives", "_live", "lives", "live"}) {
+        if (base.endsWith(suffix) && base.size() >= suffix.size() + 3) { base.chop(suffix.size()); break; }
+    }
+    while (base.endsWith('_') && base.size() > 3) base.chop(1);
+    QStringList candidates{name, base, base + "live", base + "lives", base + "_live", base + "_lives",
+                           "live_" + base, "lives_" + base, "livedo_" + base, "livesdo_" + base,
+                           "livede_" + base, "livesde_" + base, "live" + base, "lives" + base,
+                           "livedo" + base, "livesdo" + base};
+    candidates.removeDuplicates();
+    struct Search {
+        int remaining = 0, next = 0, active = 0;
+        QList<QPair<QString, QString>> requests;
+        QJsonArray found;
+    };
     auto state = QSharedPointer<Search>::create();
     QPointer<MainWindow> self(this); QPointer<Pane> safePane(pane); QPointer<Source> safeSource(source);
     auto finish = [self, safePane, safeSource, state](QString platform, QString name, QJsonArray streams) {
@@ -1068,35 +1084,55 @@ void MainWindow::suggestSimilarLive(Source *source, Pane *pane, bool allowTest) 
         });
         layout->addWidget(buttons); dialog->resize(480, 260); dialog->show();
     };
-    state->remaining = candidates.size() * 2;
     for (const auto &candidate : candidates) {
-        if (source->platform != "twitch") {
+        if (candidate.size() > 30) continue;
+        for (const auto &platform : QStringList{"twitch", "kick", "youtube"})
+            if (source->platform != platform) state->requests.append({platform, candidate});
+    }
+    state->remaining = state->requests.size();
+    if (!state->remaining) return;
+    auto pump = std::make_shared<std::function<void()>>();
+    std::weak_ptr<std::function<void()>> weakPump = pump;
+    *pump = [this, state, finish, weakPump, self, safeSource, safePane] {
+      if (!self || !safeSource || !safePane) return;
+      auto next = weakPump.lock();
+      if (!next) return;
+      while (state->active < 6 && state->next < state->requests.size()) {
+        const auto request = state->requests[state->next++];
+        const QString platform = request.first, candidate = request.second;
+        ++state->active;
+        auto completed = [state, finish, next, platform, candidate](QJsonArray streams) {
+            --state->active;
+            finish(platform, candidate, streams);
+            (*next)();
+        };
+        if (platform == "twitch") {
             const QJsonObject body{{"query", "query($login:String!){user(login:$login){login displayName stream{id title}}}"},
                                    {"variables", QJsonObject{{"login", candidate}}}};
-            net.json(QUrl("https://gql.twitch.tv/gql"), [finish, candidate](QJsonObject data, QString error) {
+            net.json(QUrl("https://gql.twitch.tv/gql"), [completed](QJsonObject data, QString error) {
                 QJsonArray result;
                 const auto user = at(data, {"data", "user"}).toObject();
                 const auto stream = user["stream"].toObject();
                 const auto login = twitchLogin("@" + str(user["login"]));
                 if (error.isEmpty() && !stream.isEmpty() && !login.isEmpty())
                     result.append(QJsonObject{{"id", login}, {"title", stream["title"]}});
-                finish("twitch", candidate, result);
+                completed(result);
             }, "POST", body, {{"Client-ID", "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"}, {"Origin", "https://www.twitch.tv"}});
-        }
-        if (source->platform != "kick") {
-            net.json(QUrl("https://kick.com/api/v2/channels/" + candidate), [finish, candidate](QJsonObject data, QString error) {
+        } else if (platform == "kick") {
+            net.json(QUrl("https://kick.com/api/v2/channels/" + candidate), [completed, candidate](QJsonObject data, QString error) {
                 QJsonArray result; const auto live = data["livestream"].toObject();
                 if (error.isEmpty() && !live.isEmpty() && !kickLogin("kick:" + candidate).isEmpty())
                     result.append(QJsonObject{{"id", candidate}, {"title", live["session_title"]}});
-                finish("kick", candidate, result);
+                completed(result);
+            });
+        } else {
+            hub.savedStreams({{"channel_id", "@" + candidate}}, [completed](QJsonObject data, QString error) {
+                completed(error.isEmpty() ? data["streams"].toArray() : QJsonArray());
             });
         }
-        if (source->platform != "youtube") {
-            hub.savedStreams({{"channel_id", "@" + candidate}}, [finish, candidate](QJsonObject data, QString error) {
-                finish("youtube", candidate, error.isEmpty() ? data["streams"].toArray() : QJsonArray());
-            });
-        }
-    }
+      }
+    };
+    (*pump)();
 }
 
 void MainWindow::showSettings(QString page) {

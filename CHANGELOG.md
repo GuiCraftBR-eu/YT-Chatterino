@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.9
+
+- Find more live channel name variants across platforms while limiting concurrent lookups.
+- Improve 7TV catalog recovery and support large emote sets, including explicit emotes returned by 7TV.
+
 ## 2.5.8
 
 - Show native and third-party emotes in pinned messages, and display Twitch Hype Trains shared by the browser extension.
