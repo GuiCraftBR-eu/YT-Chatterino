@@ -69,7 +69,8 @@ void NativeTests::mixedHistoryDoesNotBlockLiveMessages() {
     QCOMPARE(pane->view->messages[0].text, "live A");
     QCOMPARE(pane->view->messages[1].text, "live B");
     const QJsonArray oldA{"@id=old-a;display-name=A;tmi-sent-ts=1700000001000 :a!a@a PRIVMSG #guicraft_ :old A",
-                          "@id=live-a;display-name=A;tmi-sent-ts=1700000002000 :a!a@a PRIVMSG #guicraft_ :duplicate"};
+                          "@id=live-a;display-name=A;tmi-sent-ts=1700000002000 :a!a@a PRIVMSG #guicraft_ :duplicate",
+                          "@id=old-sub;display-name=Member;login=member;msg-id=sub;system-msg=Member\\ssubscribed :tmi.twitch.tv USERNOTICE #guicraft_"};
     const QJsonArray oldB{"@id=old-b;display-name=B;tmi-sent-ts=1700000000000 :b!b@b PRIVMSG #another :old B"};
     pending["/api/v2/recent-messages/guicraft_"](QJsonDocument(QJsonObject{{"messages", oldA}}).toJson(), {});
     pending["/api/v2/recent-messages/another"](QJsonDocument(QJsonObject{{"messages", oldB}}).toJson(), {});
@@ -82,6 +83,8 @@ void NativeTests::mixedHistoryDoesNotBlockLiveMessages() {
     QCOMPARE(restoredPane->view->messages[0].text, "old B");
     QCOMPARE(restoredPane->view->messages[1].text, "old A");
     QVERIFY(twitch->historyLoaded && other->historyLoaded);
+    QCOMPARE(twitch->activityHistory.size(), 1);
+    QCOMPARE(twitch->activityHistory.first().id, QString("old-sub"));
     app->hub.testMode = true;
     auto *yt = app->hub.source("youtube", "0sfDth4lMLc");
     pane->setSources({twitch, other, yt});

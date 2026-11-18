@@ -530,6 +530,7 @@ QJsonObject Message::json() const {
             {"alert_kind", alertKind},
             {"alert_body_start", alertBodyStart},
             {"reply", reply},
+            {"activity", activity},
             {"badge_info", badgeInfo},
             {"native_emotes", es},
             {"badge_ids", bs},
@@ -562,6 +563,7 @@ Message Message::fromJson(const QJsonObject &o) {
     m.alertKind = str(o["alert_kind"]);
     m.alertBodyStart = qMax(0, o["alert_body_start"].toInt());
     m.reply = o["reply"].toObject();
+    m.activity = o["activity"].toObject();
     m.badgeInfo = str(o["badge_info"]);
     m.seq = o["_seq"].toInteger();
     m.replayOffsetMs = o.contains("replay_offset_ms") ? o["replay_offset_ms"].toInteger(-1) : -1;
@@ -754,6 +756,19 @@ ParsedIrc parseIrc(QString line) {
     if (p.command == "USERNOTICE") {
         const QString noticeType = str(p.tags.value("msg-id")).toLower();
         const QString plan = str(p.tags.value("msg-param-sub-plan"));
+        if (noticeType == "submysterygift" || noticeType == "anonsubmysterygift") {
+            QString group = str(p.tags["msg-param-community-gift-id"]);
+            if (group.isEmpty()) group = str(p.tags["msg-param-origin-id"]);
+            m.activity = {{"type", "gift_bundle"}, {"group", group},
+                          {"count", qBound(0, str(p.tags["msg-param-mass-gift-count"]).toInt(), 10000)}};
+        } else if (noticeType == "subgift" || noticeType == "anonsubgift") {
+            QString recipient = str(p.tags["msg-param-recipient-display-name"]);
+            if (recipient.isEmpty()) recipient = str(p.tags["msg-param-recipient-user-name"]);
+            m.activity = {{"type", "gift_recipient"}, {"group", str(p.tags["msg-param-community-gift-id"])},
+                          {"recipient", recipient}};
+        } else if (noticeType == "sub" || noticeType == "resub" || noticeType.contains("paidupgrade")) {
+            m.activity = {{"type", "subscription"}};
+        }
         if (noticeType.contains("gift")) m.alertKind = "gift";
         else if ((noticeType == "sub" || noticeType == "resub") && plan.compare("Prime", Qt::CaseInsensitive) == 0)
             m.alertKind = "prime";
@@ -778,6 +793,7 @@ ParsedIrc parseIrc(QString line) {
         if (!str(p.tags["bits"]).isEmpty()) {
             m.alertKind = "bits";
             m.alertText = "Cheered " + str(p.tags["bits"]) + " Bits";
+            m.activity = {{"type", "support"}};
         } else if (!str(p.tags["custom-reward-id"]).isEmpty()) {
             m.alertKind = "reward";
             m.alertText = "Redeemed a channel reward";
@@ -835,6 +851,15 @@ Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical)
     if (kind.contains("Gift", Qt::CaseInsensitive)) m.alertKind = "gift";
     else if (kind.contains("Paid")) m.alertKind = "money";
     else if (kind.contains("Membership") || kind.contains("Sponsorship")) m.alertKind = "subscription";
+    if (kind.contains("GiftPurchaseAnnouncement", Qt::CaseInsensitive))
+        m.activity = {{"type", "gift_bundle"}, {"group", m.id}};
+    else if (kind.contains("GiftRedemptionAnnouncement", Qt::CaseInsensitive)) {
+        QString group = str(o["associatedMembershipGiftingMessageId"]);
+        if (group.isEmpty()) group = str(o["associatedChatItemId"]);
+        m.activity = {{"type", "gift_recipient"}, {"group", group}, {"recipient", m.name}};
+    } else if (kind.contains("Paid") || (kind.contains("Gift", Qt::CaseInsensitive) && !kind.contains("Sponsorship")))
+        m.activity = {{"type", "support"}};
+    else if (m.alertKind == "subscription") m.activity = {{"type", "subscription"}};
     if (kind.contains("Paid")) {
         m.special = "super";
         if (m.text.isEmpty() && kind.contains("Sticker")) {

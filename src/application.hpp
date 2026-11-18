@@ -51,6 +51,7 @@ class MainWindow : public QMainWindow {
     void showSettings(QString page = "Accounts");
     void gearMenu();
     void paneMenu(Pane *pane, QPoint position);
+    void showRecentActivity(Pane *pane, Source *only = nullptr);
     void showPhone(Pane *pane);
     void openPopup(Pane *pane, bool overlay);
     void editTwitchChatModes(Source *source);

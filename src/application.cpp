@@ -1226,6 +1226,14 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
         return;
     }
     const bool popupWindow = p->window()->property("yt-chat-popup").toBool();
+    menu.setObjectName("pane-menu");
+    menu.setStyleSheet("QMenu{background:#19191e;color:#eeeef3;border:1px solid #414149;border-radius:6px;padding:5px;}"
+                       "QMenu::item{padding:7px 28px 7px 12px;border-radius:4px;}"
+                       "QMenu::item:selected{background:#443467;color:white;}"
+                       "QMenu::item:disabled{color:#85858f;} QMenu::separator{height:1px;background:#393940;margin:5px 8px;}");
+    const auto addHeading = [](QMenu *target, const QString &text) {
+        auto *heading = target->addAction(text); heading->setEnabled(false);
+    };
     for (auto source : p->sources) {
         if (source) {
             auto *channel = menu.addMenu(QIcon(QPixmap::fromImage(channelIcon(source, &images, 20))),
@@ -1239,6 +1247,7 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
                 });
                 continue;
             }
+            addHeading(channel, cfg.T("Open and share"));
             auto *openStream = channel->addAction(cfg.T("Open stream in browser"), source, [source] {
                 QDesktopServices::openUrl(QUrl(browserUrl(source->platform, source->id, "stream")));
             });
@@ -1254,7 +1263,12 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
                 });
             }
             channel->addSeparator();
+            addHeading(channel, cfg.T("Chat and channel"));
             channel->addAction(cfg.T("Reconnect"), source, &Source::reconnect);
+            if (p->sources.size() > 1) {
+                auto *activity = channel->addAction(cfg.T("Recent activity…"), this, [this, p, source] { showRecentActivity(p, source); });
+                activity->setObjectName("channel-recent-activity");
+            }
             if (source->platform == "youtube") {
                 channel->addAction(cfg.T(source->paused ? "Resume chat" : "Pause chat"), source,
                                    [source] { source->setPaused(!source->paused); });
@@ -1333,11 +1347,14 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             }
         }
     }
+    menu.addSeparator();
+    auto *activity = menu.addAction(cfg.T("Recent activity…"), this, [this, p] { showRecentActivity(p); });
+    activity->setObjectName("recent-activity");
     auto *phone = menu.addAction(cfg.T("Open on phone…"), this, [this, p] { showPhone(p); });
     phone->setObjectName("open-phone");
     menu.addSeparator();
-    menu.addAction(cfg.T("Search messages…") + "\tCtrl+F", p, &Pane::showSearch);
     auto *historyMenu = menu.addMenu(cfg.T("Filters and history"));
+    historyMenu->addAction(cfg.T("Search messages…") + "\tCtrl+F", p, &Pane::showSearch);
     auto *vod = historyMenu->addAction(cfg.T("Browser extension setup…"), this, &MainWindow::showVod);
     vod->setObjectName("open-vod-replay");
     auto *layoutMenu = menu.addMenu(cfg.T("Layout"));

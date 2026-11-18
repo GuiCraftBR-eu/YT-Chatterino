@@ -464,7 +464,7 @@ QWidget *SettingsWindow::accountsPage() {
     twLayout->addWidget(twStatus);
     twLayout->addWidget(twPermissions);
     twLayout->addWidget(text(main->cfg,
-        "With the browser extension, open the Twitch chat in your browser to share its visible pinned message and poll or prediction. Complete votes and predictions on Twitch. Official API access still requires channel permissions.", true));
+        "Open the Twitch chat in your browser with the extension connected to show its pinned message, Hype Train, polls and predictions. Some Twitch confirmations still need the browser. Official API access may require channel permissions.", true));
     twLayout->addWidget(twButton);
     twLayout->addWidget(twReconnect);
     l->addWidget(twBox);

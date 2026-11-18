@@ -268,19 +268,42 @@ async function changeKickRole(message) {
 function twitchChatPanels() {
   if (!["www.twitch.tv", "twitch.tv", "m.twitch.tv"].includes(location.hostname.toLowerCase())) return undefined;
   const shown = node => !!node && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== "hidden";
-  if (!shown(document.querySelector('[data-test-selector="chat-room-component-layout"], .chat-room'))) return {available:false};
+  const chatRoot = document.querySelector('[data-test-selector="chat-room-component-layout"], .chat-room');
+  if (!shown(chatRoot)) return {available:false};
   const clean = (text, n=800) => (text || "").replace(/\s+/g," ").trim().slice(0,n);
   const textWithEmotes = root => {
-    if (!root) return "";
-    const walk = node => node.nodeType === Node.TEXT_NODE ? node.nodeValue :
-      node.nodeType !== Node.ELEMENT_NODE ? "" : node.tagName === "IMG" ? (node.alt || "") :
-      [...node.childNodes].map(walk).join("");
-    return clean(walk(root));
+    if (!root) return {text:"",native_emotes:[]};
+    let raw=""; const found=[];
+    const walk = node => {
+      if (node.nodeType === Node.TEXT_NODE) { raw += node.nodeValue || ""; return; }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      if (node.tagName === "IMG") {
+        const code=clean(node.alt,100), start=raw.length; raw+=code;
+        if (code && found.length < 12) {
+          try {
+            const url=new URL(node.currentSrc || node.src || "",location.href);
+            if (url.protocol === "https:" && !url.username && !url.password && (!url.port || url.port === "443") && url.href.length <= 240)
+              found.push({start,code,url:url.href});
+          } catch (_) {}
+        }
+        return;
+      }
+      for (const child of node.childNodes) walk(child);
+    };
+    walk(root);
+    const text=clean(raw), native_emotes=[];
+    for (const emote of found) {
+      const start=raw.slice(0,emote.start).replace(/\s+/g," ").replace(/^\s+/,"").length;
+      const end=start+emote.code.length;
+      if (end <= text.length && text.slice(start,end) === emote.code)
+        native_emotes.push({start,end,code:emote.code,urls:[emote.url]});
+    }
+    return {text,native_emotes};
   };
   const pinNode = document.querySelector('.pinned-chat__message, [data-test-selector="pinned-chat-message"] [data-a-target="chat-line-message-body"], [data-a-target="pinned-chat-message"] [data-a-target="chat-line-message-body"]');
   const pinScope = pinNode?.parentElement?.parentElement;
   const author = pinScope?.querySelector('.chatter-name, [data-a-target="chat-message-username"]');
-  const pin = shown(pinNode) ? {text:textWithEmotes(pinNode),name:clean(author?.textContent,100)} : {};
+  const pin = shown(pinNode) ? {...textWithEmotes(pinNode),name:clean(author?.textContent,100)} : {};
   const panel = selector => {
     const node = document.querySelector(selector);
     const text = shown(node) ? clean(node.innerText,800) : "";
@@ -309,7 +332,20 @@ function twitchChatPanels() {
   };
   const poll = card("poll");
   const prediction = twitchPredictionSnapshot() || card("prediction");
-  return {available:true, pin,
+  // The current Twitch banner uses a generated class prefix and an accessible
+  // progress bar. Limit inspection to the channel's visible chat, not the page.
+  const banners=[...chatRoot.querySelectorAll('[class*="hypeTrainBanner--"], [class*="bannerButton--"][aria-controls], [data-test-selector="hype-train-banner"]')].filter(shown);
+  const banner=banners.find(node => node.matches?.('[class*="bannerButton--"], [data-test-selector="hype-train-banner"]')) || banners[0];
+  const progress=banner?.querySelector('[role="progressbar"]');
+  const timer=banner?.querySelector('[role="timer"]');
+  const progressNow=Number(progress?.getAttribute('aria-valuenow'));
+  const progressMax=Number(progress?.getAttribute('aria-valuemax'));
+  const parts=[];
+  if (progress && Number.isFinite(progressNow) && Number.isFinite(progressMax) && progressMax > 0 && progressNow >= 0)
+    parts.push(`${progressNow}/${progressMax}`);
+  const time=clean(timer?.innerText,100); if (time) parts.push(time);
+  const hype=banner ? {text:clean(banner.getAttribute('aria-label') || banner.innerText || 'Hype Train',256),options:parts.join(' · ')} : {};
+  return {available:true, pin, hype,
     poll:poll.text ? poll : panel('[data-test-selector="poll-banner"], .poll-card'),
     prediction:prediction.text ? prediction : panel('[data-test-selector="community-prediction-banner"], .community-prediction-summary')};
 }

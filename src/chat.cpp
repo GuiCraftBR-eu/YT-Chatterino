@@ -302,6 +302,18 @@ int Source::retentionCap() const {
     return qBound(100, cap, 20000);
 }
 
+void Source::recordActivity(const Message &message) {
+    if (isVod || message.system || (message.alertKind.isEmpty() && message.activity.isEmpty())) return;
+    static const QSet<QString> kinds{"prime", "subscription", "gift", "bits", "money"};
+    static const QSet<QString> types{"subscription", "gift_bundle", "gift_recipient", "support"};
+    const auto type = str(message.activity["type"]);
+    if (!kinds.contains(message.alertKind) && !types.contains(type)) return;
+    if (!message.id.isEmpty()) for (const auto &old : activityHistory)
+        if (old.id == message.id) return;
+    activityHistory << message;
+    if (activityHistory.size() > 2000) activityHistory.remove(0, activityHistory.size() - 2000);
+}
+
 void Source::publish(Message m) {
     if (closed) {
         return;
@@ -377,6 +389,7 @@ void Source::publish(Message m) {
     }
     m.seq = ++hub->sequence;
     history << m;
+    recordActivity(m);
     trim();
     emit message(m);
     emit hub->message(this, m);
@@ -712,12 +725,16 @@ void Source::setPrediction(QJsonObject prediction) {
     emit decorationsChanged();
 }
 
-void Source::setBrowserPanels(QJsonObject pin, QJsonObject pollState, QJsonObject prediction) {
-    if (browserPinned == pin && browserPoll == pollState && browserPrediction == prediction) return;
+void Source::setBrowserPanels(QJsonObject pin, QJsonObject pollState, QJsonObject prediction, QJsonObject hype) {
+    if (browserPinned == pin && browserPoll == pollState && browserPrediction == prediction && browserHype == hype) return;
+    const bool panelsChanged = browserPinned != pin || browserPoll != pollState || browserPrediction != prediction;
+    const bool hypePresenceChanged = browserHype.isEmpty() != hype.isEmpty();
     browserPinned = std::move(pin);
     browserPoll = std::move(pollState);
     browserPrediction = std::move(prediction);
-    emit decorationsChanged();
+    browserHype = std::move(hype);
+    if (panelsChanged || hypePresenceChanged) emit decorationsChanged();
+    else emit hypeChanged();
 }
 
 static bool recentlyEnded(const QJsonObject &item, int seconds = 180) {
@@ -770,8 +787,23 @@ void Source::refreshDecorations() {
             const auto item = first(data["data"].toArray()).toObject();
             QJsonObject pin;
             const QString body = str(at(item, {"message", "text"}));
-            if (!body.isEmpty()) pin = {{"id", item["message_id"]}, {"name", item["sender_user_name"]},
-                                       {"text", body}};
+            if (!body.isEmpty()) {
+                Message message; message.text = body;
+                int offset = 0;
+                for (const auto &value : at(item, {"message", "fragments"}).toArray()) {
+                    const auto fragment = value.toObject();
+                    const QString part = str(fragment["text"]), id = str(at(fragment, {"emote", "id"}));
+                    if (str(fragment["type"]) == "emote" && !part.isEmpty() && body.mid(offset, part.size()) == part &&
+                        QRegularExpression("^[A-Za-z0-9_-]{1,100}$").match(id).hasMatch()) {
+                        Span emote; emote.start = offset; emote.end = offset + part.size(); emote.code = part;
+                        emote.urls = {"https://static-cdn.jtvnw.net/emoticons/v2/" + id + "/default/dark/3.0"};
+                        message.emotes << emote;
+                    }
+                    offset += part.size();
+                }
+                pin = {{"id", item["message_id"]}, {"name", item["sender_user_name"]},
+                       {"text", body}, {"native_emotes", message.json()["native_emotes"]}};
+            }
             self->setDecorations(pin, self->activePoll);
         }, "GET", {{"broadcaster_id", broadcaster}, {"moderator_id", uid}});
     }
@@ -869,7 +901,8 @@ void Source::youtubeBannerActions(const QJsonArray &actions) {
                 if (!i.key().contains("MessageRenderer")) continue;
                 const auto parsed = parseYouTube(i.value().toObject(), i.key());
                 if (!parsed.text.isEmpty()) {
-                    pin = {{"id", str(banner["actionId"])}, {"name", parsed.name}, {"text", parsed.text}};
+                    pin = {{"id", str(banner["actionId"])}, {"name", parsed.name}, {"text", parsed.text},
+                           {"native_emotes", parsed.json()["native_emotes"]}};
                     break;
                 }
             }
@@ -970,9 +1003,16 @@ void Source::loadHistory() {
             }
             self->historyLoaded = true;
             self->historyRetryMs = 30000;
-            bool added = false;
+            bool added = false, activityAdded = false;
             for (const auto &v : d["messages"].toArray()) {
                 auto p = parseIrc(v.toString());
+                if (p.command == "USERNOTICE" && p.channel == self->id && !p.message.text.isEmpty()) {
+                    auto m = p.message;
+                    m.history = true; m.source = self->key; m.seq = ++self->hub->sequence;
+                    self->recordActivity(m);
+                    activityAdded |= !self->activityHistory.isEmpty() && self->activityHistory.last().seq == m.seq;
+                    continue;
+                }
                 if (p.command == "PRIVMSG" && p.channel == self->id) {
                     auto m = p.message;
                     if (!m.id.isEmpty() && self->seen.contains(m.id)) continue;
@@ -984,14 +1024,15 @@ void Source::loadHistory() {
                         self->seenOrder.enqueue(m.id);
                     }
                     self->history << m;
+                    self->recordActivity(m);
                     added = true;
                 }
             }
             if (added) {
                 std::stable_sort(self->history.begin(), self->history.end(), messageOrder);
                 self->trim();
-                emit self->changed();
             }
+            if (added || activityAdded) emit self->changed();
         });
 }
 
@@ -1610,6 +1651,22 @@ void Source::youtubeApiPoll() {
                 m.alertKind = type == "membershipGiftingEvent" || type == "giftMembershipReceivedEvent" || type == "giftEvent"
                                   ? "gift" : type == "superChatEvent" || type == "superStickerEvent"
                                   ? "money" : "subscription";
+                if (type == "membershipGiftingEvent") {
+                    m.activity = {{"type", "gift_bundle"}, {"group", m.id},
+                                  {"count", at(snippet, {"membershipGiftingDetails", "giftMembershipsCount"})}};
+                    const int count = at(snippet, {"membershipGiftingDetails", "giftMembershipsCount"}).toInt();
+                    if (m.text.isEmpty()) m.text = count > 0 ? self->hub->cfg->T("Gifted {count} memberships", {{"count", QString::number(count)}})
+                                                             : self->hub->cfg->T("Gifted memberships");
+                } else if (type == "giftMembershipReceivedEvent") {
+                    m.activity = {{"type", "gift_recipient"},
+                                  {"group", at(snippet, {"giftMembershipReceivedDetails", "associatedMembershipGiftingMessageId"})},
+                                  {"recipient", m.name}};
+                    if (m.text.isEmpty()) m.text = self->hub->cfg->T("Received a gifted membership");
+                } else if (type == "superChatEvent" || type == "superStickerEvent" || type == "giftEvent") {
+                    m.activity = {{"type", "support"}};
+                    const QString amount = str(at(snippet, {type == "superChatEvent" ? "superChatDetails" : "superStickerDetails", "amountDisplayString"}));
+                    if (!amount.isEmpty() && !m.text.contains(amount)) m.text = amount + (m.text.isEmpty() ? QString() : " · " + m.text);
+                } else m.activity = {{"type", "subscription"}};
                 if (m.name.isEmpty()) m.name = "YouTube";
                 if (type == "giftEvent" && m.text.isEmpty()) {
                     auto gift = str(at(snippet, {"giftDetails", "giftName"}));

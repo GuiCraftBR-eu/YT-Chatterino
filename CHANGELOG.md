@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.8
+
+- Show native and third-party emotes in pinned messages, and display Twitch Hype Trains shared by the browser extension.
+- Organize the channel menu and add recent subscription and support activity, with expandable gift groups when recipient details are available.
+- Keep recent activity received while connected separately from ordinary chat history.
+
 ## 2.5.7
 
 - Vote in Twitch, YouTube, and Kick polls through the browser extension. Place Twitch predictions with an explicit points amount and confirmation.

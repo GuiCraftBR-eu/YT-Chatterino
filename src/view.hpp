@@ -191,10 +191,15 @@ class Pane : public QWidget {
     QHash<QString, QString> pollSelection, pollQuestions, pollFeedback;
     QSet<QString> pollRequests;
     QHash<QString, QString> predictionSelection, predictionQuestions, predictionFeedback;
+    QHash<QString, int> predictionPoints;
     QSet<QString> predictionRequests;
+    QHash<QString, QPointer<QLabel>> hypeLabels;
+    QSet<QString> decorationImageUrls;
+    bool decorationImageRefreshPending = false;
     QString threadId;
     void refresh();
     void refreshDecorations();
+    void refreshHype(Source *source);
     void refreshChatModes();
     void refreshModeration();
     void runModeration(Message message, int action);

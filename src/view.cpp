@@ -1,5 +1,6 @@
 #include "view.hpp"
 #include "automod.hpp"
+#include <QBuffer>
 #include <algorithm>
 
 namespace yc {
@@ -1955,6 +1956,10 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         for (const auto &source : sources) {
             if (source && str(source->header.value("avatar")) == url) { refresh(); break; }
         }
+        if (decorationImageUrls.contains(url) && !decorationImageRefreshPending) {
+            decorationImageRefreshPending = true;
+            QTimer::singleShot(0, this, [this] { decorationImageRefreshPending = false; refreshDecorations(); });
+        }
     });
     replyBar = new QWidget(this);
     auto *rl = new QHBoxLayout(replyBar);
@@ -2207,11 +2212,12 @@ void Pane::setSources(QList<Source *> list) {
         s->viewCaps[reinterpret_cast<quintptr>(this)] = hub->cfg->cap(key());
         if (!s->isVod) target->addItem((s->platform == "twitch" ? "TW · " : s->platform == "kick" ? "K · " : "YT · ") + s->name(), s->key);
         connect(s, &Source::message, this, [this, s](Message m) { incoming(s, m); });
-        connect(s, &Source::changed, this, [this] {
+        connect(s, &Source::changed, this, [this, s] {
             refresh();
             refreshChatModes();
             refreshModeration();
             reload();
+            if (!s->pinned.isEmpty() || !s->browserPinned.isEmpty()) refreshDecorations();
         });
         connect(s, &Source::headerChanged, this, [this, s] {
             refresh();
@@ -2221,6 +2227,7 @@ void Pane::setSources(QList<Source *> list) {
                 view->showStreamTooltip(s, view->streamPreviewGlobal);
         });
         connect(s, &Source::decorationsChanged, this, &Pane::refreshDecorations);
+        connect(s, &Source::hypeChanged, this, [this, s] { refreshHype(s); });
         connect(s, &Source::chatModesChanged, this, &Pane::refreshChatModes);
         connect(s, &Source::permissionsChanged, this, &Pane::refreshModeration);
         connect(s, &Source::redacted, this, [this](QJsonObject target) {
@@ -2311,7 +2318,21 @@ void Pane::refreshChatModes() {
     chatModesLabel->setVisible(!detached && !labels.isEmpty());
 }
 
+void Pane::refreshHype(Source *source) {
+    if (!source) return;
+    auto *label = hypeLabels.value(source->key).data();
+    if (!label || source->browserHype.isEmpty()) { refreshDecorations(); return; }
+    QString text = hub->cfg->T("Hype Train");
+    if (sources.size() > 1) text += " · " + source->name();
+    text += "\n" + str(source->browserHype.value("text"));
+    const auto options = str(source->browserHype.value("options"));
+    if (!options.isEmpty()) text += "\n" + options;
+    label->setText(text.toHtmlEscaped().replace("\n", "<br>"));
+}
+
 void Pane::refreshDecorations() {
+    decorationImageUrls.clear();
+    hypeLabels.clear();
     auto *box = qobject_cast<QVBoxLayout *>(decorations->layout());
     while (auto *item = box->takeAt(0)) {
         delete item->widget();
@@ -2320,28 +2341,67 @@ void Pane::refreshDecorations() {
     int count = 0;
     for (auto source : sources) {
         if (!source) continue;
-        const auto add = [&](const QString &heading, const QJsonObject &value, const QString &action = QString()) {
-            if (str(value["text"]).isEmpty()) return;
+        const auto add = [&](const QString &heading, const QJsonObject &value, const QString &action = QString(), bool withEmotes = false) -> QLabel * {
+            if (str(value["text"]).isEmpty()) return nullptr;
             QString text = heading;
             if (sources.size() > 1) text += " · " + source->name();
             const QString author = str(value["name"]);
-            text += "\n" + (author.isEmpty() ? QString() : author + ": ") + str(value["text"]);
+            text += "\n" + (author.isEmpty() ? QString() : author + ": ");
+            const int bodyStart = text.size();
+            const QString body = str(value["text"]);
+            text += body;
             if (!str(value["options"]).isEmpty()) text += "\n" + str(value["options"]);
             QString html;
-            int last = 0;
             static const QRegularExpression links(QStringLiteral("https?://[^\\s<>\"']+"), QRegularExpression::CaseInsensitiveOption);
-            auto matches = links.globalMatch(text);
-            while (matches.hasNext()) {
-                auto match = matches.next();
-                int end = match.capturedEnd();
-                while (end > match.capturedStart() && QStringLiteral(".,;!?)").contains(text[end - 1])) --end;
-                if (end == match.capturedStart()) continue;
-                html += text.mid(last, match.capturedStart() - last).toHtmlEscaped();
-                const QString url = text.mid(match.capturedStart(), end - match.capturedStart());
-                html += "<a href=\"" + url.toHtmlEscaped() + "\" style=\"color:#80bfff;\">" + url.toHtmlEscaped() + "</a>";
-                last = end;
+            const auto appendText = [&](const QString &part) {
+                int last = 0;
+                auto matches = links.globalMatch(part);
+                while (matches.hasNext()) {
+                    auto match = matches.next();
+                    int end = match.capturedEnd();
+                    while (end > match.capturedStart() && QStringLiteral(".,;!?)").contains(part[end - 1])) --end;
+                    if (end == match.capturedStart()) continue;
+                    html += part.mid(last, match.capturedStart() - last).toHtmlEscaped();
+                    const QString url = part.mid(match.capturedStart(), end - match.capturedStart());
+                    html += "<a href=\"" + url.toHtmlEscaped() + "\" style=\"color:#80bfff;\">" + url.toHtmlEscaped() + "</a>";
+                    last = end;
+                }
+                html += part.mid(last).toHtmlEscaped();
+            };
+            QVector<Span> spans;
+            if (withEmotes) {
+                spans = Message::fromJson(value).emotes;
+                auto words = QRegularExpression("\\S+").globalMatch(body);
+                while (words.hasNext()) {
+                    const auto word = words.next();
+                    const auto it = source->emotes.constFind(word.captured());
+                    if (it == source->emotes.cend()) continue;
+                    auto span = it.value(); span.start = word.capturedStart(); span.end = word.capturedEnd(); span.code = word.captured();
+                    spans << span;
+                }
+                std::stable_sort(spans.begin(), spans.end(), [](const Span &a, const Span &b) {
+                    return a.start == b.start ? a.end > b.end : a.start < b.start;
+                });
             }
-            html += text.mid(last).toHtmlEscaped();
+            int offset = 0;
+            for (const auto &span : spans) {
+                if (bodyStart + span.start < offset || span.start < 0 || span.end <= span.start || span.end > body.size() || span.urls.isEmpty() ||
+                    !Images::allowed(QUrl(span.urls.first())) || (!span.code.isEmpty() && body.mid(span.start, span.end - span.start) != span.code)) continue;
+                appendText(text.mid(offset, bodyStart + span.start - offset));
+                decorationImageUrls.insert(span.urls.first());
+                const auto image = hub->images->get(span.urls, false);
+                if (image.isNull()) appendText(body.mid(span.start, span.end - span.start));
+                else {
+                    const int height = qBound(16, hub->cfg->appearance()["emote_size"].toInt(36), 64);
+                    QSize size = image.size(); size.scale(height * 3, height, Qt::KeepAspectRatio);
+                    const auto scaled = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                    QByteArray png; QBuffer buffer(&png); buffer.open(QIODevice::WriteOnly); scaled.save(&buffer, "PNG");
+                    html += "<img src=\"data:image/png;base64," + QString::fromLatin1(png.toBase64()) +
+                            "\" width=\"" + QString::number(size.width()) + "\" height=\"" + QString::number(size.height()) + "\">";
+                }
+                offset = bodyStart + span.end;
+            }
+            appendText(text.mid(offset));
             html.replace("\n", "<br>");
             auto *label = new QLabel(html, decorations);
             label->setObjectName("chat-decoration");
@@ -2369,11 +2429,18 @@ void Pane::refreshDecorations() {
                 box->addWidget(open, 0, Qt::AlignRight);
             }
             ++count;
+            return label;
         };
-        const auto pin = source->pinned.isEmpty() ? source->browserPinned : source->pinned;
+        auto pin = source->pinned.isEmpty() ? source->browserPinned : source->pinned;
+        if (!str(pin.value("text")).isEmpty() && pin.value("native_emotes").toArray().isEmpty() &&
+            str(pin.value("text")) == str(source->browserPinned.value("text")))
+            pin["native_emotes"] = source->browserPinned.value("native_emotes");
         const auto poll = str(source->activePoll.value("text")).isEmpty() ? source->browserPoll : source->activePoll;
         const auto prediction = str(source->activePrediction.value("text")).isEmpty() ? source->browserPrediction : source->activePrediction;
-        add(hub->cfg->T("Pinned message"), pin);
+        add(hub->cfg->T("Pinned message"), pin, {}, true);
+        if (source->platform == "twitch") {
+            if (auto *label = add(hub->cfg->T("Hype Train"), source->browserHype)) hypeLabels[source->key] = label;
+        }
         QString pollHeading = hub->cfg->T(poll.value("ended").toBool() ? "Poll result" : "Poll");
         if (poll.value("last_observed").toBool()) pollHeading += " · " + hub->cfg->T("last observed");
         add(pollHeading, poll);
@@ -2455,8 +2522,11 @@ void Pane::refreshDecorations() {
             (str(source->activePrediction.value("text")).isEmpty() ||
              str(source->activePrediction.value("text")).simplified() == predictionQuestion);
         add(predictionHeading, prediction, !predictionReady && predictionStatus != "LOCKED" ? "Load prediction" : QString());
+        if (predictionQuestion.isEmpty()) {
+            predictionQuestions.remove(key); predictionSelection.remove(key); predictionPoints.remove(key);
+        }
         if (!predictionQuestion.isEmpty() && predictionQuestions.value(key) != predictionQuestion) {
-            predictionQuestions[key] = predictionQuestion; predictionSelection.remove(key); predictionFeedback.remove(key);
+            predictionQuestions[key] = predictionQuestion; predictionSelection.remove(key); predictionFeedback.remove(key); predictionPoints.remove(key);
         }
         if (predictionReady) {
             auto *row = new QWidget(decorations);
@@ -2471,7 +2541,8 @@ void Pane::refreshDecorations() {
                 predictionSelection[key] = select->currentData().toString();
             });
             auto *points = new QSpinBox(row); points->setObjectName("twitch-prediction-points");
-            points->setRange(1, 250000); points->setValue(10); points->setSuffix(" " + hub->cfg->T("points"));
+            points->setRange(1, 250000); points->setValue(predictionPoints.value(key, 10)); points->setSuffix(" " + hub->cfg->T("points"));
+            connect(points, qOverload<int>(&QSpinBox::valueChanged), this, [this, key](int amount) { predictionPoints[key] = amount; });
             auto *place = new QPushButton(hub->cfg->T("Predict"), row); place->setObjectName("twitch-prediction-place");
             place->setEnabled(select->currentIndex() > 0 && !predictionRequests.contains(key));
             connect(select, qOverload<int>(&QComboBox::currentIndexChanged), place, [this, place, key](int index) {

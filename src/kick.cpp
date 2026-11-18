@@ -287,7 +287,7 @@ void Source::kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Mess
             auto pin = pinObject.contains("message") ? pinObject["message"].toObject() : pinObject;
             auto pinned = parseKick(pin, true);
             self->setDecorations(pinned.text.isEmpty() ? QJsonObject() :
-                QJsonObject{{"name", pinned.name}, {"text", pinned.text}}, self->activePoll);
+                QJsonObject{{"name", pinned.name}, {"text", pinned.text}, {"native_emotes", pinned.json()["native_emotes"]}}, self->activePoll);
         }
         bool seen = false;
         for (const auto &item : data["messages"].toArray()) {
@@ -516,7 +516,7 @@ void Source::kickEvent(QString event, QJsonObject data) {
     }
     if (event.endsWith("PinnedMessageCreatedEvent")) {
         const auto m = parseKick(data["message"].toObject());
-        setDecorations({{"name", m.name}, {"text", m.text}}, activePoll); return;
+        setDecorations({{"name", m.name}, {"text", m.text}, {"native_emotes", m.json()["native_emotes"]}}, activePoll); return;
     }
     if (event.endsWith("PinnedMessageDeletedEvent")) { setDecorations({}, activePoll); return; }
     Message m; m.special = "alert"; m.stamp = QDateTime::currentDateTime();
@@ -530,6 +530,13 @@ void Source::kickEvent(QString event, QJsonObject data) {
         m.alertKind = "gift";
         m.name = str(data["gifter_username"]);
         m.text = hub->cfg->T("Gifted {count} subscriptions!", {{"count", QString::number(data["gifted_usernames"].toArray().size())}});
+        QJsonArray recipients;
+        for (const auto &value : data["gifted_usernames"].toArray()) {
+            const QString name = value.isString() ? value.toString() : str(value.toObject()["username"]);
+            if (!name.isEmpty()) recipients.append(name.left(100));
+            if (recipients.size() >= 1000) break;
+        }
+        m.activity = {{"type", "gift_bundle"}, {"group", m.id}, {"recipients", recipients}};
     } else if (event.endsWith("RewardRedeemedEvent")) {
         m.alertKind = "reward";
         m.name = str(at(data, {"user", "username"}));
@@ -540,6 +547,7 @@ void Source::kickEvent(QString event, QJsonObject data) {
         if (!input.isEmpty()) m.text += " — " + input;
     } else if (event.endsWith("KicksGifted")) {
         m.alertKind = "gift";
+        m.activity = {{"type", "support"}};
         m.id = str(data["gift_transaction_id"]); m.name = str(at(data, {"sender", "username"}));
         m.text = str(at(data, {"gift", "name"}));
         const auto body = str(data["message"]); if (!body.isEmpty()) m.text += " — " + body;
