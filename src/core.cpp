@@ -506,7 +506,8 @@ QJsonObject Message::json() const {
                               {"end", e.end},
                               {"code", e.code},
                               {"urls", QJsonArray::fromStringList(e.urls)},
-                              {"gif", e.gif}});
+                              {"gif", e.gif},
+                              {"explicit_7tv", e.explicit7tv}});
     }
     for (const auto &b : badges) {
         bs.append(QJsonObject{{"set_id", b.id},
@@ -586,6 +587,7 @@ Message Message::fromJson(const QJsonObject &o) {
         s.end = e["end"].toInt();
         s.code = str(e["code"]);
         s.gif = e["gif"].toBool();
+        s.explicit7tv = e["explicit_7tv"].toBool();
         for (const auto &u : e["urls"].toArray()) {
             s.urls << u.toString();
         }

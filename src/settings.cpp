@@ -786,6 +786,15 @@ QWidget *SettingsWindow::messagesPage() {
     hoverPause->setObjectName("pause-on-hover");
     hoverPause->setChecked(main->cfg.data["pause_on_hover"].toBool(false));
     form->addRow(hoverPause);
+    auto *explicit7tv = new QCheckBox(main->cfg.T("Show explicit 7TV emotes"), w);
+    explicit7tv->setObjectName("show-explicit-7tv");
+    explicit7tv->setChecked(main->cfg.data["show_explicit_7tv"].toBool(true));
+    form->addRow(explicit7tv);
+    connect(explicit7tv, &QCheckBox::toggled, w, [this](bool enabled) {
+        main->cfg.data["show_explicit_7tv"] = enabled;
+        main->cfg.save();
+        emit main->cfg.appearanceChanged();
+    });
     form->addRow(text(main->cfg, "Messages keep arriving. Scrolling resumes on leaving unless you scroll up.", true));
     l->addWidget(text(main->cfg,
                       "Twitch history uses recent-messages.robotty.de without account tokens. Availability "

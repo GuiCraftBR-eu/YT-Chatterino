@@ -1081,7 +1081,7 @@ void Source::loadEmotes(QString channelId) {
             } else self->hub->provider(self, provider == "7tv" ? at(d, {"emote_set", "emotes"}) : d["data"], provider, "channel");
         };
         if (provider == "bttv") hub->net->json(QUrl("https://api.betterttv.net/3/cached/users/" + platform + '/' + channelId), done);
-        else if (provider == "7tv") hub->net->json(QUrl("https://7tv.io/v3/users/" + platform + '/' + channelId), done);
+        else if (provider == "7tv") hub->net->sevenTv("users/" + platform + '/' + channelId, false, done);
         else hub->accounts->helix("chat/emotes", done, "GET", {{"broadcaster_id", channelId}});
     };
     start("bttv"); start("7tv");
@@ -1138,7 +1138,7 @@ void Source::reloadChannelEmotes() {
             self->hub->provider(self,emotes,"bttv","channel");
             self->status("BetterTTV channel emotes reloaded.");
         });
-    hub->net->json(QUrl("https://7tv.io/v3/users/"+platform+'/'+channelId), [self,valid,channelId](QJsonObject d,QString error) {
+    hub->net->sevenTv("users/"+platform+'/'+channelId, false, [self,valid,channelId](QJsonObject d,QString error) {
         if(!valid())return;
         const auto values=at(d,{"emote_set","emotes"});
         if ((!error.isEmpty() && !error.contains("404")) || (error.isEmpty() && !values.isArray() && !d["emote_set"].isNull())) {
@@ -2074,7 +2074,7 @@ void Hub::globalEmotes() {
             provider(nullptr, items, name, "global");
         };
         if (name == "bttv") net->json(QUrl("https://api.betterttv.net/3/cached/emotes/global"), done);
-        else if (name == "7tv") net->json(QUrl("https://7tv.io/v3/emote-sets/global"), done);
+        else if (name == "7tv") net->sevenTv("emote-sets/global", true, done);
         else accounts->helix("chat/emotes/global", done);
     };
     start("bttv"); start("7tv"); start("twitch");
@@ -2108,6 +2108,10 @@ void Hub::provider(Source *s, const QJsonValue &data, QString provider, QString 
         } else if (provider == "twitch") {
             e.urls = {"https://static-cdn.jtvnw.net/emoticons/v2/" + id + "/default/dark/3.0"};
         } else {
+            const auto metadata = o["data"].toObject();
+            e.explicit7tv = (metadata["flags"].toInt() & (65536 | 16777216)) || metadata["nsfw"].toBool();
+            for (const auto &state : metadata["state"].toArray())
+                if (str(state).compare("NSFW", Qt::CaseInsensitive) == 0) e.explicit7tv = true;
             auto host = at(o, {"data", "host"}).toObject();
             QString base = str(host["url"]);
             if (base.startsWith("//")) {

@@ -21,7 +21,7 @@ QUrl Network::query(QString base, const QMap<QString, QString> &params) {
 }
 
 void Network::bytes(QUrl url, BytesCallback done, QByteArray method, QByteArray body,
-                    QMap<QByteArray, QByteArray> headers, qint64 maxBytes) {
+                    QMap<QByteArray, QByteArray> headers, qint64 maxBytes, int timeoutMs) {
     if (transport) {
         transport(url, method, body, headers, std::move(done));
         return;
@@ -31,7 +31,7 @@ void Network::bytes(QUrl url, BytesCallback done, QByteArray method, QByteArray 
         return;
     }
     QNetworkRequest request(url);
-    request.setTransferTimeout(20000);
+    request.setTransferTimeout(timeoutMs);
     request.setRawHeader("User-Agent", "YT-Chatterino/" APP_VERSION);
     request.setRawHeader("Accept-Language", "en-US,en;q=0.9");
     for (auto i = headers.begin(); i != headers.end(); ++i) {
@@ -69,7 +69,7 @@ void Network::bytes(QUrl url, BytesCallback done, QByteArray method, QByteArray 
 }
 
 void Network::json(QUrl url, JsonCallback done, QByteArray method, QJsonObject body,
-                   QMap<QByteArray, QByteArray> headers) {
+                   QMap<QByteArray, QByteArray> headers, qint64 maxBytes, int timeoutMs) {
     headers["Accept"] = "application/json";
     QByteArray payload;
     if (!body.isEmpty()) {
@@ -86,7 +86,30 @@ void Network::json(QUrl url, JsonCallback done, QByteArray method, QJsonObject b
             }
             done(doc.isArray() ? QJsonObject{{"items", doc.array()}} : doc.object(), error);
         },
-        method, payload, headers);
+        method, payload, headers, maxBytes, timeoutMs);
+}
+
+void Network::sevenTv(const QString &path, bool global, JsonCallback done) {
+    auto valid = [global](const QJsonObject &data) {
+        if (global) return data.value("emotes").isArray();
+        const auto set = data.value("emote_set");
+        return set.isNull() || (set.isObject() && set.toObject().value("emotes").isArray());
+    };
+    auto complete = [done, valid](QJsonObject data, QString error) {
+        if (error.isEmpty() && !valid(data)) error = "The 7TV server returned an invalid emote set.";
+        done(data, error);
+    };
+    auto request = [this, path](const QString &host, JsonCallback callback) {
+        json(QUrl("https://" + host + "/v3/" + path), std::move(callback), "GET", {}, {},
+             32 * 1024 * 1024, 35000);
+    };
+    request("7tv.io", [request, valid, complete](QJsonObject data, QString error) {
+        if ((error.isEmpty() && valid(data)) || error.startsWith("HTTP 404") || error.startsWith("HTTP 429")) {
+            complete(data, error);
+            return;
+        }
+        request("api.7tv.app", complete);
+    });
 }
 
 void Network::form(QUrl url, const QMap<QString, QString> &values, JsonCallback done) {

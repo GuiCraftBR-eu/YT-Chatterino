@@ -620,6 +620,12 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
     const bool revealDeleted = m.deleted && hub->cfg->data["show_deleted_messages"].toBool(false);
     QString body = visibleMessageText(m, *hub->cfg);
     QVector<Span> spans = m.deleted && !revealDeleted ? QVector<Span>() : m.emotes;
+    if (!hub->cfg->data["show_explicit_7tv"].toBool(true))
+        spans.erase(std::remove_if(spans.begin(), spans.end(), [source](const Span &span) {
+            const auto host = QUrl(span.urls.value(0)).host().toLower();
+            return span.explicit7tv || (source && (host.endsWith(".7tv.app") || host.endsWith(".7tv.io")) &&
+                                       source->emotes.value(span.code).explicit7tv);
+        }), spans.end());
     if (isAlert && bodyOffset > 0 && (!m.deleted || revealDeleted)) {
         body.remove(0, bodyOffset);
         for (auto &span : spans) { span.start -= bodyOffset; span.end -= bodyOffset; }
@@ -691,7 +697,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         while (matches.hasNext()) {
             auto match = matches.next();
             auto it = source->emotes.constFind(match.captured());
-            if (it != source->emotes.cend()) {
+            if (it != source->emotes.cend() && (!it->explicit7tv || hub->cfg->data["show_explicit_7tv"].toBool(true))) {
                 auto span = it.value();
                 span.start = match.capturedStart();
                 span.end = match.capturedEnd();
@@ -2046,7 +2052,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
                 }
             } else if (!prefix.isEmpty()) {
                 for (auto it = s->emotes.cbegin(); it != s->emotes.cend(); ++it) {
-                    if (it.key().startsWith(prefix, Qt::CaseInsensitive)) {
+                    if ((!it->explicit7tv || hub->cfg->data["show_explicit_7tv"].toBool(true)) && it.key().startsWith(prefix, Qt::CaseInsensitive)) {
                         c << it.key();
                         input->candidateVisuals[it.key()] = {it->urls, false};
                     }
@@ -2140,6 +2146,7 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         }
         reload();
         refresh();
+        refreshDecorations();
     });
     connect(hub->cfg, &Config::filtersChanged, this, [this](const QString &changedKey) {
         if (changedKey != key()) return;
@@ -2371,11 +2378,17 @@ void Pane::refreshDecorations() {
             QVector<Span> spans;
             if (withEmotes) {
                 spans = Message::fromJson(value).emotes;
+                if (!hub->cfg->data["show_explicit_7tv"].toBool(true))
+                    spans.erase(std::remove_if(spans.begin(), spans.end(), [source](const Span &span) {
+                        const auto host = QUrl(span.urls.value(0)).host().toLower();
+                        return span.explicit7tv || ((host.endsWith(".7tv.app") || host.endsWith(".7tv.io")) &&
+                                                    source->emotes.value(span.code).explicit7tv);
+                    }), spans.end());
                 auto words = QRegularExpression("\\S+").globalMatch(body);
                 while (words.hasNext()) {
                     const auto word = words.next();
                     const auto it = source->emotes.constFind(word.captured());
-                    if (it == source->emotes.cend()) continue;
+                    if (it == source->emotes.cend() || (it->explicit7tv && !hub->cfg->data["show_explicit_7tv"].toBool(true))) continue;
                     auto span = it.value(); span.start = word.capturedStart(); span.end = word.capturedEnd(); span.code = word.captured();
                     spans << span;
                 }
@@ -3093,7 +3106,8 @@ void Pane::openEmotes() {
         int total = 0;
         for (const auto &code : codes) {
             const auto emote = catalog.value(code);
-            if (!emote.code.contains(needle, Qt::CaseInsensitive) || tabs->currentIndex() == 3) {
+            if ((!hub->cfg->data["show_explicit_7tv"].toBool(true) && emote.explicit7tv) ||
+                !emote.code.contains(needle, Qt::CaseInsensitive) || tabs->currentIndex() == 3) {
                 continue;
             }
             const int position = total++;
@@ -3177,6 +3191,7 @@ void Pane::openEmotes() {
         }
     });
     connect(s, &Source::changed, dialog, populate);
+    connect(hub->cfg, &Config::appearanceChanged, dialog, populate);
     connect(s, &Source::emoteRefreshRequested, dialog, load);
     connect(authorize, &QPushButton::clicked, dialog, [=, this] {
         if (hub->accounts->twitchAllows({"user:read:emotes"})) {

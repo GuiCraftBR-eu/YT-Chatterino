@@ -74,6 +74,7 @@ struct Span {
     QString code;
     QStringList urls;
     bool gif = false;
+    bool explicit7tv = false;
 };
 
 struct Badge {
