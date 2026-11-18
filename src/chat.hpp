@@ -19,12 +19,13 @@ class Source : public QObject {
     QPointer<VodReplay> vodReplay;
     QJsonObject header;
     QJsonObject pinned, activePoll, activePrediction;
-    QJsonObject browserPinned, browserPoll, browserPrediction;
+    QJsonObject browserPinned, browserPoll, browserPrediction, browserHype;
     QJsonObject chatModes;
     QSet<QString> autoModPending, autoModInFlight;
     bool chatModesKnown = false;
     QString youtubeModeNotice;
     QVector<Message> history;
+    QVector<Message> activityHistory;
     QHash<quintptr, int> viewCaps;
     QSet<QString> seen;
     QQueue<QString> seenOrder;
@@ -97,6 +98,7 @@ class Source : public QObject {
     void setPaused(bool paused);
     void stop();
     void publish(Message message);
+    void recordActivity(const Message &message);
     void status(const QString &text);
     void connectionStatus(const QString &text);
     void updateTwitchUserState(const QJsonObject &tags);
@@ -109,7 +111,7 @@ class Source : public QObject {
     void refreshDecorations();
     void setDecorations(QJsonObject pin, QJsonObject poll);
     void setPrediction(QJsonObject prediction);
-    void setBrowserPanels(QJsonObject pin, QJsonObject poll, QJsonObject prediction);
+    void setBrowserPanels(QJsonObject pin, QJsonObject poll, QJsonObject prediction, QJsonObject hype = {});
     void youtubeBannerActions(const QJsonArray &actions);
     void youtubeWebPollState(const QJsonObject &response);
     void updateChatModes(const QJsonObject &patch, bool known = true);
@@ -156,6 +158,7 @@ class Source : public QObject {
     void changed();
     void headerChanged();
     void decorationsChanged();
+    void hypeChanged();
     void chatModesChanged();
     void permissionsChanged();
     void emoteRefreshRequested();

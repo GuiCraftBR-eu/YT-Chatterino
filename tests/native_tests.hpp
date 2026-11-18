@@ -11,6 +11,8 @@ class NativeTests : public QObject {
     QStringList unexpectedRequests;
     void authenticate();
   private slots:
+    void pinnedEmotesAndHypeTrain();
+    void recentActivityGroupsAndFilters();
     void roleChangesAndCommands();
     void roleButtonsTrackChannelOwnership();
     void kickOgBadgeVisible();

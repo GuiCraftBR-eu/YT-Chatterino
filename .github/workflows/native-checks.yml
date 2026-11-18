@@ -1,7 +1,7 @@
 name: Release checks
 on:
   push:
-    branches: [main, 'prepare-v2.5.7']
+    branches: [main, 'prepare-v2.5.8']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -26,6 +26,7 @@ jobs:
         run: |
           node tests/browser-poll-e2e.js
           LEXICAL_TEST_BUNDLE="$RUNNER_TEMP/kick-lexical.js" REACT_TEST_BUNDLE="$RUNNER_TEMP/twitch-react.js" node tests/browser-actions-e2e.js
+          node tests/browser-decorations-e2e.js
   windows:
     runs-on: windows-latest
     steps:
@@ -66,12 +67,12 @@ jobs:
         run: |
           $mingw = Get-ChildItem "${{ github.workspace }}/../Qt/Tools" -Directory -Filter 'mingw*' | Select-Object -First 1
           $env:PATH = "$($mingw.FullName)/bin;$env:PATH"
-          python packaging/windows/package.py --exe build/YT-Chatterino.exe --stage build/portable/YT-Chatterino --output release-assets --version 2.5.7
+          python packaging/windows/package.py --exe build/YT-Chatterino.exe --stage build/portable/YT-Chatterino --output release-assets --version 2.5.8
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $exe = Join-Path $env:GITHUB_WORKSPACE 'build/portable/YT-Chatterino/YT-Chatterino.exe'
-          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.5.7') { throw 'Incorrect executable version.' }
-          if ((Get-Item $exe).VersionInfo.FileDescription -ne 'YT-Chatterino 2.5.7v') { throw 'Incorrect Task Manager name.' }
-          if ((Get-Item $exe).VersionInfo.ProductName -ne 'YT-Chatterino 2.5.7v') { throw 'Incorrect product name.' }
+          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.5.8') { throw 'Incorrect executable version.' }
+          if ((Get-Item $exe).VersionInfo.FileDescription -ne 'YT-Chatterino 2.5.8v') { throw 'Incorrect Task Manager name.' }
+          if ((Get-Item $exe).VersionInfo.ProductName -ne 'YT-Chatterino 2.5.8v') { throw 'Incorrect product name.' }
           # Run with only the packaged DLLs/plugins, not the build's Qt installation.
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           Remove-Item Env:QT_PLUGIN_PATH,Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
@@ -80,10 +81,10 @@ jobs:
           $stderr = Join-Path $env:RUNNER_TEMP 'yt-version-err.txt'
           $process = Start-Process -FilePath $exe -ArgumentList '--version' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           if ($process.ExitCode -ne 0) { throw 'Packaged executable did not start.' }
-          if (((Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)) -notlike '*2.5.7*') { throw 'Wrong packaged application version.' }
+          if (((Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)) -notlike '*2.5.8*') { throw 'Wrong packaged application version.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-Windows-2.5.7
+          name: YT-Chatterino-Windows-2.5.8
           path: release-assets/*.zip
       - uses: actions/upload-artifact@v4
         if: always()
@@ -108,7 +109,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Compiler-2.5.7
+          name: YT-Chatterino-OBS-Compiler-2.5.8
           if-no-files-found: error
           path: |
             obs-build/Release/yt-chatterino-obs.dll
@@ -128,29 +129,29 @@ jobs:
           cache: true
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-Windows-2.5.7
+          name: YT-Chatterino-Windows-2.5.8
           path: windows-package
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Compiler-2.5.7
+          name: YT-Chatterino-OBS-Compiler-2.5.8
           path: obs-compiler
       - name: Package the dock and test the embedded window
         shell: pwsh
         run: |
-          python obs-plugin/package_obs.py --plugin obs-compiler/yt-chatterino-obs.dll --core obs-compiler/yt-chatterino-obs-core.dll --windows-zip windows-package/YT-Chatterino-Windows11-2.5.7.zip --output release-assets --version 2.5.7
+          python obs-plugin/package_obs.py --plugin obs-compiler/yt-chatterino-obs.dll --core obs-compiler/yt-chatterino-obs-core.dll --windows-zip windows-package/YT-Chatterino-Windows11-2.5.8.zip --output release-assets --version 2.5.8
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Expand-Archive release-assets/YT-Chatterino-OBS-Windows-2.5.7.zip -DestinationPath "$env:RUNNER_TEMP/obs-package"
+          Expand-Archive release-assets/YT-Chatterino-OBS-Windows-2.5.8.zip -DestinationPath "$env:RUNNER_TEMP/obs-package"
           $env:YTCHATTERINO_OBS_DISABLE_UPDATES = '1'
           $env:YTCHATTERINO_OBS_PROFILE = "$env:RUNNER_TEMP/obs-profile"
           $env:QT_QPA_PLATFORM = 'windows'
           & "$env:GITHUB_WORKSPACE/obs-compiler/obs-dock-fixture.exe" "$env:GITHUB_WORKSPACE/obs-compiler/obs-frontend-api.dll" "$env:RUNNER_TEMP/obs-package/yt-chatterino-obs/yt-chatterino-obs.dll"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python tests/obs-cache-fixture.py release-assets/YT-Chatterino-OBS-Windows-2.5.7.zip obs-compiler/obs-dock-fixture.exe obs-compiler/obs-frontend-api.dll obs-compiler/yt-chatterino-obs-test-bootstrap.dll
+          python tests/obs-cache-fixture.py release-assets/YT-Chatterino-OBS-Windows-2.5.8.zip obs-compiler/obs-dock-fixture.exe obs-compiler/obs-frontend-api.dll obs-compiler/yt-chatterino-obs-test-bootstrap.dll
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Windows-2.5.7
-          path: release-assets/YT-Chatterino-OBS-Windows-2.5.7.zip
+          name: YT-Chatterino-OBS-Windows-2.5.8
+          path: release-assets/YT-Chatterino-OBS-Windows-2.5.8.zip
           if-no-files-found: error
   flatpak-app:
     runs-on: ubuntu-latest
@@ -163,14 +164,14 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: packaging/flatpak/io.github.GuiCraftBR_eu.YTChatterino.json
-          bundle: YT-Chatterino-Linux-2.5.7.flatpak
+          bundle: YT-Chatterino-Linux-2.5.8.flatpak
           branch: stable
           run-tests: true
-          artifact-name: YT-Chatterino-Flatpak-2.5.7
+          artifact-name: YT-Chatterino-Flatpak-2.5.8
       - name: Install and smoke-test the app
         run: |
-          flatpak install --user --noninteractive ./YT-Chatterino-Linux-2.5.7.flatpak
-          QT_QPA_PLATFORM=offscreen flatpak run io.github.GuiCraftBR_eu.YTChatterino --version | grep 2.5.7
+          flatpak install --user --noninteractive ./YT-Chatterino-Linux-2.5.8.flatpak
+          QT_QPA_PLATFORM=offscreen flatpak run io.github.GuiCraftBR_eu.YTChatterino --version | grep 2.5.8
           QT_QPA_PLATFORM=offscreen timeout 10s flatpak run io.github.GuiCraftBR_eu.YTChatterino || test "$?" -eq 124
           test -d "$HOME/.var/app/io.github.GuiCraftBR_eu.YTChatterino/config/YT-Chatterino"
           python3 tests/flatpak-updater.py
@@ -194,8 +195,8 @@ jobs:
           repo-dir: flatpak-repo
       - name: Package and exercise the OBS extension
         run: |
-          flatpak build-bundle --runtime flatpak-repo YT-Chatterino-OBS-Linux-2.5.7.flatpak com.obsproject.Studio.Plugin.YTChatterino stable
-          flatpak install --user --noninteractive ./YT-Chatterino-OBS-Linux-2.5.7.flatpak
+          flatpak build-bundle --runtime flatpak-repo YT-Chatterino-OBS-Linux-2.5.8.flatpak com.obsproject.Studio.Plugin.YTChatterino stable
+          flatpak install --user --noninteractive ./YT-Chatterino-OBS-Linux-2.5.8.flatpak
           xvfb-run -a sh -c '
             flatpak run --env=YTCHATTERINO_OBS_TEST_MODE=1 com.obsproject.Studio --multi --disable-updater --unfiltered_log > obs-test.log 2>&1 &
             pid=$!
@@ -217,39 +218,39 @@ jobs:
           '
       - uses: actions/upload-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Flatpak-2.5.7
-          path: YT-Chatterino-OBS-Linux-2.5.7.flatpak
+          name: YT-Chatterino-OBS-Flatpak-2.5.8
+          path: YT-Chatterino-OBS-Linux-2.5.8.flatpak
           if-no-files-found: error
   publish-release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release 2.5.7')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release 2.5.8')
     needs: [browser-e2e, windows, obs-integration, flatpak-app, flatpak-obs]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    concurrency: yt-chatterino-release-2.5.7
+    concurrency: yt-chatterino-release-2.5.8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-Windows-2.5.7
+          name: YT-Chatterino-Windows-2.5.8
           path: release-assets
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Windows-2.5.7
+          name: YT-Chatterino-OBS-Windows-2.5.8
           path: release-assets
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-Flatpak-2.5.7
+          name: YT-Chatterino-Flatpak-2.5.8
           path: release-assets
       - uses: actions/download-artifact@v4
         with:
-          name: YT-Chatterino-OBS-Flatpak-2.5.7
+          name: YT-Chatterino-OBS-Flatpak-2.5.8
           path: release-assets
       - name: Verify assets and publish release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: v2.5.7
+          RELEASE_TAG: v2.5.8
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1 || test -n "$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG")"; then
@@ -257,7 +258,7 @@ jobs:
             exit 1
           fi
           python packaging/verify_firefox_release.py
-          cp firefox-release/YT-Chatterino-Firefox-2.5.7.xpi release-assets/
+          cp firefox-release/YT-Chatterino-Firefox-2.5.8.xpi release-assets/
           cp packaging/flatpak/updater.py release-assets/YT-Chatterino-Flatpak-Install.py
           curl -fL --retry 3 -o release-assets/Qt-6.8.3-Library-Sources.zip https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.1.0/Qt-6.8.3-Library-Sources.zip
           echo '8376df57d67130e3f41820db7b76cdc112da43f672d19dd32c4554bbf254524f  release-assets/Qt-6.8.3-Library-Sources.zip' | sha256sum -c -
@@ -267,15 +268,15 @@ jobs:
           curl -fL --retry 3 -o release-assets/qtwebsockets-everywhere-src-6.11.1.tar.xz https://download.qt.io/archive/qt/6.11/6.11.1/submodules/qtwebsockets-everywhere-src-6.11.1.tar.xz
           echo '243e3aa11924c8c5c1645e892f62d013caa3766c57512ca926d5b58146646fbf  release-assets/qtwebsockets-everywhere-src-6.11.1.tar.xz' | sha256sum -c -
           cd release-assets
-          test -f YT-Chatterino-Windows11-2.5.7.zip
-          test -f YT-Chatterino-OBS-Windows-2.5.7.zip
-          test -f YT-Chatterino-Cpp-Source-2.5.7.zip
-          test -f YT-Chatterino-Linux-2.5.7.flatpak
-          test -f YT-Chatterino-OBS-Linux-2.5.7.flatpak
+          test -f YT-Chatterino-Windows11-2.5.8.zip
+          test -f YT-Chatterino-OBS-Windows-2.5.8.zip
+          test -f YT-Chatterino-Cpp-Source-2.5.8.zip
+          test -f YT-Chatterino-Linux-2.5.8.flatpak
+          test -f YT-Chatterino-OBS-Linux-2.5.8.flatpak
           sha256sum *.zip *.xpi *.flatpak *.py *.tar.xz > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
           gh api "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA"
           test "$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')" = "$GITHUB_SHA"
-          gh release create "$RELEASE_TAG" --verify-tag --draft --title '2.5.7 — Polls, predictions and moderation' --notes-file ../.github/release-notes-2.5.7.md *.zip *.xpi *.flatpak *.py *.tar.xz SHA256SUMS.txt
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title '2.5.8 — Pinned emotes and activity' --notes-file ../.github/release-notes-2.5.8.md *.zip *.xpi *.flatpak *.py *.tar.xz SHA256SUMS.txt
           python ../packaging/verify_draft_assets.py
           gh release edit "$RELEASE_TAG" --draft=false --latest

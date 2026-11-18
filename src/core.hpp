@@ -96,6 +96,7 @@ struct Message {
     QVector<Badge> badges;
     QVector<MentionSpan> mentions;
     QJsonObject reply;
+    QJsonObject activity;
     QString badgeInfo;
     qint64 seq = 0, deletionDuration = 0, replayOffsetMs = -1;
     bool history = false, deleted = false, own = false, system = false;

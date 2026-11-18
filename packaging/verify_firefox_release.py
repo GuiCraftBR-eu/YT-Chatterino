@@ -5,8 +5,8 @@ from pathlib import Path
 import zipfile
 
 root = Path(__file__).resolve().parents[1]
-release_version = '2.5.7'
-extension_version = '2.5.7.1'
+release_version = '2.5.8'
+extension_version = '2.5.8'
 xpi = root / 'firefox-release' / f'YT-Chatterino-Firefox-{release_version}.xpi'
 extension = root / 'browser-extension'
 data = xpi.read_bytes()

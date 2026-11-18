@@ -54,14 +54,22 @@ function youtubeChatId(raw) {
   return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : "";
 }
 function panel(value) {
-  return value && typeof value === "object" && typeof value.text === "string"
-    ? {text:value.text.slice(0,800),name:typeof value.name === "string" ? value.name.slice(0,100) : "",
+  if (!value || typeof value !== "object" || typeof value.text !== "string") return {};
+  const text=value.text.slice(0,800), native_emotes=[];
+  for (const e of Array.isArray(value.native_emotes) ? value.native_emotes.slice(0,12) : []) {
+    if (!e || !Number.isInteger(e.start) || !Number.isInteger(e.end) || e.start < 0 || e.end <= e.start ||
+        e.end > text.length || typeof e.code !== "string" || text.slice(e.start,e.end) !== e.code || !Array.isArray(e.urls)) continue;
+    let url; try { url=new URL(e.urls[0]); } catch (_) { continue; }
+    if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443") || url.href.length > 240) continue;
+    native_emotes.push({start:e.start,end:e.end,code:e.code,urls:[url.href]});
+  }
+  return {text,name:typeof value.name === "string" ? value.name.slice(0,100) : "",native_emotes,
        options:typeof value.options === "string" ? value.options.slice(0,800) : "",
        state:["open","voted","ended","unavailable"].includes(value.state) ? value.state : "unavailable",
        choices:Array.isArray(value.choices) ? value.choices.slice(0,10).filter(c => c &&
          typeof c.id === "string" && /^[a-z0-9_-]{1,128}$/i.test(c.id) &&
          typeof c.label === "string" && c.label.length > 0 && c.label.length <= 100)
-         .map(c => ({id:c.id,label:c.label})) : []} : {};
+         .map(c => ({id:c.id,label:c.label})) : []};
 }
 function sendTo(endpoint, data) {
   if (endpoint.socket?.readyState === WebSocket.OPEN && endpoint.ready) endpoint.socket.send(JSON.stringify(data));
@@ -251,7 +259,7 @@ api.runtime.onMessage.addListener((message, sender, respond) => {
     const state={type:"live-state",tab,url,live:message.live === true && !!name,name};
     if ((url.startsWith("https://www.twitch.tv/") || url.startsWith("https://kick.com/")) && message.chat && typeof message.chat === "object") {
       state.chat={available:message.chat.available === true,pin:panel(message.chat.pin),
-        poll:panel(message.chat.poll),prediction:panel(message.chat.prediction)};
+        poll:panel(message.chat.poll),prediction:panel(message.chat.prediction),hype:panel(message.chat.hype)};
       youtubeFrames.delete(tab);
     } else if (url.startsWith("https://www.youtube.com/watch?v=")) {
       const frame=youtubeFrames.get(tab);

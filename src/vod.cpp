@@ -717,7 +717,8 @@ void VodBridge::refreshBrowserPanels(const QString &platform, const QString &log
     for (auto *source : hub->sources) {
         if (source && !source->isVod && source->platform == platform &&
             source->id.compare(login, platform == "youtube" ? Qt::CaseSensitive : Qt::CaseInsensitive) == 0)
-            source->setBrowserPanels(selected["pin"].toObject(), selected["poll"].toObject(), selected["prediction"].toObject());
+            source->setBrowserPanels(selected["pin"].toObject(), selected["poll"].toObject(),
+                                     selected["prediction"].toObject(), selected["hype"].toObject());
     }
 }
 
@@ -751,6 +752,20 @@ void VodBridge::updateBrowserPanels(const QString &player, const QString &platfo
             const auto source = input.toObject();
             const QString text = str(source["text"]).simplified().left(800);
             if (text.isEmpty()) return QJsonObject();
+            QJsonArray emotes;
+            for (const auto &value : source["native_emotes"].toArray()) {
+                const auto emote = value.toObject();
+                const int start = emote["start"].toInt(-1), end = emote["end"].toInt(-1);
+                const QString code = str(emote["code"]);
+                if (start < 0 || end <= start || end > text.size() || code != text.mid(start, end - start)) continue;
+                QJsonArray urls;
+                for (const auto &value : emote["urls"].toArray()) {
+                    const QString url = str(value);
+                    if (url.size() <= 240 && Images::allowed(QUrl(url))) { urls.append(url); break; }
+                }
+                if (!urls.isEmpty()) emotes.append(QJsonObject{{"start", start}, {"end", end}, {"code", code}, {"urls", urls}});
+                if (emotes.size() >= 12) break;
+            }
             QJsonArray choices;
             for (const auto &value : source["choices"].toArray()) {
                 const auto choice = value.toObject();
@@ -760,14 +775,14 @@ void VodBridge::updateBrowserPanels(const QString &player, const QString &platfo
                 if (choices.size() >= 10) break;
             }
             const auto state = str(source["state"]);
-            return QJsonObject{{"text", text}, {"name", str(source["name"]).simplified().left(100)},
+            return QJsonObject{{"text", text}, {"name", str(source["name"]).simplified().left(100)}, {"native_emotes", emotes},
                                {"options", str(source["options"]).simplified().left(800)}, {"browser", true},
                                {"state", QStringList{"open", "voted", "ended", "unavailable"}.contains(state) ? state : QString("unavailable")},
                                {"choices", choices}};
         };
         browserPanels[player] = {{"platform", platform}, {"login", login}, {"sequence", double(++browserPanelSequence)},
                                  {"pin", panel(chat["pin"])}, {"poll", panel(chat["poll"])},
-                                 {"prediction", panel(chat["prediction"])}};
+                                 {"prediction", panel(chat["prediction"])}, {"hype", panel(chat["hype"])}};
     }
     if (!oldLogin.isEmpty() && (oldLogin != login || oldPlatform != platform)) refreshBrowserPanels(oldPlatform, oldLogin);
     if (!login.isEmpty()) refreshBrowserPanels(platform, login);
