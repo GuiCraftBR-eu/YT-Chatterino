@@ -2014,8 +2014,9 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
             if (prefix.startsWith('/') && input->text().left(input->cursorPosition()).trimmed() == prefix && !s->isVod) {
                 c = {"/ban", "/timeout"};
                 if (s->platform != "youtube") c << "/unban";
-                if (s->platform == "twitch" || s->platform == "youtube") c << "/mod" << "/unmod";
-                if (s->platform == "twitch") c << "/vip" << "/unvip";
+                if (s->platform == "twitch" || s->platform == "youtube" || s->platform == "kick") c << "/mod" << "/unmod";
+                if (s->platform == "twitch" || s->platform == "kick") c << "/vip" << "/unvip";
+                if (s->platform == "kick") c << "/og" << "/unog";
             } else if (prefix.startsWith('@')) {
                 QSet<QString> seen;
                 for (auto it = s->history.crbegin(); it != s->history.crend(); ++it) {
@@ -2357,10 +2358,10 @@ void Pane::refreshDecorations() {
                 auto *open = new QToolButton(decorations);
                 open->setObjectName("open-twitch-engagement");
                 open->setText(hub->cfg->T(action));
-                open->setToolTip(hub->cfg->T("Complete this action on Twitch in your browser."));
+                open->setToolTip(hub->cfg->T("Open the prediction in your browser to load its choices."));
                 open->setStyleSheet("QToolButton { color:#c7a6ff; background:#25232a; border:0; padding:3px 8px; } QToolButton:hover { background:#39333f; }");
                 QPointer<Source> target(source);
-                const QString kind = action == "Vote on Twitch" ? "poll" : "prediction";
+                const QString kind = "prediction";
                 connect(open, &QToolButton::clicked, this, [this, target, kind] {
                     if (target && (!openBrowserPanel || !openBrowserPanel(target, kind)))
                         QDesktopServices::openUrl(QUrl("https://www.twitch.tv/" + target->id));
@@ -2371,7 +2372,7 @@ void Pane::refreshDecorations() {
         };
         const auto pin = source->pinned.isEmpty() ? source->browserPinned : source->pinned;
         const auto poll = str(source->activePoll.value("text")).isEmpty() ? source->browserPoll : source->activePoll;
-        const auto prediction = source->activePrediction.isEmpty() ? source->browserPrediction : source->activePrediction;
+        const auto prediction = str(source->activePrediction.value("text")).isEmpty() ? source->browserPrediction : source->activePrediction;
         add(hub->cfg->T("Pinned message"), pin);
         QString pollHeading = hub->cfg->T(poll.value("ended").toBool() ? "Poll result" : "Poll");
         if (poll.value("last_observed").toBool()) pollHeading += " · " + hub->cfg->T("last observed");
@@ -2421,7 +2422,7 @@ void Pane::refreshDecorations() {
                             {"already_voted", "Your vote was already recorded."}, {"ended", "This poll has ended."},
                             {"changed", "The poll changed. Choose again."}, {"tab_closed", "The browser tab was closed."},
                             {"unavailable", "Voting is unavailable in the browser tab."},
-                            {"uncertain", "Vote submitted, but it was not confirmed. Check the browser before retrying."}};
+                            {"uncertain", "Vote may have been submitted, but it was not confirmed. Check the browser before retrying."}};
                         safe->pollFeedback[key] = error.isEmpty() ? messages.value(status, "Voting is unavailable in the browser tab.") : error;
                         QTimer::singleShot(0, safe, [safe] { if (safe) safe->refreshDecorations(); });
                     });
@@ -2444,7 +2445,66 @@ void Pane::refreshDecorations() {
         QString predictionHeading = hub->cfg->T(prediction.value("ended").toBool() ? "Prediction result" : "Prediction");
         if (str(prediction.value("status")) == "LOCKED") predictionHeading += " · " + hub->cfg->T("Locked");
         if (str(prediction.value("status")) == "CANCELED") predictionHeading += " · " + hub->cfg->T("Canceled");
-        add(predictionHeading, prediction, str(prediction.value("status")) == "LOCKED" ? QString() : "Predict on Twitch");
+        const auto browserPrediction = source->browserPrediction;
+        const auto predictionQuestion = str(browserPrediction["text"]);
+        const auto predictionChoices = browserPrediction["choices"].toArray();
+        const auto predictionStatus = str(source->activePrediction.value("status"));
+        const bool predictionReady = source->platform == "twitch" && !source->isVod && predictInBrowser &&
+            !predictionQuestion.isEmpty() && str(browserPrediction["state"]) == "open" && !predictionChoices.isEmpty() &&
+            !source->activePrediction.value("ended").toBool() && (predictionStatus.isEmpty() || predictionStatus == "ACTIVE") &&
+            (str(source->activePrediction.value("text")).isEmpty() ||
+             str(source->activePrediction.value("text")).simplified() == predictionQuestion);
+        add(predictionHeading, prediction, !predictionReady && predictionStatus != "LOCKED" ? "Load prediction" : QString());
+        if (!predictionQuestion.isEmpty() && predictionQuestions.value(key) != predictionQuestion) {
+            predictionQuestions[key] = predictionQuestion; predictionSelection.remove(key); predictionFeedback.remove(key);
+        }
+        if (predictionReady) {
+            auto *row = new QWidget(decorations);
+            auto *layout = new QHBoxLayout(row); layout->setContentsMargins(2, 0, 2, 0);
+            auto *select = new QComboBox(row); select->setObjectName("twitch-prediction-choice");
+            select->addItem(hub->cfg->T("Choose an outcome"), QString());
+            for (const auto &value : predictionChoices) {
+                const auto choice = value.toObject(); select->addItem(str(choice["label"]), str(choice["id"]));
+            }
+            select->setCurrentIndex(qMax(0, select->findData(predictionSelection.value(key))));
+            connect(select, qOverload<int>(&QComboBox::currentIndexChanged), this, [this, select, key] {
+                predictionSelection[key] = select->currentData().toString();
+            });
+            auto *points = new QSpinBox(row); points->setObjectName("twitch-prediction-points");
+            points->setRange(1, 250000); points->setValue(10); points->setSuffix(" " + hub->cfg->T("points"));
+            auto *place = new QPushButton(hub->cfg->T("Predict"), row); place->setObjectName("twitch-prediction-place");
+            place->setEnabled(select->currentIndex() > 0 && !predictionRequests.contains(key));
+            connect(select, qOverload<int>(&QComboBox::currentIndexChanged), place, [this, place, key](int index) {
+                place->setEnabled(index > 0 && !predictionRequests.contains(key));
+            });
+            QPointer<Source> target(source);
+            connect(place, &QPushButton::clicked, this, [this, target, select, points, place, key, predictionQuestion] {
+                if (!target || predictionRequests.contains(key) || select->currentIndex() <= 0) return;
+                const auto choice = select->currentData().toString(), outcome = select->currentText();
+                const int amount = points->value();
+                if (QMessageBox::question(this, hub->cfg->T("Confirm prediction"),
+                    hub->cfg->T("Predict {outcome} with {points} points?", {{"outcome", outcome}, {"points", QString::number(amount)}})) != QMessageBox::Yes) return;
+                predictionRequests.insert(key); place->setEnabled(false); predictionFeedback[key] = "Sending prediction…";
+                QPointer<Pane> safe(this);
+                predictInBrowser(target, predictionQuestion, choice, outcome, amount, [safe, key, predictionQuestion](QJsonObject result, QString error) {
+                    if (!safe) return;
+                    safe->predictionRequests.remove(key);
+                    if (safe->predictionQuestions.value(key) != predictionQuestion) return;
+                    const QMap<QString, QString> messages{{"needs_confirmation", "Finish Twitch's required confirmation in the browser."},
+                        {"changed", "The prediction changed. Choose again."}, {"tab_closed", "The browser tab was closed."},
+                        {"unavailable", "Prediction is unavailable in the browser tab."},
+                        {"uncertain", "Prediction may have been submitted, but it was not confirmed. Check Twitch before retrying."}};
+                    safe->predictionFeedback[key] = error.isEmpty() ? messages.value(str(result["status"]), "Prediction is unavailable in the browser tab.") : error;
+                    QTimer::singleShot(0, safe, [safe] { if (safe) safe->refreshDecorations(); });
+                });
+            });
+            layout->addWidget(select, 1); layout->addWidget(points); layout->addWidget(place); box->addWidget(row);
+        }
+        if (!predictionFeedback.value(key).isEmpty()) {
+            auto *status = new QLabel(hub->cfg->T(predictionFeedback.value(key)), decorations);
+            status->setObjectName("twitch-prediction-status"); status->setWordWrap(true);
+            status->setStyleSheet("color:#bcbcc6; padding:2px 4px;"); box->addWidget(status); ++count;
+        }
     }
     decorations->setVisible(count > 0 && !detached);
 }

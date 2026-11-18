@@ -128,10 +128,43 @@ void NativeTests::browserPollVotesRouteAndHandleClosedTabs() {
     socket.sendTextMessage(QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact)));
     QTRY_VERIFY(pane->findChild<QLabel *>("twitch-poll-status"));
     QTRY_VERIFY(pane->findChild<QLabel *>("twitch-poll-status")->text().contains("confirmed", Qt::CaseInsensitive));
+
+    const QJsonObject prediction{{"text", "Will it happen?"}, {"state", "open"},
+        {"choices", QJsonArray{QJsonObject{{"id", "outcome-0"}, {"label", "Yes"}},
+                               QJsonObject{{"id", "outcome-1"}, {"label", "No"}}}}};
+    auto predictionState = state;
+    predictionState["chat"] = QJsonObject{{"available", true}, {"poll", poll}, {"prediction", prediction}};
+    socket.sendTextMessage(QString::fromUtf8(QJsonDocument(predictionState).toJson(QJsonDocument::Compact)));
+    QTRY_COMPARE(str(twitch->browserPrediction["state"]), QString("open"));
+    QTRY_VERIFY(pane->findChild<QComboBox *>("twitch-prediction-choice"));
+    auto *predictionChoice = pane->findChild<QComboBox *>("twitch-prediction-choice");
+    auto *predictionPoints = pane->findChild<QSpinBox *>("twitch-prediction-points");
+    auto *predict = pane->findChild<QPushButton *>("twitch-prediction-place");
+    QVERIFY(predictionPoints); QVERIFY(predict); predictionChoice->setCurrentIndex(2); predictionPoints->setValue(125);
+    QVERIFY(predict->isEnabled()); received.clear();
+    bool confirmedDialog = false;
+    QTimer::singleShot(100, [&confirmedDialog] {
+        for (auto *widget : QApplication::topLevelWidgets()) if (auto *dialog = qobject_cast<QMessageBox *>(widget)) {
+            if (dialog->isVisible() && dialog->button(QMessageBox::Yes)) {
+                confirmedDialog = true; dialog->button(QMessageBox::Yes)->click(); return;
+            }
+        }
+    });
+    predict->click(); QVERIFY(confirmedDialog); QTRY_VERIFY(!received.isEmpty());
+    const auto predictionCommand = QJsonDocument::fromJson(received.last()[0].toString().toUtf8()).object();
+    QCOMPARE(str(predictionCommand["type"]), QString("place-prediction"));
+    QCOMPARE(str(predictionCommand["choice"]), QString("outcome-1"));
+    QCOMPARE(str(predictionCommand["label"]), QString("No"));
+    QCOMPARE(predictionCommand["points"].toInt(), 125);
+    reply["request"] = predictionCommand["request"]; reply["status"] = "needs_confirmation";
+    socket.sendTextMessage(QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact)));
+    QTRY_VERIFY(pane->findChild<QLabel *>("twitch-prediction-status"));
+    QTRY_VERIFY(pane->findChild<QLabel *>("twitch-prediction-status")->text().contains("confirmation", Qt::CaseInsensitive));
+
     status.clear();
     app->vodBridge->voteBrowserPoll(twitch, "Which?", "choice-1", "Yes", [&](QJsonObject result, QString) { status = str(result["status"]); });
     socket.sendTextMessage(R"({"type":"live-closed","tab":17})");
-    QTRY_COMPARE(status, QString("tab_closed"));
+    QTRY_COMPARE(status, QString("uncertain"));
 
     // Identical Twitch and Kick channel names must never share a poll or tab.
     auto *kick = app->hub.source("kick", "guicraft_");
@@ -159,10 +192,23 @@ void NativeTests::browserPollVotesRouteAndHandleClosedTabs() {
     QCOMPARE(str(kickCommand["platform"]), QString("kick"));
     QCOMPARE(str(kickCommand["choice"]), QString("0"));
     QCOMPARE(kickCommand["tab"].toInt(), 18);
-    reply["tab"] = 18; reply["request"] = kickCommand["request"];
+    reply["tab"] = 18; reply["request"] = kickCommand["request"]; reply["status"] = "confirmed";
     socket.sendTextMessage(QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact)));
     QTRY_VERIFY(kickPane->findChild<QLabel *>("kick-poll-status"));
     QTRY_VERIFY(kickPane->findChild<QLabel *>("kick-poll-status")->text().contains("confirmed", Qt::CaseInsensitive));
+    kick->header["channel_id"] = 42;
+    app->accounts.kick = {{"user_id", 42}, {"access_token", "fixture"}, {"scope", "channel:write"},
+                          {"expires_at", double(QDateTime::currentSecsSinceEpoch() + 600)}};
+    Message kickUser; kickUser.uid = "99"; kickUser.name = "Viewer"; kickUser.login = "viewer";
+    QString roleError = "pending"; received.clear();
+    app->hub.setUserRole(kick, kickUser, "moderator", true, [&](QJsonObject, QString error) { roleError = error; });
+    QTRY_VERIFY(!received.isEmpty());
+    const auto roleCommand = QJsonDocument::fromJson(received.last()[0].toString().toUtf8()).object();
+    QCOMPARE(str(roleCommand["type"]), QString("kick-role")); QCOMPARE(str(roleCommand["uid"]), QString("99"));
+    QCOMPARE(str(roleCommand["username"]), QString("Viewer")); QCOMPARE(str(roleCommand["verb"]), QString("mod"));
+    reply["request"] = roleCommand["request"];
+    socket.sendTextMessage(QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact)));
+    QTRY_VERIFY(roleError.isEmpty());
     socket.sendTextMessage(R"({"type":"live-closed","tab":18})");
     QTRY_VERIFY(kick->browserPoll.isEmpty());
     QVERIFY(!twitch->browserPoll.isEmpty());

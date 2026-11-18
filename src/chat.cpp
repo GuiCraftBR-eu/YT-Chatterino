@@ -2136,11 +2136,12 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
     static const QRegularExpression whitespace("\\s+");
     const auto parts = trimmed.startsWith('/') ? trimmed.split(whitespace, Qt::SkipEmptyParts) : QStringList();
     const QString command = parts.value(0).toLower();
-    static const QSet<QString> commands{"/ban", "/timeout", "/unban", "/mod", "/unmod", "/vip", "/unvip"};
+    static const QSet<QString> commands{"/ban", "/timeout", "/unban", "/mod", "/unmod", "/vip", "/unvip", "/og", "/unog"};
     if (commands.contains(command)) {
-        const bool role = command == "/mod" || command == "/unmod" || command == "/vip" || command == "/unvip";
+        const bool role = command == "/mod" || command == "/unmod" || command == "/vip" || command == "/unvip" || command == "/og" || command == "/unog";
         if ((!role && command == "/unban" && s->platform == "youtube") ||
-            (role && (s->platform == "kick" || (s->platform == "youtube" && (command == "/vip" || command == "/unvip"))))) {
+            (s->platform != "kick" && (command == "/og" || command == "/unog")) ||
+            (s->platform == "youtube" && (command == "/vip" || command == "/unvip"))) {
             done({}, "This command is not supported on this platform."); return;
         }
         if (parts.size() < 2 || parts.size() > (command == "/timeout" ? 3 : 2)) {
@@ -2168,8 +2169,8 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
         QPointer<Source> safe(s);
         auto run = [this, safe, command, role, duration, done](Message resolved) {
             if (!safe) { done({}, "Channel closed."); return; }
-            if (role) setUserRole(safe, resolved, command.contains("vip") ? "vip" : "moderator",
-                                  command == "/mod" || command == "/vip", done);
+            if (role) setUserRole(safe, resolved, command.contains("vip") ? "vip" : command.contains("og") ? "og" : "moderator",
+                                  command == "/mod" || command == "/vip" || command == "/og", done);
             else moderate(safe, resolved, command.mid(1), command == "/timeout" ? duration : 0, done);
         };
         if (ids.size() == 1) { run(match); return; }
@@ -2548,6 +2549,22 @@ void Hub::twitchChatSettings(Source *source, QJsonObject changes, JsonCallback d
 void Hub::setUserRole(Source *s, const Message &m, QString role, bool add, JsonCallback done) {
     if (!s || s->isVod || !canEditChannel(s) || m.uid.isEmpty() || m.uid == s->room()) {
         done({}, "Role changes require the channel owner's account and a valid user."); return;
+    }
+    if (s->platform == "kick" && QStringList{"moderator", "vip", "og"}.contains(role)) {
+        const auto username = m.name.isEmpty() ? m.login : m.name;
+        const auto base = role == "moderator" ? QString("mod") : role;
+        const auto verb = add ? base : "un" + base;
+        if (!kickRoleInBrowser) { done({}, "Open the Kick channel in a browser with the extension connected."); return; }
+        kickRoleInBrowser(s, username, m.uid, verb, [done](QJsonObject result, QString error) {
+            if (!error.isEmpty()) { done({}, error); return; }
+            const auto status = str(result["status"]);
+            if (status == "confirmed" || status == "already_set") { done({}, {}); return; }
+            if (status == "changed") done({}, "Kick could not match this username to the selected user.");
+            else if (status == "tab_closed") done({}, "Open the Kick channel in a browser with the extension connected.");
+            else if (status == "uncertain") done({}, "The Kick role change was not confirmed. Check Kick before retrying.");
+            else done({}, "Kick role changes require a signed-in channel tab with an empty chat input.");
+        });
+        return;
     }
     if (s->platform == "twitch" && (role == "moderator" || role == "vip")) {
         if (s->room().isEmpty() || s->room() != str(accounts->twitch["user_id"])) {

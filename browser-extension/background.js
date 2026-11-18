@@ -133,7 +133,55 @@ function connectEndpoint(endpoint) {
       const action=platform === "youtube" ? api.tabs.sendMessage(tab,message,{frameId:frame.frameId}) : api.tabs.sendMessage(tab,message);
       action
         .then(result => finish(["confirmed","already_voted","ended","changed","unavailable","uncertain"].includes(result?.status)
-          ? result.status : "uncertain"), () => finish("tab_closed"));
+          ? result.status : "uncertain"), () => finish("uncertain"));
+      return;
+    }
+    if (data.type === "place-prediction" && endpoint.ready) {
+      const tab=data.tab, channel=typeof data.channel === "string" ? data.channel.toLowerCase() : "";
+      const request=typeof data.request === "string" ? data.request : "";
+      if (!Number.isInteger(tab) || !/^[a-z0-9_]{1,25}$/.test(channel) || !/^[a-f0-9-]{36}$/i.test(request) ||
+          !Number.isInteger(data.points) || data.points < 1 || data.points > 250000 || pendingVotes.has(request)) return;
+      const key="prediction:" + tab + ":" + data.question;
+      const finish=status => {
+        pendingVotes.delete(request); pendingPolls.delete(key);
+        sendTo(endpoint, {type:"poll-result",request,tab,status});
+      };
+      const state=liveStates.get(tab), prediction=state?.chat?.prediction;
+      if (!state || state.url !== "https://www.twitch.tv/" + channel) {
+        sendTo(endpoint,{type:"poll-result",request,tab,status:"tab_closed"}); return;
+      }
+      if (!prediction || prediction.text !== data.question) {
+        sendTo(endpoint,{type:"poll-result",request,tab,status:"changed"}); return;
+      }
+      if (prediction.state !== "open" || !prediction.choices?.some(c => c.id === data.choice && c.label === data.label) || pendingPolls.has(key)) {
+        sendTo(endpoint,{type:"poll-result",request,tab,status:"unavailable"}); return;
+      }
+      pendingVotes.add(request); pendingPolls.add(key);
+      api.tabs.sendMessage(tab,{type:"place-prediction",channel,question:prediction.text,choice:data.choice,label:data.label,points:data.points})
+        .then(result => finish(["needs_confirmation","changed","unavailable","uncertain"].includes(result?.status) ? result.status : "uncertain"),
+          () => finish("uncertain"));
+      return;
+    }
+    if (data.type === "kick-role" && endpoint.ready) {
+      const tab=data.tab, channel=typeof data.channel === "string" ? data.channel.toLowerCase() : "";
+      const request=typeof data.request === "string" ? data.request : "";
+      const username=typeof data.username === "string" ? data.username : "";
+      const uid=typeof data.uid === "string" ? data.uid : "";
+      if (!Number.isInteger(tab) || !/^[a-z0-9_-]{1,80}$/.test(channel) || !/^[a-f0-9-]{36}$/i.test(request) ||
+          !/^[a-z0-9_]{1,25}$/i.test(username) || !/^[0-9]{1,20}$/.test(uid) ||
+          !["mod","unmod","vip","unvip","og","unog"].includes(data.verb) || pendingVotes.has(request)) return;
+      const key="kick-role:" + tab + ":" + username.toLowerCase();
+      if (liveStates.get(tab)?.url !== "https://kick.com/" + channel) {
+        sendTo(endpoint,{type:"poll-result",request,tab,status:"tab_closed"}); return;
+      }
+      if (pendingPolls.has(key)) { sendTo(endpoint,{type:"poll-result",request,tab,status:"unavailable"}); return; }
+      pendingVotes.add(request); pendingPolls.add(key);
+      const finish=status => {
+        pendingVotes.delete(request); pendingPolls.delete(key);
+        sendTo(endpoint,{type:"poll-result",request,tab,status});
+      };
+      api.tabs.sendMessage(tab,{type:"kick-role",platform:"kick",channel,username,uid,verb:data.verb})
+        .then(result => finish(["confirmed","already_set","changed","unavailable","uncertain"].includes(result?.status) ? result.status : "uncertain"), () => finish("uncertain"));
       return;
     }
     if (data.type !== "ready") return;

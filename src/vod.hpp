@@ -70,6 +70,8 @@ class VodBridge : public QObject {
     void refreshBrowserPanels(const QString &platform, const QString &login);
     bool openTwitchPanel(Source *source, const QString &kind);
     void voteBrowserPoll(Source *source, const QString &question, const QString &choice, const QString &label, JsonCallback done);
+    void placeTwitchPrediction(Source *source, const QString &question, const QString &choice, const QString &label, int points, JsonCallback done);
+    void changeKickRole(Source *source, const QString &username, const QString &uid, const QString &verb, JsonCallback done);
     void finishPollRequest(const QString &request, const QString &status);
     void removeLivePlayer(const QString &player);
     static QJsonObject identifyLive(const QUrl &url);

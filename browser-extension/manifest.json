@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YT-Chatterino",
-  "version": "2.5.6",
-  "description": "Find open streams, synchronize VOD chat, and share Twitch chat panels and free poll votes with YT-Chatterino on this computer.",
+  "version": "2.5.7.1",
+  "description": "Synchronize streams and send selected poll, prediction, and moderation actions from YT-Chatterino.",
   "permissions": [],
   "host_permissions": [
     "http://127.0.0.1/*"

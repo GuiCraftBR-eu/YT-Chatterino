@@ -431,6 +431,11 @@ void MainWindow::attachPane(Pane *p) {
         if (vodBridge) vodBridge->voteBrowserPoll(source, question, choice, label, std::move(done));
         else done({{"status", "tab_closed"}}, {});
     };
+    p->predictInBrowser = [this](Source *source, const QString &question, const QString &choice,
+                                  const QString &label, int points, JsonCallback done) {
+        if (vodBridge) vodBridge->placeTwitchPrediction(source, question, choice, label, points, std::move(done));
+        else done({{"status", "tab_closed"}}, {});
+    };
     auto markVodSources = [this, p] {
         for (auto source : p->sources) if (source) {
             if (source->isVod) {
@@ -1470,6 +1475,11 @@ void MainWindow::openPopup(Pane *sourcePane, bool overlay) {
 void MainWindow::startVodBridge(quint16 port) {
     if (vodBridge) return;
     vodBridge = new VodBridge(&hub, this, port);
+    hub.kickRoleInBrowser = [this](Source *source, const QString &username, const QString &uid,
+                                   const QString &verb, JsonCallback done) {
+        if (vodBridge) vodBridge->changeKickRole(source, username, uid, verb, std::move(done));
+        else done({{"status", "tab_closed"}}, {});
+    };
     if (!vodBridge->server.isListening()) statusBar()->showMessage(cfg.T("VOD browser connection is unavailable."), 10000);
 }
 
@@ -2523,21 +2533,25 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
     auto *roleStatus = label(cfg, "", true);
     roleStatus->setObjectName("user-card-role-status");
     roleStatus->setWordWrap(true);
-    auto *roleButtons = new QHBoxLayout(roleRow);
+    auto *roleButtons = new QGridLayout(roleRow);
     roleButtons->setContentsMargins(0, 0, 0, 0);
+    int roleIndex = 0;
     for (const auto &entry : QList<QPair<QString, QString>>{{"Add moderator", "mod"}, {"Remove moderator", "unmod"},
-                                                          {"Add VIP", "vip"}, {"Remove VIP", "unvip"}}) {
-        if (source->platform != "twitch" && (entry.second == "vip" || entry.second == "unvip")) continue;
+                                                          {"Add VIP", "vip"}, {"Remove VIP", "unvip"},
+                                                          {"Add OG", "og"}, {"Remove OG", "unog"}}) {
+        if (source->platform == "youtube" && (entry.second == "vip" || entry.second == "unvip")) continue;
+        if (source->platform != "kick" && (entry.second == "og" || entry.second == "unog")) continue;
         auto *control = new QPushButton(cfg.T(entry.first), d);
         connect(control, &QPushButton::clicked, d, [this, s = QPointer<Source>(source), message, entry,
                                                     safeRow = QPointer<QWidget>(roleRow),
                                                     safeStatus = QPointer<QLabel>(roleStatus)] {
             if (!s) return;
-            const bool vip = entry.second.contains("vip"), add = !entry.second.startsWith("un");
+            const auto role = entry.second.contains("vip") ? QString("vip") : entry.second.contains("og") ? QString("og") : QString("moderator");
+            const bool add = !entry.second.startsWith("un");
             if (safeRow) safeRow->setEnabled(false);
             if (safeStatus) safeStatus->setText(cfg.T("Updating role…"));
             QPointer<MainWindow> safe(this);
-            hub.setUserRole(s, message, vip ? "vip" : "moderator", add, [safe, safeRow, safeStatus](QJsonObject, QString error) {
+            hub.setUserRole(s, message, role, add, [safe, safeRow, safeStatus](QJsonObject, QString error) {
                 if (!safe) return;
                 if (safeRow) safeRow->setEnabled(true);
                 if (safeStatus) safeStatus->setText(safe->cfg.T(error.isEmpty() ? "Role updated." : error));
@@ -2545,7 +2559,8 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
         });
         control->setObjectName("role-" + entry.second);
         control->setEnabled(!message.uid.isEmpty() && message.uid != source->room());
-        roleButtons->addWidget(control);
+        roleButtons->addWidget(control, roleIndex / 2, roleIndex % 2);
+        ++roleIndex;
     }
     layout->addWidget(roleRow);
     layout->addWidget(roleStatus);
@@ -2553,7 +2568,7 @@ void MainWindow::showUser(Pane *pane, Source *source, Message message) {
     auto updateModeration = [this, permissionSource, moderationRow, roleRow] {
         moderationRow->setVisible(permissionSource && hub.hasModerationRole(permissionSource) &&
             (permissionSource->platform != "kick" || accounts.kickAllows({"moderation:ban"})));
-        roleRow->setVisible(permissionSource && permissionSource->platform != "kick" && hub.canEditChannel(permissionSource));
+        roleRow->setVisible(permissionSource && hub.canEditChannel(permissionSource));
     };
     updateModeration();
     connect(source, &Source::permissionsChanged, d, updateModeration);

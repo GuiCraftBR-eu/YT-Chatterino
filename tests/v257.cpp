@@ -71,6 +71,23 @@ void NativeTests::roleChangesAndCommands() {
     app->hub.setUserRole(youtube, user, "moderator", false, done); QVERIFY2(error.isEmpty(), qPrintable(error)); QCOMPARE(page, 2);
     QCOMPARE(app->quota.used() - used, 500);
     app->hub.setUserRole(youtube, user, "vip", true, done); QVERIFY(!error.isEmpty());
+
+    auto *kick = app->hub.source("kick", "mine");
+    kick->header["channel_id"] = 42;
+    app->accounts.kick = {{"user_id", 42}, {"access_token", "fixture"}, {"scope", "channel:write"},
+                          {"expires_at", double(QDateTime::currentSecsSinceEpoch() + 600)}};
+    user.uid = "99"; user.name = "Viewer"; user.login = "viewer"; kick->publish(user);
+    QString verb, target;
+    app->hub.kickRoleInBrowser = [&](Source *source, const QString &username, const QString &uid, const QString &action, JsonCallback reply) {
+        QCOMPARE(source, kick); QCOMPARE(uid, QString("99")); verb = action; target = username;
+        reply({{"status", action == "vip" ? "uncertain" : "confirmed"}}, {});
+    };
+    app->hub.send(kick, "/vip Viewer", {}, done); QCOMPARE(verb, QString("vip")); QCOMPARE(target, QString("Viewer"));
+    QVERIFY(error.contains("not confirmed"));
+    app->hub.send(kick, "/unog Viewer", {}, done); QCOMPARE(verb, QString("unog")); QVERIFY(error.isEmpty());
+    auto *kickPane = app->addWorkspace({kick})->focusedPane.data();
+    kickPane->input->setText("/uno"); QTest::keyClick(kickPane->input, Qt::Key_Tab);
+    QCOMPARE(kickPane->input->text(), QString("/unog "));
 }
 
 void NativeTests::roleButtonsTrackChannelOwnership() {
@@ -94,6 +111,21 @@ void NativeTests::roleButtonsTrackChannelOwnership() {
     auto *status = card->findChild<QLabel *>("user-card-role-status"); QVERIFY(status);
     QCOMPARE(status->text(), QString("Role updated."));
     twitch->header["channel_id"] = "12"; emit twitch->headerChanged(); QVERIFY(row->isHidden());
+
+    auto *kick = app->hub.source("kick", "mine"); kick->header["channel_id"] = 42;
+    app->accounts.kick = {{"user_id", 42}, {"access_token", "fixture"}, {"scope", "channel:write"},
+                          {"expires_at", double(QDateTime::currentSecsSinceEpoch() + 600)}};
+    user.source = kick->key;
+    QString action;
+    app->hub.kickRoleInBrowser = [&](Source *, const QString &, const QString &, const QString &verb, JsonCallback done) {
+        action = verb; done({{"status", "confirmed"}}, {});
+    };
+    auto *kickPane = app->addWorkspace({kick})->focusedPane.data();
+    app->showUser(kickPane, kick, user);
+    auto kickCard = app->userCards.value(kick->key + ":99"); QVERIFY(kickCard);
+    auto *kickRoles = kickCard->findChild<QWidget *>("user-card-roles"); QVERIFY(kickRoles); QVERIFY(!kickRoles->isHidden());
+    auto *og = kickCard->findChild<QPushButton *>("role-og"); QVERIFY(og); og->click();
+    QCOMPARE(action, QString("og"));
 }
 
 void NativeTests::kickOgBadgeVisible() {

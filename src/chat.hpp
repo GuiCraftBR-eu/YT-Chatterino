@@ -197,6 +197,7 @@ class Hub : public QObject {
     QHash<QString, QUrl> knownVodUrls;
     TwitchConnection twitch;
     TwitchAutoMod *autoMod = nullptr;
+    std::function<void(Source *, const QString &, const QString &, const QString &, JsonCallback)> kickRoleInBrowser;
     qint64 sequence = 0;
     QHash<QString, Span> globals;
     QHash<QString, Badge> vodGlobalBadges;
