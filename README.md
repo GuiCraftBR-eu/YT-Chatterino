@@ -6,7 +6,7 @@
 
 Aplicativo independente, inspirado na interface do Chatterino. Disponível em português e inglês.
 
-[Baixar a versão 2.5.6](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.5.6) · [Começar](#começar) · [OBS Studio](#painel-no-obs-studio) · [Ajuda](#ajuda-e-limitações)
+[Baixar a versão 2.5.7](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.5.7) · [Começar](#começar) · [OBS Studio](#painel-no-obs-studio) · [Ajuda](#ajuda-e-limitações)
 
 </div>
 
@@ -14,10 +14,10 @@ Aplicativo independente, inspirado na interface do Chatterino. Disponível em po
 
 | Plataforma | Arquivo | Como abrir |
 | --- | --- | --- |
-| Windows 11 | [Aplicativo para Windows](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.6/YT-Chatterino-Windows11-2.5.6.zip) | Extraia o ZIP e abra `YT-Chatterino.exe`. Mantenha as pastas e DLLs junto ao executável. |
-| Linux x86_64 | [Instalador Flatpak](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.6/YT-Chatterino-Flatpak-Install.py) | Instale Flatpak e Python 3 e execute `python3 YT-Chatterino-Flatpak-Install.py --app`. |
+| Windows 11 | [Aplicativo para Windows](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.7/YT-Chatterino-Windows11-2.5.7.zip) | Extraia o ZIP e abra `YT-Chatterino.exe`. Mantenha as pastas e DLLs junto ao executável. |
+| Linux x86_64 | [Instalador Flatpak](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.7/YT-Chatterino-Flatpak-Install.py) | Instale Flatpak e Python 3 e execute `python3 YT-Chatterino-Flatpak-Install.py --app`. |
 
-No Linux, o instalador configura verificações automáticas pelo systemd de usuário, além de instalar o pacote Flatpak. É possível instalar o [arquivo Flatpak](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.6/YT-Chatterino-Linux-2.5.6.flatpak) manualmente, mas nesse caso as atualizações não são configuradas automaticamente. O aplicativo não precisa de Python para funcionar. Os arquivos e seus SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.5.6).
+No Linux, o instalador configura verificações automáticas pelo systemd de usuário, além de instalar o pacote Flatpak. É possível instalar o [arquivo Flatpak](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.7/YT-Chatterino-Linux-2.5.7.flatpak) manualmente, mas nesse caso as atualizações não são configuradas automaticamente. O aplicativo não precisa de Python para funcionar. Os arquivos e seus SHA-256 estão na [página da versão](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/tag/v2.5.7).
 
 Ao migrar do pacote nativo, o instalador copia as configurações antigas se ainda não existir um perfil Flatpak, sem apagar o original. Conecte as contas novamente no aplicativo e no painel do OBS: o armazenamento de credenciais é separado.
 
@@ -34,17 +34,18 @@ Ler o chat público do YouTube normalmente não exige conta, chave de API ou uni
 - **Organização:** abas, painéis divididos, chat misturado, canais salvos, janela separada e sobreposição com opacidade ajustável.
 - **Conversas:** emotes nativos, BTTV e 7TV, preenchimento com Tab, respostas, histórico de envio, busca e destaques.
 - **Moderação:** quando seu cargo for reconhecido, a espada ativa botões ao lado das mensagens. Configure ações e ícones em **Configurações → Moderação**. As ações exigem as permissões da plataforma; reconecte a Twitch para conceder as novas permissões de AutoMod e modos de chat.
+- **Comandos:** digite `/` no início da mensagem e use Tab para completar os comandos disponíveis. `/ban`, `/timeout` e `/unban` usam as permissões da plataforma; `/mod`, `/unmod`, `/vip` e `/unvip` estão disponíveis onde a API oferece esses cargos. Na Twitch, o nome pode ser consultado pela API; nas outras plataformas, o usuário precisa aparecer no histórico recente do painel. Comandos de bots como `!comando` continuam sendo enviados como mensagens normais. O cartão de usuário também oferece os botões de cargos para o dono do canal.
 - **Acompanhar:** alertas, enquetes, mensagens fixadas com links clicáveis e notificações de canais ao vivo quando disponíveis.
 - **Celular:** no menu do painel, escolha **Abrir no celular** e leia o QR code. Computador e celular precisam estar na mesma rede confiável.
 - **VODs:** a extensão do navegador sincroniza o chat com a reprodução. Abra a VOD no navegador e selecione-a pelo botão **+**. A disponibilidade depende da plataforma e do vídeo.
 
-Para a extensão, use **+ → Configurar extensão do navegador…**. No Firefox, instale a [extensão assinada](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.6/YT-Chatterino-Firefox-2.5.6.xpi); ela recebe atualizações assinadas automaticamente. No Chrome ou Edge, carregue a pasta `browser-extension` do aplicativo no modo de desenvolvedor.
+Para a extensão, use **+ → Configurar extensão do navegador…**. No Firefox, instale a [extensão assinada](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.7/YT-Chatterino-Firefox-2.5.7.xpi); ela recebe atualizações assinadas automaticamente. No Chrome ou Edge, carregue a pasta `browser-extension` do aplicativo no modo de desenvolvedor.
 
 ## Painel no OBS Studio
 
 O painel reúne os canais das suas contas em um único chat. As contas do OBS são **separadas** das do aplicativo independente; conecte-as em **Configurações → Contas** no próprio painel. No YouTube, é necessário haver uma live ativa.
 
-**Windows:** baixe o [plugin para OBS](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.6/YT-Chatterino-OBS-Windows-2.5.6.zip). Com o OBS fechado, extraia a pasta `yt-chatterino-obs` para `%PROGRAMDATA%\obs-studio\plugins` e reabra o OBS. É necessário instalar a 2.5.6 manualmente uma vez; depois, o plugin verifica atualizações e as aplica ao reiniciar o OBS.
+**Windows:** baixe o [plugin para OBS](https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v2.5.7/YT-Chatterino-OBS-Windows-2.5.7.zip). Com o OBS fechado, extraia a pasta `yt-chatterino-obs` para `%PROGRAMDATA%\obs-studio\plugins` e reabra o OBS. É necessário instalar a 2.5.6 manualmente uma vez; depois, o plugin verifica atualizações e as aplica ao reiniciar o OBS.
 
 **Linux:** instale primeiro o OBS Studio Flatpak pelo Flathub e execute `python3 YT-Chatterino-Flatpak-Install.py --obs`. Use `--both` para instalar o aplicativo e o plugin. O instalador configura atualizações para seu usuário; reinicie o OBS depois de uma atualização. O plugin é para o OBS Flatpak.
 

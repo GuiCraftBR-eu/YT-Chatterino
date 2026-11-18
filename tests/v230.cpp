@@ -36,6 +36,37 @@ void NativeTests::kickRealtimeEventsAndAlerts() {
     QCOMPARE(source->history.last().special, QString("alert"));
     source->kickSocketMessage(kickEnvelope("App\\Events\\MessageDeletedEvent", {{"message", QJsonObject{{"id", "live-1"}}}}));
     QVERIFY(source->history.first().deleted);
+    const QJsonObject poll{{"title", "Pick one"}, {"remaining", 20},
+        {"options", QJsonArray{QJsonObject{{"id", 0}, {"label", "Yes"}, {"votes", 3}},
+                               QJsonObject{{"id", 1}, {"label", "No"}, {"votes", 1}}}}};
+    source->kickSocketMessage(kickEnvelope("App\\Events\\PollUpdateEvent", {{"poll", poll}}));
+    QCOMPARE(str(source->activePoll["text"]), QString("Pick one"));
+    QCOMPARE(str(source->activePoll["options"]), QString("Yes (3) · No (1)"));
+    QCOMPARE(source->activePoll["choices"].toArray().size(), 2);
+    QVERIFY(!source->activePoll["ended"].toBool());
+    source->kickSocketMessage(kickEnvelope("App\\Events\\PollDeleteEvent", {}));
+    QVERIFY(source->activePoll["ended"].toBool());
+    QVERIFY(source->activePoll["last_observed"].toBool());
+    QVERIFY(source->pollResultTimer.isActive());
+    source->kickChannelId = "123";
+    BytesCallback pending;
+    int requests = 0;
+    app->net.transport = [&](QUrl url, QByteArray method, QByteArray, QMap<QByteArray, QByteArray>, BytesCallback done) {
+        QCOMPARE(url.path(), QString("/api/v2/channels/test/polls"));
+        QCOMPARE(method, QByteArray("GET")); ++requests; pending = std::move(done);
+    };
+    source->kickRefreshPoll(); source->kickRefreshPoll(); QCOMPARE(requests, 1);
+    auto newer = poll; newer["title"] = "New poll";
+    source->kickSocketMessage(kickEnvelope("PollUpdateEvent", {{"poll", newer}}));
+    pending(QJsonDocument(poll).toJson(), {});
+    QCOMPARE(str(source->activePoll["text"]), QString("New poll"));
+    source->kickRefreshPoll(); QCOMPARE(requests, 2);
+    pending(QJsonDocument(QJsonObject{{"data", poll}}).toJson(), {});
+    QCOMPARE(str(source->activePoll["text"]), QString("Pick one"));
+    source->kickRefreshPoll(); QCOMPARE(requests, 3);
+    pending(QJsonDocument(QJsonObject{{"status", QJsonObject{{"code", 404}}}, {"data", QJsonValue(QJsonValue::Null)}}).toJson(), {});
+    QVERIFY(source->activePoll["ended"].toBool());
+    QVERIFY(source->activePoll["last_observed"].toBool());
 }
 
 void NativeTests::kickEmoteCatalogCompletesAndDisplays() {

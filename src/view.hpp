@@ -187,8 +187,11 @@ class Pane : public QWidget {
     std::function<bool(const Message &)> extraFilter;
     std::function<bool(Source *, const QString &)> openBrowserPanel;
     std::function<void(Source *, const QString &, const QString &, const QString &, JsonCallback)> voteBrowserPoll;
+    std::function<void(Source *, const QString &, const QString &, const QString &, int, JsonCallback)> predictInBrowser;
     QHash<QString, QString> pollSelection, pollQuestions, pollFeedback;
     QSet<QString> pollRequests;
+    QHash<QString, QString> predictionSelection, predictionQuestions, predictionFeedback;
+    QSet<QString> predictionRequests;
     QString threadId;
     void refresh();
     void refreshDecorations();

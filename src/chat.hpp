@@ -58,6 +58,8 @@ class Source : public QObject {
     QTimer kickSocketRetry, kickSocketWatchdog, kickSocketRenew;
     QTimer kickModesTimer;
     bool kickModesPending = false;
+    bool kickPollSnapshotPending = false;
+    quint64 kickPollRevision = 0;
     int kickModesRetryMs = 60000;
     bool kickSocketActive = false, kickSocketStarting = false;
     bool kickThumbnailPending = false;
@@ -123,6 +125,7 @@ class Source : public QObject {
     void kickConnect();
     void kickLoadThumbnail();
     void kickPoll();
+    void kickRefreshPoll();
     void kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Message>> batch, bool historical);
     void kickError(QString error);
     void kickLoadEmotes(bool notify = false);
@@ -194,6 +197,7 @@ class Hub : public QObject {
     QHash<QString, QUrl> knownVodUrls;
     TwitchConnection twitch;
     TwitchAutoMod *autoMod = nullptr;
+    std::function<void(Source *, const QString &, const QString &, const QString &, JsonCallback)> kickRoleInBrowser;
     qint64 sequence = 0;
     QHash<QString, Span> globals;
     QHash<QString, Badge> vodGlobalBadges;
@@ -231,6 +235,9 @@ class Hub : public QObject {
     void provider(Source *source, const QJsonValue &data, QString provider, QString scope);
     void send(Source *source, QString text, Message reply, JsonCallback done);
     void moderate(Source *source, const Message &message, QString action, int duration, JsonCallback done);
+    void setUserRole(Source *source, const Message &message, QString role, bool add, JsonCallback done);
+    void youtubeRemoveModeratorPage(QPointer<Source> source, QString chat, QString user, QString cursor,
+                                    int page, JsonCallback done);
     void twitchChatSettings(Source *source, QJsonObject changes, JsonCallback done);
     void canModerate(Source *source, std::function<void(bool, QString)> done);
     void moderatedPage(QPointer<Source> source, QString userId, QString cursor, int page,

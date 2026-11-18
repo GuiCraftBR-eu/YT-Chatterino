@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.7
+
+- Vote in Twitch, YouTube, and Kick polls through the browser extension. Place Twitch predictions with an explicit points amount and confirmation.
+- Use supported moderation commands with Tab completion, and manage broadcaster roles on Twitch, YouTube, and Kick.
+- Display Kick OG badges and retain the latest observed Kick poll results.
+- Improve browser-bridge routing, duplicate-action protection, and handling of unconfirmed results.
+
 ## 2.5.6
 
 - Enquetes gratuitas da Twitch podem ser respondidas no aplicativo por meio da extensão do navegador; apostas continuam na Twitch.

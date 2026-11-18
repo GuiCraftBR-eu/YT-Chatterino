@@ -53,6 +53,13 @@ void NativeTests::accountControlsReflectPermissions() {
     QVERIFY(!yt->isEnabled());
     QCOMPARE(tw->text(), "All Twitch permissions enabled");
     QCOMPARE(yt->text(), "YouTube permissions enabled");
+    auto oldScopes = app->accounts.twitch["scope"].toArray();
+    QJsonArray withoutRoles;
+    for (const auto &scope : oldScopes)
+        if (scope.toString() != "channel:manage:moderators" && scope.toString() != "channel:manage:vips") withoutRoles.append(scope);
+    app->accounts.twitch["scope"] = withoutRoles; emit app->accounts.changed();
+    QVERIFY(tw->isEnabled());
+    QVERIFY(settings->findChild<QLabel *>("twitch-permission-status")->text().contains("○ Moderator / VIP roles"));
     app->accounts.twitch["scope"] = QJsonArray{"chat:read"};
     emit app->accounts.changed();
     QVERIFY(tw->isEnabled());

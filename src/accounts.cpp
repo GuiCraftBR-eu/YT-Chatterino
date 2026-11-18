@@ -291,6 +291,8 @@ QSet<QString> Accounts::fullTwitchScopes() {
             "moderator:manage:automod",
             "channel:read:polls",
             "channel:read:predictions",
+            "channel:manage:moderators",
+            "channel:manage:vips",
             "channel:manage:broadcast"};
 }
 

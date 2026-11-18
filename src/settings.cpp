@@ -588,6 +588,7 @@ QWidget *SettingsWindow::accountsPage() {
                    "moderator:manage:automod"}},
                  {"Polls in your channel", {"channel:read:polls"}},
                  {"Predictions in your channel", {"channel:read:predictions"}},
+                 {"Moderator / VIP roles", {"channel:manage:moderators", "channel:manage:vips"}},
                  {"Title / category editing", {"channel:manage:broadcast"}}}) {
             permissions << (accounts.twitchAllows(item.second) ? "✓ " : "○ ") + cfg.T(item.first);
         }

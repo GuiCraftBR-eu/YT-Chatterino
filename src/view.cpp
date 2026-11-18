@@ -382,13 +382,16 @@ static QImage roleBadge(const QString &role, int size) {
         p.drawPolyline(QPolygonF{{4.2, 9.2}, {7.4, 12.2}, {13.8, 5.8}});
         return image;
     }
-    p.setBrush(QColor(role == "moderator" ? "#00ad03"
+    p.setBrush(QColor(role == "og" ? "#53fc18" : role == "moderator" ? "#00ad03"
                       : role == "owner"   ? "#e91916"
                       : role == "vip"     ? "#e005b9"
                                           : "#7349b8"));
     p.drawRoundedRect(QRectF(0, 0, 18, 18), 2, 2);
     p.setBrush(Qt::white);
-    if (role == "owner") {
+    if (role == "og") {
+        QFont font = p.font(); font.setBold(true); font.setPixelSize(9); p.setFont(font);
+        p.setPen(Qt::black); p.drawText(QRectF(0, 0, 18, 18), Qt::AlignCenter, "OG");
+    } else if (role == "owner") {
         p.drawPolygon(QPolygonF{{3, 6}, {6, 9}, {9, 4}, {12, 9}, {15, 6}, {14, 14}, {4, 14}});
     } else if (role == "moderator") {
         p.drawPolygon(QPolygonF{{5, 3}, {10, 4}, {15, 9}, {12, 12}, {7, 7}});
@@ -576,7 +579,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
             }
         }
         if (source && source->isVod && badge.urls.isEmpty() && badge.role != "owner" &&
-            badge.role != "moderator" && badge.role != "subscriber" && badge.role != "vip") continue;
+            badge.role != "moderator" && badge.role != "subscriber" && badge.role != "vip" &&
+            !(source->platform == "kick" && badge.role == "og")) continue;
         QString label = badge.label;
         if (label.isEmpty() || (label.startsWith('[') && label.endsWith(']'))) {
             if (badge.role == "owner") label = hub->cfg->T(source && source->platform == "twitch" ? "Broadcaster" : "Owner");
@@ -588,7 +592,8 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         }
         const bool youtubeVerified = source && source->platform == "youtube" && badge.role == "verified";
         if (youtubeVerified || (badge.urls.isEmpty() && (badge.role == "owner" || badge.role == "moderator" ||
-                                                        badge.role == "subscriber" || badge.role == "vip"))) {
+                                                        badge.role == "subscriber" || badge.role == "vip" ||
+                                                        (source && source->platform == "kick" && badge.role == "og")))) {
             const int size = a["badge_size"].toInt(18);
             QString url = "badge:" + badge.role;
             doc->addResource(QTextDocument::ImageResource, QUrl(url), roleBadge(badge.role, size));
@@ -2006,7 +2011,13 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
         auto s = targetSource();
         if (s) {
             const auto prefix = input->completionPrefix();
-            if (prefix.startsWith('@')) {
+            if (prefix.startsWith('/') && input->text().left(input->cursorPosition()).trimmed() == prefix && !s->isVod) {
+                c = {"/ban", "/timeout"};
+                if (s->platform != "youtube") c << "/unban";
+                if (s->platform == "twitch" || s->platform == "youtube" || s->platform == "kick") c << "/mod" << "/unmod";
+                if (s->platform == "twitch" || s->platform == "kick") c << "/vip" << "/unvip";
+                if (s->platform == "kick") c << "/og" << "/unog";
+            } else if (prefix.startsWith('@')) {
                 QSet<QString> seen;
                 for (auto it = s->history.crbegin(); it != s->history.crend(); ++it) {
                     if (it->system) continue;
@@ -2347,10 +2358,10 @@ void Pane::refreshDecorations() {
                 auto *open = new QToolButton(decorations);
                 open->setObjectName("open-twitch-engagement");
                 open->setText(hub->cfg->T(action));
-                open->setToolTip(hub->cfg->T("Complete this action on Twitch in your browser."));
+                open->setToolTip(hub->cfg->T("Open the prediction in your browser to load its choices."));
                 open->setStyleSheet("QToolButton { color:#c7a6ff; background:#25232a; border:0; padding:3px 8px; } QToolButton:hover { background:#39333f; }");
                 QPointer<Source> target(source);
-                const QString kind = action == "Vote on Twitch" ? "poll" : "prediction";
+                const QString kind = "prediction";
                 connect(open, &QToolButton::clicked, this, [this, target, kind] {
                     if (target && (!openBrowserPanel || !openBrowserPanel(target, kind)))
                         QDesktopServices::openUrl(QUrl("https://www.twitch.tv/" + target->id));
@@ -2360,12 +2371,12 @@ void Pane::refreshDecorations() {
             ++count;
         };
         const auto pin = source->pinned.isEmpty() ? source->browserPinned : source->pinned;
-        const auto poll = source->activePoll.isEmpty() ? source->browserPoll : source->activePoll;
-        const auto prediction = source->activePrediction.isEmpty() ? source->browserPrediction : source->activePrediction;
+        const auto poll = str(source->activePoll.value("text")).isEmpty() ? source->browserPoll : source->activePoll;
+        const auto prediction = str(source->activePrediction.value("text")).isEmpty() ? source->browserPrediction : source->activePrediction;
         add(hub->cfg->T("Pinned message"), pin);
         QString pollHeading = hub->cfg->T(poll.value("ended").toBool() ? "Poll result" : "Poll");
         if (poll.value("last_observed").toBool()) pollHeading += " · " + hub->cfg->T("last observed");
-        add(pollHeading, poll, "Vote on Twitch");
+        add(pollHeading, poll);
         const auto browserPoll = source->browserPoll;
         const auto question = str(browserPoll["text"]);
         const auto key = source->key;
@@ -2373,12 +2384,13 @@ void Pane::refreshDecorations() {
             pollQuestions[key] = question; pollSelection.remove(key); pollFeedback.remove(key);
         }
         const auto choices = browserPoll["choices"].toArray();
-        if (source->platform == "twitch" && !source->isVod && !question.isEmpty() &&
-            (source->activePoll.isEmpty() || str(source->activePoll["text"]) == question)) {
+        if ((source->platform == "twitch" || source->platform == "kick" || source->platform == "youtube") && !source->isVod && !question.isEmpty() &&
+            (source->activePoll.isEmpty() || (!source->activePoll.value("ended").toBool() &&
+                (str(source->activePoll.value("text")).isEmpty() || str(source->activePoll.value("text")).simplified() == question)))) {
             if (str(browserPoll["state"]) == "open" && !choices.isEmpty() && voteBrowserPoll) {
                 auto *row = new QWidget(decorations);
                 auto *layout = new QHBoxLayout(row); layout->setContentsMargins(2, 0, 2, 0);
-                auto *select = new QComboBox(row); select->setObjectName("twitch-poll-choice");
+                auto *select = new QComboBox(row); select->setObjectName(source->platform + "-poll-choice");
                 select->addItem(hub->cfg->T("Choose an option"), QString());
                 for (const auto &value : choices) {
                     const auto choice = value.toObject();
@@ -2389,7 +2401,7 @@ void Pane::refreshDecorations() {
                 connect(select, qOverload<int>(&QComboBox::currentIndexChanged), this, [this, select, key] {
                     pollSelection[key] = select->currentData().toString();
                 });
-                auto *vote = new QPushButton(hub->cfg->T("Vote"), row); vote->setObjectName("twitch-poll-vote");
+                auto *vote = new QPushButton(hub->cfg->T("Vote"), row); vote->setObjectName(source->platform + "-poll-vote");
                 vote->setEnabled(select->currentIndex() > 0 && !pollRequests.contains(key));
                 connect(select, qOverload<int>(&QComboBox::currentIndexChanged), vote, [this, vote, key](int index) {
                     vote->setEnabled(index > 0 && !pollRequests.contains(key));
@@ -2406,11 +2418,11 @@ void Pane::refreshDecorations() {
                         safe->pollRequests.remove(key);
                         if (safe->pollQuestions.value(key) != question) return;
                         const auto status = str(result["status"]);
-                        const QMap<QString, QString> messages{{"confirmed", "Vote confirmed on Twitch."},
+                        const QMap<QString, QString> messages{{"confirmed", "Vote confirmed."},
                             {"already_voted", "Your vote was already recorded."}, {"ended", "This poll has ended."},
-                            {"changed", "The poll changed. Choose again."}, {"tab_closed", "The Twitch browser tab was closed."},
+                            {"changed", "The poll changed. Choose again."}, {"tab_closed", "The browser tab was closed."},
                             {"unavailable", "Voting is unavailable in the browser tab."},
-                            {"uncertain", "Vote submitted, but Twitch did not confirm it. Check the browser before retrying."}};
+                            {"uncertain", "Vote may have been submitted, but it was not confirmed. Check the browser before retrying."}};
                         safe->pollFeedback[key] = error.isEmpty() ? messages.value(status, "Voting is unavailable in the browser tab.") : error;
                         QTimer::singleShot(0, safe, [safe] { if (safe) safe->refreshDecorations(); });
                     });
@@ -2421,19 +2433,78 @@ void Pane::refreshDecorations() {
             }
             if (!pollFeedback.value(key).isEmpty()) {
                 auto *status = new QLabel(hub->cfg->T(pollFeedback.value(key)), decorations);
-                status->setObjectName("twitch-poll-status"); status->setWordWrap(true);
+                status->setObjectName(source->platform + "-poll-status"); status->setWordWrap(true);
                 status->setStyleSheet("color:#bcbcc6; padding:2px 4px;"); box->addWidget(status);
             }
         }
         if (question.isEmpty() && !pollFeedback.value(key).isEmpty()) {
             auto *status = new QLabel(hub->cfg->T(pollFeedback.value(key)), decorations);
-            status->setObjectName("twitch-poll-status"); status->setWordWrap(true);
+            status->setObjectName(source->platform + "-poll-status"); status->setWordWrap(true);
             status->setStyleSheet("color:#bcbcc6; padding:2px 4px;"); box->addWidget(status); ++count;
         }
         QString predictionHeading = hub->cfg->T(prediction.value("ended").toBool() ? "Prediction result" : "Prediction");
         if (str(prediction.value("status")) == "LOCKED") predictionHeading += " · " + hub->cfg->T("Locked");
         if (str(prediction.value("status")) == "CANCELED") predictionHeading += " · " + hub->cfg->T("Canceled");
-        add(predictionHeading, prediction, str(prediction.value("status")) == "LOCKED" ? QString() : "Predict on Twitch");
+        const auto browserPrediction = source->browserPrediction;
+        const auto predictionQuestion = str(browserPrediction["text"]);
+        const auto predictionChoices = browserPrediction["choices"].toArray();
+        const auto predictionStatus = str(source->activePrediction.value("status"));
+        const bool predictionReady = source->platform == "twitch" && !source->isVod && predictInBrowser &&
+            !predictionQuestion.isEmpty() && str(browserPrediction["state"]) == "open" && !predictionChoices.isEmpty() &&
+            !source->activePrediction.value("ended").toBool() && (predictionStatus.isEmpty() || predictionStatus == "ACTIVE") &&
+            (str(source->activePrediction.value("text")).isEmpty() ||
+             str(source->activePrediction.value("text")).simplified() == predictionQuestion);
+        add(predictionHeading, prediction, !predictionReady && predictionStatus != "LOCKED" ? "Load prediction" : QString());
+        if (!predictionQuestion.isEmpty() && predictionQuestions.value(key) != predictionQuestion) {
+            predictionQuestions[key] = predictionQuestion; predictionSelection.remove(key); predictionFeedback.remove(key);
+        }
+        if (predictionReady) {
+            auto *row = new QWidget(decorations);
+            auto *layout = new QHBoxLayout(row); layout->setContentsMargins(2, 0, 2, 0);
+            auto *select = new QComboBox(row); select->setObjectName("twitch-prediction-choice");
+            select->addItem(hub->cfg->T("Choose an outcome"), QString());
+            for (const auto &value : predictionChoices) {
+                const auto choice = value.toObject(); select->addItem(str(choice["label"]), str(choice["id"]));
+            }
+            select->setCurrentIndex(qMax(0, select->findData(predictionSelection.value(key))));
+            connect(select, qOverload<int>(&QComboBox::currentIndexChanged), this, [this, select, key] {
+                predictionSelection[key] = select->currentData().toString();
+            });
+            auto *points = new QSpinBox(row); points->setObjectName("twitch-prediction-points");
+            points->setRange(1, 250000); points->setValue(10); points->setSuffix(" " + hub->cfg->T("points"));
+            auto *place = new QPushButton(hub->cfg->T("Predict"), row); place->setObjectName("twitch-prediction-place");
+            place->setEnabled(select->currentIndex() > 0 && !predictionRequests.contains(key));
+            connect(select, qOverload<int>(&QComboBox::currentIndexChanged), place, [this, place, key](int index) {
+                place->setEnabled(index > 0 && !predictionRequests.contains(key));
+            });
+            QPointer<Source> target(source);
+            connect(place, &QPushButton::clicked, this, [this, target, select, points, place, key, predictionQuestion] {
+                if (!target || predictionRequests.contains(key) || select->currentIndex() <= 0) return;
+                const auto choice = select->currentData().toString(), outcome = select->currentText();
+                const int amount = points->value();
+                if (QMessageBox::question(this, hub->cfg->T("Confirm prediction"),
+                    hub->cfg->T("Predict {outcome} with {points} points?", {{"outcome", outcome}, {"points", QString::number(amount)}})) != QMessageBox::Yes) return;
+                predictionRequests.insert(key); place->setEnabled(false); predictionFeedback[key] = "Sending prediction…";
+                QPointer<Pane> safe(this);
+                predictInBrowser(target, predictionQuestion, choice, outcome, amount, [safe, key, predictionQuestion](QJsonObject result, QString error) {
+                    if (!safe) return;
+                    safe->predictionRequests.remove(key);
+                    if (safe->predictionQuestions.value(key) != predictionQuestion) return;
+                    const QMap<QString, QString> messages{{"needs_confirmation", "Finish Twitch's required confirmation in the browser."},
+                        {"changed", "The prediction changed. Choose again."}, {"tab_closed", "The browser tab was closed."},
+                        {"unavailable", "Prediction is unavailable in the browser tab."},
+                        {"uncertain", "Prediction may have been submitted, but it was not confirmed. Check Twitch before retrying."}};
+                    safe->predictionFeedback[key] = error.isEmpty() ? messages.value(str(result["status"]), "Prediction is unavailable in the browser tab.") : error;
+                    QTimer::singleShot(0, safe, [safe] { if (safe) safe->refreshDecorations(); });
+                });
+            });
+            layout->addWidget(select, 1); layout->addWidget(points); layout->addWidget(place); box->addWidget(row);
+        }
+        if (!predictionFeedback.value(key).isEmpty()) {
+            auto *status = new QLabel(hub->cfg->T(predictionFeedback.value(key)), decorations);
+            status->setObjectName("twitch-prediction-status"); status->setWordWrap(true);
+            status->setStyleSheet("color:#bcbcc6; padding:2px 4px;"); box->addWidget(status); ++count;
+        }
     }
     decorations->setVisible(count > 0 && !detached);
 }

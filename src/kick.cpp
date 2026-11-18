@@ -160,6 +160,7 @@ void Source::kickConnect() {
         const bool firstConnection = self->kickChannelId.isEmpty();
         self->kickChannelId = channelId;
         self->kickRoomId = str(at(data, {"chatroom", "id"}));
+        if (firstConnection) self->kickRefreshPoll();
         self->kickUpdateChatModes(data["chatroom"].toObject());
         if (!self->kickModesPending && !self->kickModesTimer.isActive()) self->kickRefreshChatModes();
         if (firstConnection) self->kickLoadEmotes();
@@ -243,6 +244,29 @@ void Source::kickPoll() {
     requesting = true;
     kickPollHead.clear();
     kickFetchPage({}, 0, QSharedPointer<QVector<Message>>::create(), kickInitial);
+}
+
+void Source::kickRefreshPoll() {
+    if (closed || platform != "kick" || kickChannelId.isEmpty() || kickPollSnapshotPending ||
+        kickPollCooldownUntil > QDateTime::currentMSecsSinceEpoch()) return;
+    kickPollSnapshotPending = true;
+    const auto epoch = generation, revision = kickPollRevision;
+    QPointer<Source> self(this);
+    hub->net->json(QUrl("https://kick.com/api/v2/channels/" + id + "/polls"),
+        [self, epoch, revision](QJsonObject data, QString error) {
+            if (!self || self->closed || self->generation != epoch) return;
+            self->kickPollSnapshotPending = false;
+            if (!error.isEmpty() || self->kickPollRevision != revision) return;
+            if (data["status"].toObject()["code"].toInt() == 404 && data["data"].isNull()) {
+                self->kickEvent("PollDeleteEvent", {});
+                return;
+            }
+            auto snapshot = data["poll"].toObject();
+            if (snapshot.isEmpty()) snapshot = data["data"].toObject();
+            if (snapshot["poll"].isObject()) snapshot = snapshot["poll"].toObject();
+            if (snapshot.isEmpty()) snapshot = data;
+            self->kickEvent("PollUpdateEvent", {{"poll", snapshot}});
+        });
 }
 
 void Source::kickFetchPage(QString cursor, int page, QSharedPointer<QVector<Message>> batch, bool historical) {
@@ -413,6 +437,7 @@ void Source::kickSocketMessage(const QString &text) {
             kickSocketRenew.start(40 * 60 * 1000);
         } else if (frame["id"].toInt() == 2 && frame.contains("subscribe")) {
             kickSocketStarting = false; kickSocketActive = true; kickSocketRetryMs = 3000;
+            if (!hub->testMode) kickRefreshPoll();
             if (!requesting && kickPollCooldownUntil <= QDateTime::currentMSecsSinceEpoch()) poll.start(0);
         }
         const auto push = frame["push"].toObject();
@@ -426,6 +451,39 @@ void Source::kickSocketMessage(const QString &text) {
 }
 
 void Source::kickEvent(QString event, QJsonObject data) {
+    if (event.endsWith("PollUpdateEvent")) {
+        ++kickPollRevision;
+        const auto pollData = data["poll"].toObject();
+        const auto title = str(pollData["title"]).simplified().left(400);
+        if (title.isEmpty() || !pollData["options"].isArray()) return;
+        QStringList options;
+        QJsonArray choices;
+        for (const auto &item : pollData["options"].toArray()) {
+            const auto option = item.toObject();
+            const auto label = str(option["label"]).simplified().left(100);
+            if (label.isEmpty()) continue;
+            const auto votes = option["votes"];
+            options << (votes.isDouble() && votes.toDouble() >= 0
+                            ? label + " (" + QString::number(votes.toInteger()) + ")" : label);
+            choices.append(QJsonObject{{"id", str(option["id"])}, {"label", label}});
+            if (choices.size() >= 10) break;
+        }
+        if (choices.isEmpty()) return;
+        const bool ended = pollData["remaining"].isDouble() && pollData["remaining"].toDouble() <= 0;
+        QJsonObject state{{"text", title}, {"options", options.join(" · ")}, {"choices", choices}};
+        if (ended) { state["ended"] = true; pollResultTimer.start(180000); }
+        else pollResultTimer.stop();
+        setDecorations(pinned, state);
+        return;
+    }
+    if (event.endsWith("PollDeleteEvent")) {
+        ++kickPollRevision;
+        if (!activePoll.isEmpty()) {
+            auto state = activePoll; state["ended"] = true; state["last_observed"] = true;
+            setDecorations(pinned, state); pollResultTimer.start(180000);
+        }
+        return;
+    }
     if (event.endsWith("ChatroomUpdatedEvent") || event.endsWith("ChatroomSettingsUpdatedEvent")) {
         const auto room = data["chatroom"].isObject() ? data["chatroom"].toObject() : data;
         kickUpdateChatModes(room); return;

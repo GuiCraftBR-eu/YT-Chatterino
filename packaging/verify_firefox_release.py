@@ -5,14 +5,15 @@ from pathlib import Path
 import zipfile
 
 root = Path(__file__).resolve().parents[1]
-version = '2.5.6'
-xpi = root / 'firefox-release' / f'YT-Chatterino-Firefox-{version}.xpi'
+release_version = '2.5.7'
+extension_version = '2.5.7.1'
+xpi = root / 'firefox-release' / f'YT-Chatterino-Firefox-{release_version}.xpi'
 extension = root / 'browser-extension'
 data = xpi.read_bytes()
 feed = json.loads((extension / 'updates.json').read_text(encoding='utf8'))
 entry = feed['addons']['vod-sync@yt-chatterino.local']['updates'][0]
-assert entry == {'version': version,
-                 'update_link': f'https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v{version}/YT-Chatterino-Firefox-{version}.xpi',
+assert entry == {'version': extension_version,
+                 'update_link': f'https://github.com/GuiCraftBR-eu/YT-Chatterino/releases/download/v{release_version}/YT-Chatterino-Firefox-{release_version}.xpi',
                  'update_hash': 'sha256:' + hashlib.sha256(data).hexdigest()}
 with zipfile.ZipFile(xpi) as archive:
     assert archive.testzip() is None
@@ -23,9 +24,11 @@ with zipfile.ZipFile(xpi) as archive:
             continue  # The update feed lives outside the signed package.
         assert path.name in names, path.name
         if path.name == 'manifest.json':
-            assert json.loads(archive.read(path.name)) == json.loads(path.read_text(encoding='utf8'))
+            manifest = json.loads(archive.read(path.name))
+            assert manifest == json.loads(path.read_text(encoding='utf8'))
+            assert manifest['version'] == extension_version
         else:
             assert archive.read(path.name) == path.read_bytes(), path.name
     assert {name for name in names if not name.startswith('META-INF/')} == {
         path.name for path in extension.iterdir() if path.is_file()}
-print(f'Firefox {version}: signed package and update feed verified.')
+print(f'Firefox extension {extension_version} for release {release_version}: signed package and update feed verified.')
