@@ -44,6 +44,7 @@ jobs:
           node tests/browser-poll-bridge.js
           python tests/flatpak-updater.py
           python tests/firefox-update.py
+          python tests/release-versions.py
           python packaging/verify_firefox_release.py
       - uses: jurplel/install-qt-action@v4
         with:
@@ -107,6 +108,9 @@ jobs:
           cmake -S obs-plugin -B obs-build -G 'Visual Studio 17 2022' -A x64 -DBUILD_OBS_DOCK_TESTS=ON
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build obs-build --config Release --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:YT_OBS_BOOTSTRAP_VERIFY = "$env:GITHUB_WORKSPACE/obs-build/Release/yt-chatterino-obs.dll"
+          python tests/release-versions.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
