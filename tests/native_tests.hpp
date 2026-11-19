@@ -11,6 +11,14 @@ class NativeTests : public QObject {
     QStringList unexpectedRequests;
     void authenticate();
   private slots:
+    void diskCacheTracksChatVisibility();
+    void diskCacheEvictsUnusedEmotes();
+    void diskImageCacheSurvivesRestart();
+    void diskImageCacheExpiryAndCorruption();
+    void diskImageCacheClearDuringDownload();
+    void youtubeFullLinkDestinations();
+    void imageSettingsPersistAndApply();
+    void imageDownloadConcurrencyAndPriority();
     void emotesPreloadInBackground();
     void mixedChatSharesChannelEmotes();
     void animatedSevenTvShowsStillWhileLoading();

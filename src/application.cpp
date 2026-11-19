@@ -120,6 +120,12 @@ MainWindow::MainWindow(QString profile, bool testing, bool obsDock, bool embedde
     : cfg(profile, this), net(this), quota(&cfg), accounts(&cfg, &net, &quota, this), images(&net, this),
       hub(&cfg, &net, &accounts, &images, &quota, this), updater(&cfg, &net, this, this), testMode(testing), obsDockMode(obsDock) {
     hub.testMode = testing;
+    images.configure(cfg.data["image_download_limit"].toInt(3), cfg.data["image_cache_mb"].toInt(48),
+                     cfg.data["image_disk_cache_mb"].toInt(512));
+    const auto defaultCache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    const bool isolatedProfile = testing || !profile.isEmpty() || !qEnvironmentVariableIsEmpty("YTCHATTERINO_DATA_DIR");
+    const auto cacheRoot = isolatedProfile || defaultCache.isEmpty() ? QDir(cfg.home).filePath(".ytchatterino-cache") : defaultCache;
+    images.setDiskCacheDirectory(QDir(cacheRoot).filePath("images"));
     accounts.persistenceEnabled = !testing;
     accounts.window = this;
     standardTranslator = new StandardTranslator(&cfg, this);

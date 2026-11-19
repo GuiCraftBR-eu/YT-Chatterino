@@ -76,6 +76,7 @@ static QWidget *pageWidget(Config &cfg, const QString &title, QVBoxLayout **layo
         {"Accounts", "Connect accounts and manage permissions."},
         {"Appearance", "Customize the window, chat text and stream header."},
         {"Messages", "Choose how much message history to keep."},
+        {"Images and cache", "Control image downloads and memory and disk caches."},
         {"Highlights", "Choose which messages stand out and their colors."},
         {"Notifications", "Choose sounds and channels to follow."},
         {"Saved channels", "Keep favorite channels ready to open."},
@@ -284,6 +285,8 @@ SettingsWindow::SettingsWindow(MainWindow *m) : QDialog(m), main(m) {
     searchItems["Moderation"] << "Moderation actions\tmoderation actions commands icons moderacao comandos"
                               << "Show deleted messages received while connected\tdeleted removed mensagem excluida apagada moderacao";
     searchItems["Display"] << "Overlay opacity (%)\toverlay opacity transparency opacidade transparencia";
+    searchItems["Images and cache"] << "Image downloads\temote cache memory downloads simultaneous performance desempenho memoria simultaneo"
+                                     << "Cache size (MB)\tcache memory memoria tamanho";
     rebuildLanguage();
 }
 
@@ -301,7 +304,7 @@ void SettingsWindow::rebuildLanguage() {
     for (const auto &group : QList<QPair<QString, QStringList>>{
              {"Connections", {"Accounts", "Saved channels", "YouTube quota"}},
              {"Appearance", {"Display", "Messages", "Highlights", "Moderation"}},
-             {"Application", {"Notifications", "Updates", "Keyboard shortcuts", "Tutorial"}}}) {
+             {"Application", {"Images and cache", "Notifications", "Updates", "Keyboard shortcuts", "Tutorial"}}}) {
         auto *section = new QTreeWidgetItem(navigation, {main->cfg.T(group.first)});
         section->setFlags(section->flags() & ~Qt::ItemIsSelectable);
         QFont sectionFont = section->font(0);
@@ -381,6 +384,7 @@ QWidget *SettingsWindow::buildPage(QString name) {
     if (name == "Messages") {
         return messagesPage();
     }
+    if (name == "Images and cache") return imageLoadingPage();
     if (name == "Moderation") return moderationPage();
     if (name == "Highlights") {
         return highlightsPage();
@@ -817,6 +821,106 @@ QWidget *SettingsWindow::messagesPage() {
     }));
     l->addStretch();
     return w;
+}
+
+QWidget *SettingsWindow::imageLoadingPage() {
+    auto &cfg = main->cfg;
+    QVBoxLayout *layout;
+    auto *page = pageWidget(cfg, "Images and cache", &layout);
+    auto *form = settingsCard(cfg, layout, page, "Image downloads");
+    auto *mode = new QComboBox(page);
+    mode->setObjectName("image-settings-mode");
+    mode->addItem(cfg.T("Simple"), "simple");
+    mode->addItem(cfg.T("Advanced"), "advanced");
+    mode->setCurrentIndex(cfg.data["image_settings_mode"].toString() == "advanced" ? 1 : 0);
+    form->addRow(cfg.T("Settings mode"), mode);
+    auto *choices = new QStackedWidget(page);
+    choices->setObjectName("image-settings-choices");
+    auto *simple = new QWidget(choices);
+    auto *simpleForm = new QFormLayout(simple); simpleForm->setContentsMargins(0, 0, 0, 0);
+    simpleForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    auto *preset = new QComboBox(simple); preset->setObjectName("image-preset");
+    preset->addItem(cfg.T("Light"), "light");
+    preset->addItem(cfg.T("Balanced"), "balanced");
+    preset->addItem(cfg.T("Fast"), "fast");
+    const auto storedPreset = cfg.data["image_preset"].toString("balanced");
+    const int selectedPreset = preset->findData(storedPreset);
+    preset->setCurrentIndex(selectedPreset < 0 ? 1 : selectedPreset);
+    simpleForm->addRow(cfg.T("Preset"), preset);
+    auto *presetDetails = text(cfg, "", true);
+    simpleForm->addRow(presetDetails);
+    const auto updatePresetDetails = [&cfg, preset, presetDetails] {
+        const auto value = preset->currentData().toString();
+        const bool light = value == "light", fast = value == "fast";
+        presetDetails->setText(cfg.T("Downloads: %1 · RAM: %2 MB · Disk: %3 MB")
+                                   .arg(light ? 1 : fast ? 8 : 3).arg(light ? 24 : fast ? 128 : 48)
+                                   .arg(light ? 128 : fast ? 1024 : 512));
+    };
+    connect(preset, qOverload<int>(&QComboBox::currentIndexChanged), page, [updatePresetDetails] { updatePresetDetails(); });
+    updatePresetDetails();
+    choices->addWidget(simple);
+    auto *advanced = new QWidget(choices);
+    auto *advancedForm = new QFormLayout(advanced); advancedForm->setContentsMargins(0, 0, 0, 0);
+    advancedForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    auto *downloads = new QSpinBox(advanced); downloads->setObjectName("image-download-limit");
+    downloads->setRange(1, 16); downloads->setValue(qBound(1, cfg.data["image_advanced_download_limit"].toInt(3), 16));
+    advancedForm->addRow(cfg.T("Simultaneous downloads"), downloads);
+    auto *cache = new QSpinBox(advanced); cache->setObjectName("image-cache-mb");
+    cache->setRange(16, 1024); cache->setSingleStep(16); cache->setSuffix(" MB");
+    cache->setValue(qBound(16, cfg.data["image_advanced_cache_mb"].toInt(48), 1024));
+    advancedForm->addRow(cfg.T("Memory cache (MB)"), cache);
+    auto *disk = new QSpinBox(advanced); disk->setObjectName("image-disk-cache-mb");
+    disk->setRange(64, 16384); disk->setSingleStep(128); disk->setSuffix(" MB");
+    disk->setValue(qBound(64, cfg.data["image_advanced_disk_cache_mb"].toInt(512), 16384));
+    advancedForm->addRow(cfg.T("Disk cache (MB)"), disk);
+    choices->addWidget(advanced);
+    choices->setCurrentIndex(mode->currentIndex());
+    connect(mode, qOverload<int>(&QComboBox::currentIndexChanged), choices, &QStackedWidget::setCurrentIndex);
+    form->addRow(choices);
+    layout->addWidget(text(cfg, "These limits apply to emotes and other chat images. Existing downloads finish when the limit is reduced.", true));
+    layout->addWidget(text(cfg, "Emotes not displayed in chat for 7 days are removed from the disk cache.", true));
+    auto *diskCard = settingsCard(cfg, layout, page, "Disk cache");
+    auto *location = text(cfg, main->images.diskDirectory, true);
+    location->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    location->setObjectName("image-disk-cache-path");
+    diskCard->addRow(cfg.T("Location"), location);
+    auto *buttons = new QWidget(page);
+    auto *buttonLayout = new QHBoxLayout(buttons); buttonLayout->setContentsMargins(0, 0, 0, 0);
+    auto *openFolder = new QPushButton(cfg.T("Open cache folder"), buttons);
+    auto *clearDisk = new QPushButton(cfg.T("Clear disk cache"), buttons); clearDisk->setObjectName("clear-image-disk-cache");
+    buttonLayout->addWidget(openFolder); buttonLayout->addWidget(clearDisk); buttonLayout->addStretch();
+    diskCard->addRow(buttons);
+    auto *diskStatus = text(cfg, main->images.diskCache.cacheDirectory().isEmpty()
+                                    ? "Disk cache is unavailable. The app will retry automatically." : "", true);
+    diskStatus->setObjectName("image-disk-cache-status");
+    diskCard->addRow(diskStatus);
+    connect(openFolder, &QPushButton::clicked, page, [this] {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(main->images.diskDirectory));
+    });
+    connect(clearDisk, &QPushButton::clicked, page, [this, diskStatus] {
+        diskStatus->setText(main->cfg.T(main->images.clearDiskCache() ? "Disk cache cleared." : "Could not clear the disk cache."));
+    });
+    connect(&main->images, &Images::diskCacheAvailable, page, [diskStatus] { diskStatus->clear(); });
+    layout->addWidget(action(cfg, "Apply image settings", page, [this, mode, preset, downloads, cache, disk] {
+        const bool advancedMode = mode->currentData().toString() == "advanced";
+        const QString selected = preset->currentData().toString();
+        const int limit = advancedMode ? downloads->value() : selected == "light" ? 1 : selected == "fast" ? 8 : 3;
+        const int cacheMb = advancedMode ? cache->value() : selected == "light" ? 24 : selected == "fast" ? 128 : 48;
+        const int diskMb = advancedMode ? disk->value() : selected == "light" ? 128 : selected == "fast" ? 1024 : 512;
+        auto &data = main->cfg.data;
+        data["image_settings_mode"] = advancedMode ? "advanced" : "simple";
+        data["image_preset"] = selected;
+        data["image_advanced_download_limit"] = downloads->value();
+        data["image_advanced_cache_mb"] = cache->value();
+        data["image_advanced_disk_cache_mb"] = disk->value();
+        data["image_download_limit"] = limit;
+        data["image_cache_mb"] = cacheMb;
+        data["image_disk_cache_mb"] = diskMb;
+        main->images.configure(limit, cacheMb, diskMb);
+        main->cfg.save();
+    }));
+    layout->addStretch();
+    return page;
 }
 
 QWidget *SettingsWindow::moderationPage() {

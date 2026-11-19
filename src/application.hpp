@@ -129,6 +129,7 @@ class SettingsWindow : public QDialog {
     QWidget *accountsPage();
     QWidget *appearancePage();
     QWidget *messagesPage();
+    QWidget *imageLoadingPage();
     QWidget *moderationPage();
     QWidget *highlightsPage();
     QWidget *notificationsPage();

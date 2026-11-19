@@ -8,5 +8,5 @@
   <description><p>A multi-platform chat client with mixed chats, emotes, moderation and a phone view.</p></description>
   <launchable type="desktop-id">io.github.GuiCraftBR_eu.YTChatterino.desktop</launchable>
   <url type="homepage">https://github.com/GuiCraftBR-eu/YT-Chatterino</url>
-  <releases><release version="2.5.10" date="2026-11-18"/><release version="2.5.9" date="2026-11-18"/><release version="2.5.8" date="2026-11-18"/><release version="2.5.7" date="2026-11-18"/><release version="2.5.6" date="2026-11-16"/></releases>
+  <releases><release version="2.5.11" date="2026-11-19"/><release version="2.5.10" date="2026-11-18"/><release version="2.5.9" date="2026-11-18"/><release version="2.5.8" date="2026-11-18"/><release version="2.5.7" date="2026-11-18"/><release version="2.5.6" date="2026-11-16"/></releases>
 </component>

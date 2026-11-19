@@ -4,6 +4,20 @@
 #include <algorithm>
 
 namespace yc {
+class CachedChatLabel final : public QLabel {
+  public:
+    CachedChatLabel(const QString &html, Images *images, QVector<QStringList> emotes, QWidget *parent)
+        : QLabel(html, parent), images(images), emotes(std::move(emotes)) {}
+  protected:
+    void paintEvent(QPaintEvent *event) override {
+        QLabel::paintEvent(event);
+        for (const auto &urls : emotes) images->markChatVisible(urls);
+    }
+  private:
+    Images *images;
+    QVector<QStringList> emotes;
+};
+
 class HighlightScrollBar final : public QScrollBar {
   public:
     explicit HighlightScrollBar(ChatView *view) : QScrollBar(Qt::Vertical, view), view(view) {
@@ -569,6 +583,7 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         f.setHeight(fitted.height());
         f.setVerticalAlignment(QTextCharFormat::AlignMiddle);
         detail.imageCodes[cursor.position()] = code;
+        if (isEmote) detail.chatEmotes.append({cursor.position(), urls});
         if (isEmote && !gif) {
             detail.emoteImages[cursor.position()] = {code, urls};
         }
@@ -653,6 +668,13 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         body.remove(0, bodyOffset);
         for (auto &span : spans) { span.start -= bodyOffset; span.end -= bodyOffset; }
     }
+    QVector<LinkSpan> explicitLinks;
+    if (!m.deleted || revealDeleted) {
+        explicitLinks = m.links;
+        if (isAlert && bodyOffset > 0)
+            for (auto &link : explicitLinks) { link.start -= bodyOffset; link.end -= bodyOffset; }
+    }
+    const auto bodyLinks = linkSpansFor(body, explicitLinks);
     QHash<int, QPair<QString, QColor>> cheerAmounts;
     if (source && source->platform == "twitch" && (!m.deleted || revealDeleted) &&
         (m.alertKind == "bits" || source->isVod)) {
@@ -771,17 +793,17 @@ QSharedPointer<QTextDocument> ChatView::document(int row) {
         cursor.insertText(text.mid(from), normalFormat);
     };
     auto insertText = [&](const QString &text, int bodyStart) {
-        auto links = QRegularExpression("https?://[^\\s<>]+").globalMatch(text);
         int from = 0;
-        while (links.hasNext()) {
-            auto match = links.next();
-            insertPlain(text.mid(from, match.capturedStart() - from), bodyStart + from);
+        for (const auto &link : bodyLinks) {
+            const int start = link.start - bodyStart, end = link.end - bodyStart;
+            if (start < from || end > text.size() || end <= start) continue;
+            insertPlain(text.mid(from, start - from), bodyStart + from);
             auto lf = normalFormat;
             lf.setAnchor(true);
-            lf.setAnchorHref(match.captured());
+            lf.setAnchorHref(link.url);
             lf.setForeground(QColor("#4a9cdb"));
-            cursor.insertText(match.captured(), lf);
-            from = match.capturedEnd();
+            cursor.insertText(text.mid(start, end - start), lf);
+            from = end;
         }
         insertPlain(text.mid(from), bodyStart + from);
     };
@@ -853,6 +875,15 @@ void ChatView::paintEvent(QPaintEvent *) {
             }
         }
         int height = qCeil(doc->size().height()) + (a["compact_spacing"].toBool() ? 4 : 8);
+        for (const auto &emote : detail.chatEmotes) {
+            const auto block = doc->findBlock(emote.position);
+            if (!block.isValid() || !block.layout()) continue;
+            const auto line = block.layout()->lineForTextPosition(emote.position - block.position());
+            if (!line.isValid()) continue;
+            const auto bounds = doc->documentLayout()->blockBoundingRect(block);
+            const qreal top = y + 3 + bounds.top() + line.y();
+            if (top < viewport()->height() && top + line.height() > 0) hub->images->markChatVisible(emote.urls);
+        }
         if (height != heights[i]) {
             heights[i] = height;
             changed = true;
@@ -1284,6 +1315,8 @@ void ChatView::mouseReleaseEvent(QMouseEvent *e) {
                 }
             }
             emit userClicked(selected);
+        } else if (!safeHttpUrl(anchor).isEmpty()) {
+            QDesktopServices::openUrl(QUrl(anchor));
         } else if (!threadMode && !m.reply.isEmpty()) {
             emit threadClicked(m);
         } else {
@@ -2384,23 +2417,22 @@ void Pane::refreshDecorations() {
             text += body;
             if (!str(value["options"]).isEmpty()) text += "\n" + str(value["options"]);
             QString html;
-            static const QRegularExpression links(QStringLiteral("https?://[^\\s<>\"']+"), QRegularExpression::CaseInsensitiveOption);
-            const auto appendText = [&](const QString &part) {
+            auto explicitLinks = Message::fromJson(value).links;
+            for (auto &link : explicitLinks) { link.start += bodyStart; link.end += bodyStart; }
+            const auto decorationLinks = linkSpansFor(text, explicitLinks);
+            const auto appendText = [&](const QString &part, int partStart) {
                 int last = 0;
-                auto matches = links.globalMatch(part);
-                while (matches.hasNext()) {
-                    auto match = matches.next();
-                    int end = match.capturedEnd();
-                    while (end > match.capturedStart() && QStringLiteral(".,;!?)").contains(part[end - 1])) --end;
-                    if (end == match.capturedStart()) continue;
-                    html += part.mid(last, match.capturedStart() - last).toHtmlEscaped();
-                    const QString url = part.mid(match.capturedStart(), end - match.capturedStart());
-                    html += "<a href=\"" + url.toHtmlEscaped() + "\" style=\"color:#80bfff;\">" + url.toHtmlEscaped() + "</a>";
+                for (const auto &link : decorationLinks) {
+                    const int start = link.start - partStart, end = link.end - partStart;
+                    if (start < last || end > part.size() || end <= start) continue;
+                    html += part.mid(last, start - last).toHtmlEscaped();
+                    html += "<a href=\"" + link.url.toHtmlEscaped() + "\" style=\"color:#80bfff;\">" + part.mid(start, end - start).toHtmlEscaped() + "</a>";
                     last = end;
                 }
                 html += part.mid(last).toHtmlEscaped();
             };
             QVector<Span> spans;
+            QVector<QStringList> displayedEmotes;
             if (withEmotes) {
                 spans = Message::fromJson(value).emotes;
                 if (!hub->cfg->data["show_explicit_7tv"].toBool(true))
@@ -2425,11 +2457,12 @@ void Pane::refreshDecorations() {
             for (const auto &span : spans) {
                 if (bodyStart + span.start < offset || span.start < 0 || span.end <= span.start || span.end > body.size() || span.urls.isEmpty() ||
                     !Images::allowed(QUrl(span.urls.first())) || (!span.code.isEmpty() && body.mid(span.start, span.end - span.start) != span.code)) continue;
-                appendText(text.mid(offset, bodyStart + span.start - offset));
+                appendText(text.mid(offset, bodyStart + span.start - offset), offset);
                 decorationImageUrls.insert(span.urls.first());
                 const auto image = hub->images->get(span.urls, false);
-                if (image.isNull()) appendText(body.mid(span.start, span.end - span.start));
+                if (image.isNull()) appendText(body.mid(span.start, span.end - span.start), bodyStart + span.start);
                 else {
+                    displayedEmotes.append(span.urls);
                     const int height = qBound(16, hub->cfg->appearance()["emote_size"].toInt(36), 64);
                     QSize size = image.size(); size.scale(height * 3, height, Qt::KeepAspectRatio);
                     const auto scaled = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -2439,9 +2472,9 @@ void Pane::refreshDecorations() {
                 }
                 offset = bodyStart + span.end;
             }
-            appendText(text.mid(offset));
+            appendText(text.mid(offset), offset);
             html.replace("\n", "<br>");
-            auto *label = new QLabel(html, decorations);
+            auto *label = new CachedChatLabel(html, hub->images, displayedEmotes, decorations);
             label->setObjectName("chat-decoration");
             label->setTextFormat(Qt::RichText);
             label->setWordWrap(true);

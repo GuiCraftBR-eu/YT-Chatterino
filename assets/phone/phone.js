@@ -63,14 +63,22 @@ function node(tag, text, cls) { const el = document.createElement(tag); if (text
 function content(parent, message, offset) {
   let position = offset;
   const pieces = [...(message.emotes || []).map(span => ({...span, kind:'emote'})),
+                  ...(message.links || []).map(span => ({...span, kind:'link'})),
                   ...(message.mentions || []).map((span, index) => ({...span, kind:'mention', index}))]
-                 .sort((a,b) => a.start - b.start || (a.kind === 'emote' ? -1 : 1));
+                 .sort((a,b) => a.start - b.start || ({emote:0, link:1, mention:2}[a.kind] - {emote:0, link:1, mention:2}[b.kind]));
   for (const span of pieces) {
     if (span.start < position || span.end <= span.start || span.end > message.text.length) continue;
     parent.append(document.createTextNode(message.text.slice(position, span.start)));
     if (span.kind === 'emote') {
       const img = node('img', undefined, 'emote previewable'); img.src = span.url; img.alt = span.name; img.title = span.name;
       img.loading = 'lazy'; img.tabIndex = 0; img.dataset.preview = 'emote'; parent.append(img);
+    } else if (span.kind === 'link') {
+      let destination;
+      try { destination = new URL(span.url); } catch (_) {}
+      if (destination && ['http:', 'https:'].includes(destination.protocol)) {
+        const link = node('a', message.text.slice(span.start, span.end)); link.href = destination.href;
+        link.target = '_blank'; link.rel = 'noopener noreferrer'; parent.append(link);
+      } else parent.append(document.createTextNode(message.text.slice(span.start, span.end)));
     } else if (message.seq) {
       const mention = node('button', message.text.slice(span.start, span.end), 'mention-link'); mention.type = 'button';
       mention.addEventListener('click', () => showDetail('user-history', message, span.index)); parent.append(mention);

@@ -13,9 +13,12 @@ void NativeTests::emotesPreloadInBackground() {
     app->images.preload({"https://cdn.betterttv.net/emote/closed/3x"}, [] { return false; });
     QTRY_COMPARE(requests.size(), 3);
     app->images.get({"https://cdn.betterttv.net/emote/foreground/3x"});
-    QCOMPARE(requests.size(), 4); // Visible chat requests do not wait for the preload queue.
+    QCOMPARE(requests.size(), 3); // The total limit includes visible images.
+    { auto done = requests[0]; done(png, {}); }
+    QTRY_COMPARE(requests.size(), 4);
+    QCOMPARE(requested[3], QString("https://cdn.betterttv.net/emote/foreground/3x"));
     auto foreground = requests[3]; foreground(png, {});
-    for (int i : {0, 1, 2}) { auto done = requests[i]; done(png, {}); }
+    for (int i : {1, 2}) { auto done = requests[i]; done(png, {}); }
     QTRY_COMPARE(requests.size(), 7);
     for (int i : {4, 5, 6}) { auto done = requests[i]; done(png, {}); }
     QTRY_COMPARE(app->images.preloadActive, 0);
