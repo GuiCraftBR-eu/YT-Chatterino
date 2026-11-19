@@ -87,6 +87,11 @@ struct MentionSpan {
     QString name, uid;
 };
 
+struct LinkSpan {
+    int start = 0, end = 0;
+    QString url;
+};
+
 struct Message {
     QString id, source, name, login, uid, text, color, avatar, special, apiId, webId;
     QString deletionReason;
@@ -96,6 +101,7 @@ struct Message {
     QVector<Span> emotes;
     QVector<Badge> badges;
     QVector<MentionSpan> mentions;
+    QVector<LinkSpan> links;
     QJsonObject reply;
     QJsonObject activity;
     QString badgeInfo;
@@ -104,6 +110,9 @@ struct Message {
     QJsonObject json() const;
     static Message fromJson(const QJsonObject &o);
 };
+
+QString safeHttpUrl(const QString &value);
+QVector<LinkSpan> linkSpansFor(const QString &text, const QVector<LinkSpan> &explicitLinks = {});
 
 struct ParsedIrc {
     QString channel, command, params;

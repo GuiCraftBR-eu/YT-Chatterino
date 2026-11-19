@@ -499,8 +499,44 @@ QString Config::number(qint64 value) const {
     return QLocale(language() == "pt-BR" ? QLocale::Portuguese : QLocale::English).toString(value);
 }
 
+QString safeHttpUrl(const QString &value) {
+    if (value.isEmpty() || value.size() > 8192 || value.contains(QRegularExpression("[\\x00-\\x20\\x7f]"))) return {};
+    const QUrl url(value, QUrl::StrictMode);
+    const auto scheme = url.scheme().toLower();
+    if (!url.isValid() || (scheme != "http" && scheme != "https") || url.host().isEmpty() || !url.userInfo().isEmpty()) return {};
+    return url.toString(QUrl::FullyEncoded);
+}
+
+QVector<LinkSpan> linkSpansFor(const QString &text, const QVector<LinkSpan> &explicitLinks) {
+    QVector<LinkSpan> result;
+    for (const auto &link : explicitLinks) {
+        const auto url = safeHttpUrl(link.url);
+        if (link.start >= 0 && link.end > link.start && link.end <= text.size() && !url.isEmpty())
+            result.append({link.start, link.end, url});
+    }
+    static const QRegularExpression pattern("https?://[^\\s<>\"']+", QRegularExpression::CaseInsensitiveOption);
+    auto matches = pattern.globalMatch(text);
+    while (matches.hasNext()) {
+        const auto match = matches.next();
+        int end = match.capturedEnd();
+        while (end > match.capturedStart() && QStringLiteral(".,;!?)").contains(text[end - 1])) {
+            if (text[end - 1] == ')' &&
+                text.mid(match.capturedStart(), end - match.capturedStart()).count(')') <=
+                    text.mid(match.capturedStart(), end - match.capturedStart()).count('(')) break;
+            --end;
+        }
+        bool overlap = false;
+        for (const auto &link : result)
+            if (match.capturedStart() < link.end && end > link.start) { overlap = true; break; }
+        const auto url = safeHttpUrl(text.mid(match.capturedStart(), end - match.capturedStart()));
+        if (!overlap && !url.isEmpty()) result.append({int(match.capturedStart()), end, url});
+    }
+    std::stable_sort(result.begin(), result.end(), [](const LinkSpan &a, const LinkSpan &b) { return a.start < b.start; });
+    return result;
+}
+
 QJsonObject Message::json() const {
-    QJsonArray es, bs, ms;
+    QJsonArray es, bs, ms, ls;
     for (const auto &e : emotes) {
         es.append(QJsonObject{{"start", e.start},
                               {"end", e.end},
@@ -518,6 +554,8 @@ QJsonObject Message::json() const {
     }
     for (const auto &m : mentions)
         ms.append(QJsonObject{{"start", m.start}, {"end", m.end}, {"name", m.name}, {"user_id", m.uid}});
+    for (const auto &link : links)
+        ls.append(QJsonObject{{"start", link.start}, {"end", link.end}, {"url", link.url}});
     return {{"id", id},
             {"source", source},
             {"name", name},
@@ -536,6 +574,7 @@ QJsonObject Message::json() const {
             {"native_emotes", es},
             {"badge_ids", bs},
             {"mentions", ms},
+            {"links", ls},
             {"sent_at", stamp.isValid() ? stamp.toMSecsSinceEpoch() / 1000.0 : 0},
             {"_seq", seq},
             {"replay_offset_ms", double(replayOffsetMs)},
@@ -610,6 +649,14 @@ Message Message::fromJson(const QJsonObject &o) {
         const int start = item["start"].toInt(-1), end = item["end"].toInt(-1);
         if (start >= 0 && end > start && end <= m.text.size())
             m.mentions.append({start, end, str(item["name"]), str(item["user_id"])});
+    }
+    for (const auto &v : o["links"].toArray()) {
+        const auto item = v.toObject();
+        const int start = item["start"].toInt(-1), end = item["end"].toInt(-1);
+        const auto url = safeHttpUrl(str(item["url"]));
+        if (start >= 0 && end > start && end <= m.text.size() && !url.isEmpty())
+            m.links.append({start, end, url});
+        if (m.links.size() >= 128) break;
     }
     return m;
 }
@@ -804,6 +851,21 @@ ParsedIrc parseIrc(QString line) {
     return p;
 }
 
+static QString youtubeLink(const QJsonObject &run) {
+    const auto endpoint = run["navigationEndpoint"].toObject();
+    if (endpoint.contains("browseEndpoint")) return {};
+    QString value = str(at(endpoint, {"urlEndpoint", "url"}));
+    if (value.isEmpty()) value = str(at(endpoint, {"commandMetadata", "webCommandMetadata", "url"}));
+    if (value.startsWith('/') && !value.startsWith("//")) value.prepend("https://www.youtube.com");
+    QString url = safeHttpUrl(value);
+    if (url.isEmpty()) return {};
+    const QUrl parsed(url);
+    const auto host = parsed.host().toLower();
+    if ((host == "youtube.com" || host == "www.youtube.com" || host == "m.youtube.com" || host == "music.youtube.com") && parsed.path() == "/redirect")
+        url = safeHttpUrl(QUrlQuery(parsed).queryItemValue("q", QUrl::FullyDecoded));
+    return url;
+}
+
 static void appendRuns(Message &m, const QJsonValue &v) {
     auto o = v.toObject();
     if (!o.contains("runs")) {
@@ -818,6 +880,9 @@ static void appendRuns(Message &m, const QJsonValue &v) {
             const auto uid = str(at(r, {"navigationEndpoint", "browseEndpoint", "browseId"}));
             if (text.startsWith('@') && text.size() > 1 && uid.startsWith("UC"))
                 m.mentions.append({int(m.text.size()), int(m.text.size() + text.size()), text.mid(1).trimmed(), uid});
+            const auto url = youtubeLink(r);
+            if (!text.isEmpty() && !url.isEmpty())
+                m.links.append({int(m.text.size()), int(m.text.size() + text.size()), url});
             m.text += text;
             continue;
         }
@@ -887,6 +952,7 @@ Message parseYouTube(const QJsonObject &o, const QString &kind, bool historical)
                 mention.start += prefix.size();
                 mention.end += prefix.size();
             }
+            for (auto &link : m.links) { link.start += prefix.size(); link.end += prefix.size(); }
         }
     } else if (kind.contains("Membership") || kind.contains("Sponsorship")) {
         m.special = "member";

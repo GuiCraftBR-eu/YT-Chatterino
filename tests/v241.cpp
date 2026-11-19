@@ -101,6 +101,12 @@ void NativeTests::phoneMentionModerationAndChannelEditing() {
     Message owner; owner.id="owner"; owner.uid="42"; owner.name="Owner"; owner.login="owner"; owner.text="owner"; twitch->publish(owner);
     banBody=QJsonDocument(QJsonObject{{"source",twitch->key},{"seq",double(twitch->history.last().seq)},{"action","ban"}}).toJson(QJsonDocument::Compact);
     QVERIFY(phone241(server,"POST","/api/moderate",banBody,cookie).startsWith("HTTP/1.1 403")); QCOMPARE(bans,1);
+    Message linked; linked.id="phone-link"; linked.name="Viewer"; linked.text="link... @Alice";
+    linked.links.append({0, 7, "https://example.org/full?x=1&y=2"}); twitch->publish(linked);
+    const auto linkState = phone241Json(phone241(server,"GET","/api/state?after=0",{},cookie));
+    const auto linkRow = linkState["messages"].toArray().last().toObject();
+    QCOMPARE(str(linkRow["links"].toArray().first().toObject()["url"]), QString("https://example.org/full?x=1&y=2"));
+    QCOMPARE(linkRow["mentions"].toArray().size(), 1);
     server.stop();
 }
 

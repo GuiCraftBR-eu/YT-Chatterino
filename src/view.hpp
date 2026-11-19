@@ -25,6 +25,8 @@ class ChatView : public QAbstractScrollArea {
         int nameStart = 0, nameEnd = 0, replyEnd = 0;
         QHash<int, QString> imageCodes;
         QHash<int, QPair<QString, QStringList>> emoteImages;
+        struct ChatEmote { int position; QStringList urls; };
+        QVector<ChatEmote> chatEmotes;
         QHash<int, QPair<QString, QStringList>> badgeImages;
         QHash<int, QPair<QString, QStringList>> channelImages;
         struct Mention { int start = 0, end = 0; QString name, uid; };

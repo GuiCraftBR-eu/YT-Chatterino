@@ -382,6 +382,7 @@ void Source::publish(Message m) {
                 old.badges = m.badges;
                 old.emotes = m.emotes;
                 old.mentions = m.mentions;
+                old.links = m.links;
                 emit changed();
                 return;
             }
@@ -902,7 +903,7 @@ void Source::youtubeBannerActions(const QJsonArray &actions) {
                 const auto parsed = parseYouTube(i.value().toObject(), i.key());
                 if (!parsed.text.isEmpty()) {
                     pin = {{"id", str(banner["actionId"])}, {"name", parsed.name}, {"text", parsed.text},
-                           {"native_emotes", parsed.json()["native_emotes"]}};
+                           {"native_emotes", parsed.json()["native_emotes"]}, {"links", parsed.json()["links"]}};
                     break;
                 }
             }

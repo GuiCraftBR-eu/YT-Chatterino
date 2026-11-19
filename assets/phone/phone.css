@@ -18,3 +18,4 @@ dialog{background:#1d1d22;color:#efeff1;border:1px solid #555;border-radius:6px;
 .edit-dialog{width:min(95vw,430px);padding:0}.edit-dialog form{display:grid;gap:8px;padding:10px}.edit-dialog .detail-heading{margin:-10px -10px 0}.edit-dialog label{font-size:12px;color:#bbb}.edit-dialog #edit-category-fields{display:grid;gap:8px}.edit-dialog p{margin:0}.edit-dialog #edit-save{background:#227400}
 
 .deletion-reason{color:#ddd;font-size:.9em}
+.body a{color:#80bfff}

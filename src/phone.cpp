@@ -167,10 +167,8 @@ QJsonArray PhoneServer::messageMentions(const Message &m) const {
     for (const auto &mention : m.mentions)
         if (mention.start >= 0 && mention.end > mention.start && mention.end <= text.size()) found << mention;
     static const QRegularExpression re("(?<![\\p{L}\\p{N}_@])@[\\p{L}\\p{N}_][\\p{L}\\p{N}_.-]{0,63}");
-    static const QRegularExpression urls("https?://[^\\s<>]+");
     QVector<QPair<int, int>> blocked;
-    auto links = urls.globalMatch(text);
-    while (links.hasNext()) { const auto x = links.next(); blocked << qMakePair(x.capturedStart(), x.capturedEnd()); }
+    for (const auto &link : linkSpansFor(text, m.links)) blocked << qMakePair(link.start, link.end);
     for (const auto &emote : m.emotes) blocked << qMakePair(emote.start, emote.end);
     auto matches = re.globalMatch(text);
     while (matches.hasNext()) {
@@ -215,7 +213,7 @@ Message PhoneServer::resolveMention(const Message &message, Source *source, int 
 
 QJsonObject PhoneServer::renderMessage(const Message &m) const {
     auto *source = allowedSource(m.source);
-    QJsonArray badges, spans;
+    QJsonArray badges, spans, links;
     for (auto badge : m.badges) {
         if (badge.urls.isEmpty() && source) {
             auto full = source->badges.value(badge.id + '/' + badge.version);
@@ -232,6 +230,9 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
             return span.explicit7tv || (known && (host.endsWith(".7tv.app") || host.endsWith(".7tv.io")) && known->explicit7tv);
         }), images.end());
     const QString text = visibleMessageText(m, *hub->cfg);
+    if (!m.deleted || hub->cfg->data["show_deleted_messages"].toBool(false))
+        for (const auto &link : linkSpansFor(text, m.links))
+            links.append(QJsonObject{{"start", link.start}, {"end", link.end}, {"url", link.url}});
     if (source && !m.deleted) {
         auto matches = QRegularExpression("\\S+").globalMatch(text);
         while (matches.hasNext()) {
@@ -263,7 +264,7 @@ QJsonObject PhoneServer::renderMessage(const Message &m) const {
             {"color", userColor(m).name()}, {"system", m.system}, {"deleted", m.deleted},
             {"deletionLabel", deletionReasonText(m, *hub->cfg)},
             {"special", m.special}, {"alertKind", m.alertKind}, {"alert", visibleAlertText(m, *hub->cfg)}, {"alertBodyStart", m.alertBodyStart},
-            {"badges", badges}, {"emotes", spans}, {"mentions", messageMentions(m)},
+            {"badges", badges}, {"emotes", spans}, {"mentions", messageMentions(m)}, {"links", links},
             {"reply", QJsonObject{{"name", m.reply["name"]}, {"login", m.reply["login"]}, {"text", m.reply["text"]}}}};
 }
 
