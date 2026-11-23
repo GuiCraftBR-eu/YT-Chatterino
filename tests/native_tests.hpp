@@ -24,6 +24,14 @@ class NativeTests : public QObject {
     void animatedSevenTvShowsStillWhileLoading();
     void sevenTvFallbackAndExplicitEmotes();
     void similarChannelVariantsAndConcurrency();
+    void similarChannelNumberVariants();
+    void browserMixesRecognizeNumberVariants();
+    void reconnectSuggestsLiveChannels();
+    void similarSearchShowsEarlyAndStopsWhenClosed();
+    void twitchChannelPointMessagesHighlightSeparately();
+    void popupEnterSendsWithoutOpeningEmotes();
+    void reconnectKeepsSpecificYouTubeVideo();
+    void youtubeChatIdRejectsStaleOrWrongVideo();
     void pinnedEmotesAndHypeTrain();
     void recentActivityGroupsAndFilters();
     void roleChangesAndCommands();

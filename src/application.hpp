@@ -48,6 +48,7 @@ class MainWindow : public QMainWindow {
     void addChats(QString mode = "tabs", Pane *anchor = nullptr);
     void openChats(const QStringList &links, QString mode = "tabs", Pane *anchor = nullptr);
     void suggestSimilarLive(Source *source, Pane *pane, bool allowTest = false);
+    void reconnectChannel(Source *source, Pane *pane, bool allowTest = false);
     void showSettings(QString page = "Accounts");
     void gearMenu();
     void paneMenu(Pane *pane, QPoint position);

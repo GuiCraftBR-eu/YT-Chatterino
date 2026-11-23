@@ -264,6 +264,11 @@ void Source::reconnect() {
         apiPageToken.clear();
         if (apiActive && apiFallbackEnabled) {
             youtubeApiConnect();
+        } else if (!hub->testMode && !paused && !deferYouTubeForCooldown() &&
+                   !str(at(context, {"client", "clientVersion"})).isEmpty()) {
+            // Reopen this video's popout directly, without looking up the channel's current live stream.
+            requesting = true;
+            youtubePopout({}, {{"INNERTUBE_CONTEXT", context}});
         } else {
             youtubeConnect();
         }
@@ -605,9 +610,10 @@ void Source::refreshHeader() {
         if (apiActive || requesting || hub->youtubeCooldownRemaining() > 0) {
             return;
         }
+        const auto epoch = generation;
         hub->net->bytes(Network::query("https://www.youtube.com/watch", {{"v", id}}),
-                        [self](QByteArray b, QString e) {
-                            if (!self || self->closed || !e.isEmpty()) {
+                        [self, epoch](QByteArray b, QString e) {
+                            if (!self || self->closed || self->generation != epoch || !e.isEmpty()) {
                                 return;
                             }
                             QString error;
@@ -1294,6 +1300,11 @@ void Source::youtubePopout(QJsonObject chat, QJsonObject config) {
             auto full = at(initialData, {"contents", "liveChatRenderer"}).toObject();
             if (!full.isEmpty()) {
                 chat = full;
+            } else if (chat.isEmpty()) {
+                // Some broadcasts need the watch page to supply the initial chat renderer.
+                self->requesting = false;
+                self->youtubeConnect();
+                return;
             }
             auto c = configOf(html);
             for (auto i = c.begin(); i != c.end(); ++i) {
@@ -2194,12 +2205,20 @@ void Hub::youtubeChatId(Source *s, std::function<void(QString, QString)> done) {
         return;
     }
     QPointer<Source> self(s);
+    const auto epoch = s->generation;
+    const auto video = s->id;
     accounts->youtube("videos",
-                      [self, done](QJsonObject d, QString e) {
-                          if (!self) {
+                      [self, done, epoch, video](QJsonObject d, QString e) {
+                          if (!self) return;
+                          if (self->closed || self->generation != epoch || self->id != video) {
+                              done({}, "The chat connection changed. Please try again.");
                               return;
                           }
                           auto item = first(d["items"].toArray()).toObject();
+                          if (!str(item["id"]).isEmpty() && str(item["id"]) != video) {
+                              done({}, "YouTube returned a different broadcast.");
+                              return;
+                          }
                           QString id = str(at(item, {"liveStreamingDetails", "activeLiveChatId"}));
                           if (e.isEmpty() && id.isEmpty()) {
                               e = "This broadcast has no active live chat.";

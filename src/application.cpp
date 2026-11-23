@@ -318,6 +318,7 @@ MainWindow::MainWindow(QString profile, bool testing, bool obsDock, bool embedde
                     s->reconnect();
                 }
             }
+            for (auto s : p->sources) if (s && !s->isVod) { suggestSimilarLive(s, p); break; }
         }
     });
     shortcut("Ctrl+Alt+M", [this] { addChats("mix", currentPane()); });
@@ -628,10 +629,25 @@ static QStringList liveStreamChoices(const QJsonArray &streams) {
     return choices;
 }
 
+// Normalization only suggests a possible match; the user still selects the streams to mix.
 static QString suggestedMixKey(QString name) {
     name = name.normalized(QString::NormalizationForm_KD).toCaseFolded();
     name.remove(QRegularExpression("[^a-z0-9]"));
-    if (name.endsWith("live") && name.size() >= 7) name.chop(4);
+    for (const auto &prefix : QStringList{"livesdo", "livedo", "livesde", "livede", "lives", "live"})
+        if (name.startsWith(prefix) && name.size() >= prefix.size() + 3) { name.remove(0, prefix.size()); break; }
+    for (const auto &suffix : QStringList{"lives", "live"})
+        if (name.endsWith(suffix) && name.size() >= suffix.size() + 3) { name.chop(suffix.size()); break; }
+    for (auto &c : name) {
+        if (c == '0') c = 'o';
+        else if (c == '1' || c == 'l') c = 'i';
+        else if (c == '2') c = 'z';
+        else if (c == '3') c = 'e';
+        else if (c == '4') c = 'a';
+        else if (c == '5') c = 's';
+        else if (c == '6') c = 'g';
+        else if (c == '7') c = 't';
+        else if (c == '8') c = 'b';
+    }
     return name.size() >= 3 ? name : QString();
 }
 
@@ -1008,6 +1024,67 @@ void MainWindow::openChats(const QStringList &links, QString mode, Pane *anchor)
         suggestSimilarLive(addedSources[0], addedPane);
 }
 
+// Bound speculative lookups: usernames can have many interchangeable characters.
+static QStringList similarNumberVariants(const QString &base) {
+    const auto alternatives = [](QChar c) -> QString {
+        switch (c.unicode()) {
+        case 'o': return "0"; case '0': return "o";
+        case 'i': case 'l': return "1"; case '1': return "il";
+        case 'z': return "2"; case '2': return "z";
+        case 'e': return "3"; case '3': return "e";
+        case 'a': return "4"; case '4': return "a";
+        case 's': return "5"; case '5': return "s";
+        case 'g': return "6"; case '6': return "g";
+        case 't': return "7"; case '7': return "t";
+        case 'b': return "8"; case '8': return "b";
+        default: return {};
+        }
+    };
+    QStringList result;
+    const auto add = [&](const QString &value) {
+        if (value != base && !result.contains(value) && result.size() < 28) result << value;
+    };
+    // Common multi-character substitutions should not be crowded out by single edits.
+    for (int mode = 0; mode < 4; ++mode) {
+        QString value = base;
+        for (auto &c : value) {
+            if (mode == 0 && c == 'o') c = '0';
+            else if (mode == 0 && c == 'i') c = '1';
+            else if (mode == 1 && (c == 'i' || c == 'l')) c = '1';
+            else if ((mode == 2 || mode == 3) && c.isDigit()) {
+                const auto choices = alternatives(c);
+                if (!choices.isEmpty()) c = mode == 3 ? choices.back() : choices.front();
+            }
+        }
+        add(value);
+    }
+    // Single edits in either direction, then a bounded set of two-edit combinations.
+    QStringList singles;
+    for (int pass = 0; pass < 2; ++pass) for (int i = 0; i < base.size(); ++i) {
+        const bool common = QStringLiteral("o0il1").contains(base[i]);
+        if (common != (pass == 0)) continue;
+        for (const auto replacement : alternatives(base[i])) {
+            auto value = base; value[i] = replacement; singles << value; add(value);
+        }
+    }
+    for (const auto &first : singles) {
+        for (int i = 0; i < base.size(); ++i) {
+            if (first[i] != base[i]) continue;
+            for (const auto replacement : alternatives(first[i])) {
+                auto value = first; value[i] = replacement; add(value);
+            }
+        }
+        if (result.size() >= 28) break;
+    }
+    return result;
+}
+
+void MainWindow::reconnectChannel(Source *source, Pane *pane, bool allowTest) {
+    if (!source || source->isVod) return;
+    source->reconnect();
+    suggestSimilarLive(source, pane, allowTest);
+}
+
 void MainWindow::suggestSimilarLive(Source *source, Pane *pane, bool allowTest) {
     if ((testMode && !allowTest) || !source || !pane || source->isVod) return;
     if (source->platform == "youtube" && str(source->header["channel"]).isEmpty()) {
@@ -1038,57 +1115,72 @@ void MainWindow::suggestSimilarLive(Source *source, Pane *pane, bool allowTest) 
                            "live_" + base, "lives_" + base, "livedo_" + base, "livesdo_" + base,
                            "livede_" + base, "livesde_" + base, "live" + base, "lives" + base,
                            "livedo" + base, "livesdo" + base};
+    candidates << name + "_" << base + "_" << base + "_live_" << "live_" + base + "_" << "livesdo_" + base + "_";
+    const auto numbered = similarNumberVariants(base);
+    for (const auto &variant : numbered) candidates << variant << variant + "_";
+    // Limit combinations with live prefixes so reconnection cannot expand exponentially.
+    for (int i = 0; i < qMin(8, int(numbered.size())); ++i) {
+        const auto &variant = numbered[i];
+        candidates << variant + "_live" << "live_" + variant << "livesdo_" + variant;
+    }
     candidates.removeDuplicates();
     struct Search {
         int remaining = 0, next = 0, active = 0;
+        bool dismissed = false;
         QList<QPair<QString, QString>> requests;
-        QJsonArray found;
+        QSet<QString> seen;
+        QPointer<QDialog> dialog;
+        QPointer<QListWidget> list;
+        QPointer<QLabel> progress;
     };
     auto state = QSharedPointer<Search>::create();
     QPointer<MainWindow> self(this); QPointer<Pane> safePane(pane); QPointer<Source> safeSource(source);
     auto finish = [self, safePane, safeSource, state](QString platform, QString name, QJsonArray streams) {
-        if (!self || !safePane || !safeSource) return;
+        if (!self || !safePane || !safeSource || state->dismissed || !safePane->sources.contains(safeSource)) return;
         for (const auto &v : streams) {
             auto row = v.toObject(); row["platform"] = platform; row["name"] = name;
-            state->found.append(row);
-        }
-        if (--state->remaining || state->found.isEmpty()) return;
-        auto *dialog = new QDialog(self);
-        dialog->setAttribute(Qt::WA_DeleteOnClose);
-        dialog->setWindowTitle(self->cfg.T("Similar live channels"));
-        auto *layout = new QVBoxLayout(dialog);
-        layout->addWidget(label(self->cfg, "Similar names may belong to different people. Select streams to mix:", true));
-        auto *list = new QListWidget(dialog);
-        list->setObjectName("similar-live-channels");
-        QSet<QString> seen;
-        for (const auto &v : state->found) {
-            const auto row = v.toObject();
-            const QString platform = str(row["platform"]), id = str(row["id"]), key = platform + ':' + id;
-            if (id.isEmpty() || seen.contains(key)) continue;
+            const QString id = str(row["id"]), key = platform + ':' + id;
+            if (id.isEmpty() || state->seen.contains(key)) continue;
             bool already = false;
-            for (auto existing : safePane->sources) if (existing && existing->platform == platform && existing->id == id) already = true;
+            for (auto existing : safePane->sources)
+                if (existing && existing->platform == platform && existing->id == id) already = true;
             if (already) continue;
-            seen.insert(key);
-            auto *item = new QListWidgetItem(platform + " · " + str(row["name"]) + " — " + str(row["title"]), list);
+            state->seen.insert(key);
+            if (!state->dialog) {
+                auto *dialog = new QDialog(self);
+                state->dialog = dialog;
+                dialog->setAttribute(Qt::WA_DeleteOnClose);
+                dialog->setWindowTitle(self->cfg.T("Similar live channels"));
+                auto *layout = new QVBoxLayout(dialog);
+                layout->addWidget(label(self->cfg, "Similar names may belong to different people. Select streams to mix:", true));
+                auto *list = new QListWidget(dialog);
+                state->list = list;
+                list->setObjectName("similar-live-channels");
+                layout->addWidget(list);
+                auto *progress = label(self->cfg, "Looking for more live channels…");
+                state->progress = progress; layout->addWidget(progress);
+                auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+                buttons->button(QDialogButtonBox::Ok)->setText(self->cfg.T("Mix selected"));
+                connect(dialog, &QDialog::finished, dialog, [state](int) { state->dismissed = true; });
+                connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+                connect(buttons, &QDialogButtonBox::accepted, dialog, [self, safePane, list, dialog] {
+                    if (!self || !safePane) { dialog->reject(); return; }
+                    QList<Source *> sources;
+                    for (auto existing : safePane->sources) if (existing) sources << existing;
+                    for (int i = 0; i < list->count(); ++i) if (list->item(i)->checkState() == Qt::Checked) {
+                        const auto row = list->item(i)->data(Qt::UserRole).toJsonObject();
+                        if (auto *added = self->hub.source(str(row["platform"]), str(row["id"])); added && !sources.contains(added)) sources << added;
+                    }
+                    safePane->setSources(sources); dialog->accept();
+                });
+                layout->addWidget(buttons); dialog->resize(480, 280);
+            }
+            auto *item = new QListWidgetItem(platform + " · " + name + " — " + str(row["title"]), state->list);
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             item->setCheckState(Qt::Unchecked); item->setData(Qt::UserRole, row);
+            if (!state->dialog->isVisible()) state->dialog->show();
         }
-        if (!list->count()) { dialog->deleteLater(); return; }
-        layout->addWidget(list);
-        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
-        buttons->button(QDialogButtonBox::Ok)->setText(self->cfg.T("Mix selected"));
-        connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-        connect(buttons, &QDialogButtonBox::accepted, dialog, [self, safePane, list, dialog] {
-            if (!self || !safePane) { dialog->reject(); return; }
-            QList<Source *> sources;
-            for (auto existing : safePane->sources) if (existing) sources << existing;
-            for (int i = 0; i < list->count(); ++i) if (list->item(i)->checkState() == Qt::Checked) {
-                const auto row = list->item(i)->data(Qt::UserRole).toJsonObject();
-                if (auto *added = self->hub.source(str(row["platform"]), str(row["id"])); added && !sources.contains(added)) sources << added;
-            }
-            safePane->setSources(sources); dialog->accept();
-        });
-        layout->addWidget(buttons); dialog->resize(480, 260); dialog->show();
+        if (--state->remaining == 0 && state->progress) state->progress->setText(self->cfg.T("Search complete"));
     };
     for (const auto &candidate : candidates) {
         if (candidate.size() > 30) continue;
@@ -1100,10 +1192,10 @@ void MainWindow::suggestSimilarLive(Source *source, Pane *pane, bool allowTest) 
     auto pump = std::make_shared<std::function<void()>>();
     std::weak_ptr<std::function<void()>> weakPump = pump;
     *pump = [this, state, finish, weakPump, self, safeSource, safePane] {
-      if (!self || !safeSource || !safePane) return;
+      if (!self || !safeSource || !safePane || state->dismissed || !safePane->sources.contains(safeSource)) return;
       auto next = weakPump.lock();
       if (!next) return;
-      while (state->active < 6 && state->next < state->requests.size()) {
+      while (!state->dismissed && state->active < 6 && state->next < state->requests.size()) {
         const auto request = state->requests[state->next++];
         const QString platform = request.first, candidate = request.second;
         ++state->active;
@@ -1306,7 +1398,10 @@ void MainWindow::populatePaneMenu(QMenu &menu, Pane *p) {
             }
             channel->addSeparator();
             addHeading(channel, cfg.T("Chat and channel"));
-            channel->addAction(cfg.T("Reconnect"), source, &Source::reconnect);
+            auto *reconnect = channel->addAction(cfg.T("Reconnect"), this, [this, source, p] {
+                reconnectChannel(source, p);
+            });
+            reconnect->setObjectName("channel-reconnect");
             if (p->sources.size() > 1) {
                 auto *activity = channel->addAction(cfg.T("Recent activity…"), this, [this, p, source] { showRecentActivity(p, source); });
                 activity->setObjectName("channel-recent-activity");

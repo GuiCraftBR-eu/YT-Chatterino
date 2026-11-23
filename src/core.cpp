@@ -848,6 +848,9 @@ ParsedIrc parseIrc(QString line) {
             m.alertText = "Redeemed a channel reward";
         } else { m.alertKind = "other"; m.alertText = "Highlighted a message"; }
     }
+    if (p.command == "PRIVMSG" && (!str(p.tags["custom-reward-id"]).isEmpty() ||
+                                    str(p.tags["msg-id"]) == "highlighted-message"))
+        m.activity["channel_points"] = true;
     return p;
 }
 
@@ -1151,7 +1154,9 @@ QColor highlight(const Message &m, const Config &cfg, const QStringList &ownName
     const auto settings = cfg.feature("highlight"), users = settings["users"].toObject(),
                rs = settings["roles"].toObject();
     QColor c;
-    if (!m.special.isEmpty() && settings["alerts"].toBool(false)) {
+    const bool channelPoints = m.activity["channel_points"].toBool(false);
+    if ((channelPoints && settings["channel_points"].toBool(true)) ||
+        (!channelPoints && !m.special.isEmpty() && settings["alerts"].toBool(false))) {
         c = QColor(settings["alert_color"].toString(settings["mention_color"].toString("#227400")));
     }
     for (auto i = users.begin(); i != users.end(); ++i) {

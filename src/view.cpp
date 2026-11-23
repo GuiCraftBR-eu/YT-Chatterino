@@ -1854,9 +1854,12 @@ void Composer::keyPressEvent(QKeyEvent *e) {
         applyCompletion(completionIndex);
         return;
     }
-    if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) hideSuggestions();
+    const bool enter = e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter;
+    if (enter) hideSuggestions();
     completionValue.clear();
     QLineEdit::keyPressEvent(e);
+    // QDialog otherwise treats an ignored Return as a click on its default button.
+    if (enter) e->accept();
 }
 
 bool Composer::event(QEvent *event) {
@@ -2052,8 +2055,10 @@ Pane::Pane(Hub *h, QList<Source *> list, QWidget *p, bool isDetached)
     countLabel = new QLabel(composer);
     countLabel->setStyleSheet("color:#8b8b94;font-size:10px;");
     emoteButton = new QPushButton("☺", composer);
+    emoteButton->setAutoDefault(false);
     emoteButton->setMaximumWidth(28);
     sendButton = new QPushButton(hub->cfg->T("Send"), composer);
+    sendButton->setAutoDefault(false);
     cl->addWidget(target);
     cl->addWidget(input, 1);
     cl->addWidget(countLabel);
