@@ -1046,8 +1046,12 @@ QWidget *SettingsWindow::highlightsPage() {
     alerts->setObjectName("highlight-chat-alerts");
     alerts->setChecked(settings["alerts"].toBool(false));
     form->addRow(alerts);
-    auto *alertColor = colorField("alert_color", "Alert highlight color");
-    l->addWidget(action(cfg, "Apply highlights", w, [this, users, terms, mention, alerts, roleChecks, colors, mentionColor, alertColor] {
+    auto *channelPoints = new QCheckBox(cfg.T("Highlight Twitch channel-points messages"), w);
+    channelPoints->setObjectName("highlight-channel-points");
+    channelPoints->setChecked(settings["channel_points"].toBool(true));
+    form->addRow(channelPoints);
+    auto *alertColor = colorField("alert_color", "Alert / channel points highlight color");
+    l->addWidget(action(cfg, "Apply highlights", w, [this, users, terms, mention, alerts, channelPoints, roleChecks, colors, mentionColor, alertColor] {
         const QColor mentionValue(mentionColor->text()), alertValue(alertColor->text());
         if (!mentionValue.isValid() || !alertValue.isValid()) {
             QMessageBox::warning(this, main->cfg.T("Highlights"), main->cfg.T("Enter colors as #RRGGBB."));
@@ -1085,6 +1089,7 @@ QWidget *SettingsWindow::highlightsPage() {
         h["words"] = strings(words(terms->text()));
         h["mention_me"] = mention->isChecked();
         h["alerts"] = alerts->isChecked();
+        h["channel_points"] = channelPoints->isChecked();
         h["mention_color"] = mentionValue.name();
         h["alert_color"] = alertValue.name();
         main->cfg.setFeature("highlight", h);
