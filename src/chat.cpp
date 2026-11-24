@@ -2404,6 +2404,8 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
                         return;
                     }
                     auto result = first(d["data"].toArray()).toObject();
+                    if (error.startsWith("HTTP 0:"))
+                        error = "Twitch did not confirm whether your message was sent. Check the chat before trying again.";
                     if (error.isEmpty() && !result["is_sent"].toBool()) {
                         error = str(at(result, {"drop_reason", "message"}));
                         if (error.isEmpty()) {
@@ -2436,7 +2438,7 @@ void Hub::send(Source *s, QString text, Message reply, JsonCallback done) {
                     }
                     done(d, error);
                 },
-                "POST", {}, body);
+                "POST", {}, body, Network::Lane::ChatSend);
         });
         return;
     }

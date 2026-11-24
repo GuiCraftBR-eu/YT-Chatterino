@@ -67,7 +67,8 @@ class Accounts : public QObject {
     void finishGoogle(QJsonObject auth, QString error = {});
     void cancelGoogle();
     void helix(QString endpoint, JsonCallback done, QByteArray method = "GET",
-               QMap<QString, QString> params = {}, QJsonObject body = {});
+               QMap<QString, QString> params = {}, QJsonObject body = {},
+               Network::Lane lane = Network::Lane::Shared);
     void youtube(QString endpoint, JsonCallback done, QByteArray method = "GET",
                  QMap<QString, QString> params = {}, QJsonObject body = {}, int units = 1);
   signals:

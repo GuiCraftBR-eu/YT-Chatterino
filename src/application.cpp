@@ -392,7 +392,7 @@ MainWindow::~MainWindow() {
     sessionTimer.stop();
     hub.liveTimer.stop();
     hub.twitch.close();
-    for (auto *reply : net.manager.findChildren<QNetworkReply *>()) {
+    for (auto *reply : net.findChildren<QNetworkReply *>()) {
         reply->disconnect();
         reply->abort();
     }

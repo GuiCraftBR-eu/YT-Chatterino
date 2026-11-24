@@ -1,13 +1,14 @@
 #include "network.hpp"
 
 namespace yc {
-Network::Network(QObject *p) : QObject(p), manager(this) {
+Network::Network(QObject *p) : QObject(p), manager(this), chatManager(this) {
     static bool backendSelected = false;
     if (!backendSelected && QSslSocket::availableBackends().contains("schannel")) {
         QSslSocket::setActiveBackend("schannel");
     }
     backendSelected = true;
     manager.setRedirectPolicy(QNetworkRequest::NoLessSafeRedirectPolicy);
+    chatManager.setRedirectPolicy(QNetworkRequest::NoLessSafeRedirectPolicy);
 }
 
 QUrl Network::query(QString base, const QMap<QString, QString> &params) {
@@ -21,7 +22,7 @@ QUrl Network::query(QString base, const QMap<QString, QString> &params) {
 }
 
 void Network::bytes(QUrl url, BytesCallback done, QByteArray method, QByteArray body,
-                    QMap<QByteArray, QByteArray> headers, qint64 maxBytes, int timeoutMs) {
+                    QMap<QByteArray, QByteArray> headers, qint64 maxBytes, int timeoutMs, Lane lane) {
     if (transport) {
         transport(url, method, body, headers, std::move(done));
         return;
@@ -40,7 +41,9 @@ void Network::bytes(QUrl url, BytesCallback done, QByteArray method, QByteArray 
     for (auto i = headers.begin(); i != headers.end(); ++i) {
         request.setRawHeader(i.key(), i.value());
     }
-    auto *reply = manager.sendCustomRequest(request, method, body);
+    // Chat submissions must not wait behind stalled background requests to the same host.
+    auto &selectedManager = lane == Lane::ChatSend ? chatManager : manager;
+    auto *reply = selectedManager.sendCustomRequest(request, method, body);
     reply->setReadBufferSize(maxBytes + 1);
     auto data = QSharedPointer<QByteArray>::create();
     connect(reply, &QNetworkReply::readyRead, reply, [reply, data, maxBytes] {
@@ -75,7 +78,7 @@ void Network::bytes(QUrl url, BytesCallback done, QByteArray method, QByteArray 
 }
 
 void Network::json(QUrl url, JsonCallback done, QByteArray method, QJsonObject body,
-                   QMap<QByteArray, QByteArray> headers, qint64 maxBytes, int timeoutMs) {
+                   QMap<QByteArray, QByteArray> headers, qint64 maxBytes, int timeoutMs, Lane lane) {
     headers["Accept"] = "application/json";
     QByteArray payload;
     if (!body.isEmpty()) {
@@ -92,7 +95,7 @@ void Network::json(QUrl url, JsonCallback done, QByteArray method, QJsonObject b
             }
             done(doc.isArray() ? QJsonObject{{"items", doc.array()}} : doc.object(), error);
         },
-        method, payload, headers, maxBytes, timeoutMs);
+        method, payload, headers, maxBytes, timeoutMs, lane);
 }
 
 void Network::sevenTv(const QString &path, bool global, JsonCallback done) {
