@@ -772,14 +772,15 @@ void Accounts::googleToken(TokenCallback done) {
 }
 
 void Accounts::helix(QString endpoint, JsonCallback done, QByteArray method, QMap<QString, QString> params,
-                     QJsonObject body) {
+                     QJsonObject body, Network::Lane lane) {
     twitchToken([=, this](QString token, QString error) {
         if (!error.isEmpty()) {
             done({}, error);
             return;
         }
         net->json(Network::query("https://api.twitch.tv/helix/" + endpoint, params), done, method, body,
-                  {{"Client-Id", TwitchClient.toUtf8()}, {"Authorization", "Bearer " + token.toUtf8()}});
+                  {{"Client-Id", TwitchClient.toUtf8()}, {"Authorization", "Bearer " + token.toUtf8()}},
+                  Network::DefaultMaxBytes, Network::DefaultTimeoutMs, lane);
     });
 }
 

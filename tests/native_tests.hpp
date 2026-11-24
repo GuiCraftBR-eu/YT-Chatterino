@@ -142,6 +142,8 @@ class NativeTests : public QObject {
     void threadWindowLiveUpdatesAndDeletedTarget();
     void settingsSearchLanguageAndFontControls();
     void twitchSendReplyAndDrop();
+    void chatSendIsolatedFromStalledRequests();
+    void twitchSendTimeoutHasUncertainOutcome();
     void deletedReplyCannotBecomeTopLevelSend();
     void twitchModerationPermissionsAndDuration();
     void twitchBroadcasterDeletionProtected();

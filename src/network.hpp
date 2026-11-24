@@ -7,15 +7,18 @@ namespace yc {
 class Network : public QObject {
     Q_OBJECT
   public:
+    enum class Lane { Shared, ChatSend };
+    static constexpr qint64 DefaultMaxBytes = 8 * 1024 * 1024;
+    static constexpr int DefaultTimeoutMs = 20000;
     explicit Network(QObject *parent = nullptr);
-    QNetworkAccessManager manager;
+    QNetworkAccessManager manager, chatManager;
     std::function<void(QUrl, QByteArray, QByteArray, QMap<QByteArray, QByteArray>, BytesCallback)> transport;
     void bytes(QUrl url, BytesCallback done, QByteArray method = "GET", QByteArray body = {},
-               QMap<QByteArray, QByteArray> headers = {}, qint64 maxBytes = 8 * 1024 * 1024,
-               int timeoutMs = 20000);
+               QMap<QByteArray, QByteArray> headers = {}, qint64 maxBytes = DefaultMaxBytes,
+               int timeoutMs = DefaultTimeoutMs, Lane lane = Lane::Shared);
     void json(QUrl url, JsonCallback done, QByteArray method = "GET", QJsonObject body = {},
-              QMap<QByteArray, QByteArray> headers = {}, qint64 maxBytes = 8 * 1024 * 1024,
-              int timeoutMs = 20000);
+              QMap<QByteArray, QByteArray> headers = {}, qint64 maxBytes = DefaultMaxBytes,
+              int timeoutMs = DefaultTimeoutMs, Lane lane = Lane::Shared);
     void sevenTv(const QString &path, bool global, JsonCallback done);
     void form(QUrl url, const QMap<QString, QString> &form, JsonCallback done);
     static QUrl query(QString base, const QMap<QString, QString> &params);
